@@ -34,7 +34,10 @@ function play1050HzSiren(durationSeconds = 3) {
     const gain = ctx.createGain();
 
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(1050, ctx.currentTime);
+    const [product, setProduct] = useState<RadarProduct>('ref');
+  const [tilt, setTilt] = useState('0.5');
+  const [radarSite, setRadarSite] = useState('KLZK');
+  const [maxRefWindow, setMaxRefWindow] = useState(10);
 
     gain.gain.setValueAtTime(0.01, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.4, ctx.currentTime + 0.1);
