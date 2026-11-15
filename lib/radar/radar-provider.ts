@@ -45,7 +45,8 @@ class NoaaWsR88DDriver implements RadarDriver {
     if (p === 'cc' || p === 'zdr' || p === 'kdp' || p === 'n0c' || p === 'n0x' || p === 'n0k') {
       return null;
     }
-    if (p === 'vel' || p === 'n0u') return 'N0U';
+    if (product === 'tops') return 'NET';
+    if (product === 'vil') return 'N0Z';
     if (p === 'srvel' || p === 'n0s') return 'N0S';
     if (p === 'tops') return 'NET';
     if (p === 'vil') return 'NVL';
