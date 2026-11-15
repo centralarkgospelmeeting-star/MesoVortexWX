@@ -35,6 +35,8 @@ export interface RadarMapProps {
   showRadarPills?: boolean;
   showLightning?: boolean;
   showStormTracks?: boolean;
+  /** Force METARs on/off from parent; if omitted, map uses its own toggle */
+  showMetars?: boolean;
   selectedWarning?: WarningAlert | null;
   onSelectSite?: (siteId: string) => void;
   onSelectWarningFromMap?: (warning: WarningAlert) => void;
@@ -63,10 +65,12 @@ const WARNINGS_FILL_ID = 'mv-warnings-fill';
 const WARNINGS_LINE_ID = 'mv-warnings-line';
 const RANGE_RINGS_SOURCE_ID = 'mv-range-rings-source';
 const RANGE_RINGS_LAYER_ID = 'mv-range-rings-layer';
+const METAR_SOURCE_ID = 'mv-metar-source';
+const METAR_CIRCLE_ID = 'mv-metar-circle';
+const METAR_LABEL_ID = 'mv-metar-label';
 
 const IEM = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0';
 
-/** IEM RIDGE uses 3-letter ids (LZK), not ICAO (KLZK) */
 function toRidgeId(raw: string): string {
   return (raw || 'LZK').toUpperCase().replace(/^K/, '') || 'LZK';
 }
@@ -88,7 +92,6 @@ function productCode(product: string, tilt: string): string {
   if (p === 'vil') return 'DVL';
   if (p === 'hhc') return 'HHC';
   if (p === 'qpe') return 'DPR';
-  // reflectivity family
   if (tilt === '0.9') return 'N1B';
   if (tilt === '1.3') return 'N2B';
   if (tilt === '1.8') return 'N3B';
@@ -146,6 +149,17 @@ function generateRangeRingsGeoJSON(lon: number, lat: number, distancesNm: number
   return { type: 'FeatureCollection', features };
 }
 
+function boundsToBbox(map: MapLibreMap): string {
+  const b = map.getBounds();
+  // AviationWeather: lat0,lon0,lat1,lon1
+  const lat0 = Math.max(-90, b.getSouth());
+  const lon0 = Math.max(-180, b.getWest());
+  const lat1 = Math.min(90, b.getNorth());
+  const lon1 = Math.min(180, b.getEast());
+  const r = (n: number) => Math.round(n * 1000) / 1000;
+  return `${r(lat0)},${r(lon0)},${r(lat1)},${r(lon1)}`;
+}
+
 export function RadarMap({
   product = 'ref',
   radarSite = 'KLZK',
@@ -155,6 +169,7 @@ export function RadarMap({
   radarOpacity = 0.88,
   showRangeRings = true,
   showRadarPills = true,
+  showMetars: showMetarsProp,
   selectedWarning = null,
   onSelectSite,
   onSelectWarningFromMap,
@@ -163,7 +178,16 @@ export function RadarMap({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
+  const popupRef = useRef<maplibregl.Popup | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [metarsOn, setMetarsOn] = useState(!!showMetarsProp);
+  const [metarCount, setMetarCount] = useState(0);
+  const [metarLoading, setMetarLoading] = useState(false);
+
+  // Sync external prop if provided
+  useEffect(() => {
+    if (typeof showMetarsProp === 'boolean') setMetarsOn(showMetarsProp);
+  }, [showMetarsProp]);
 
   const site =
     RADAR_SITES.find((s) => s.id === radarSite || s.radarId === radarSite) || RADAR_SITES[0];
@@ -282,13 +306,11 @@ export function RadarMap({
   const updateRadar = useCallback(
     (map: MapLibreMap) => {
       let tileUrl: string;
-
       if (mode === 'Composite') {
         tileUrl = `${IEM}/nexrad-n0q-900913/{z}/{x}/{y}.png`;
       } else if (mode === 'Satellite') {
         tileUrl = `${IEM}/goes-east-vis-1km-900913/{z}/{x}/{y}.png`;
       } else {
-        // Single-station (terminal) radar — direct IEM RIDGE, no API dependency
         const code = productCode(product, tilt);
         tileUrl = `${IEM}/ridge::${ridgeId}-${code}-0/{z}/{x}/{y}.png`;
       }
@@ -319,6 +341,129 @@ export function RadarMap({
       );
     },
     [mode, product, tilt, ridgeId, radarOpacity]
+  );
+
+  const clearMetars = useCallback((map: MapLibreMap) => {
+    if (map.getLayer(METAR_LABEL_ID)) map.removeLayer(METAR_LABEL_ID);
+    if (map.getLayer(METAR_CIRCLE_ID)) map.removeLayer(METAR_CIRCLE_ID);
+    if (map.getSource(METAR_SOURCE_ID)) map.removeSource(METAR_SOURCE_ID);
+    setMetarCount(0);
+  }, []);
+
+  const updateMetars = useCallback(
+    async (map: MapLibreMap) => {
+      if (!metarsOn) {
+        clearMetars(map);
+        return;
+      }
+
+      setMetarLoading(true);
+      try {
+        const bbox = boundsToBbox(map);
+        const res = await fetch(`/api/metar/geojson?bbox=${encodeURIComponent(bbox)}&hours=3`, {
+          cache: 'no-store',
+        });
+        const data = await res.json();
+        const features = (data.features || []).filter(
+          (f: any) => f?.geometry?.coordinates?.length >= 2
+        );
+
+        // Enrich for labels
+        const enriched = {
+          type: 'FeatureCollection',
+          features: features.map((f: any) => {
+            const p = f.properties || {};
+            const id = p.id || p.icaoId || f.id || '';
+            const temp = p.temp != null ? Math.round((Number(p.temp) * 9) / 5 + 32) : null;
+            const wspd = p.wspd != null ? Number(p.wspd) : null;
+            const label =
+              temp != null && wspd != null
+                ? `${id} ${temp}° ${wspd}kt`
+                : temp != null
+                  ? `${id} ${temp}°`
+                  : String(id);
+            return {
+              ...f,
+              properties: {
+                ...p,
+                station: id,
+                label,
+                rawOb: p.rawOb || p.raw_text || '',
+              },
+            };
+          }),
+        };
+
+        const source = map.getSource(METAR_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+        if (source) {
+          source.setData(enriched as any);
+        } else {
+          map.addSource(METAR_SOURCE_ID, { type: 'geojson', data: enriched as any });
+
+          map.addLayer({
+            id: METAR_CIRCLE_ID,
+            type: 'circle',
+            source: METAR_SOURCE_ID,
+            paint: {
+              'circle-radius': 5,
+              'circle-color': '#22d3ee',
+              'circle-stroke-width': 1.5,
+              'circle-stroke-color': '#0e7490',
+              'circle-opacity': 0.9,
+            },
+          });
+
+          map.addLayer({
+            id: METAR_LABEL_ID,
+            type: 'symbol',
+            source: METAR_SOURCE_ID,
+            layout: {
+              'text-field': ['get', 'label'],
+              'text-size': 10,
+              'text-offset': [0, 1.2],
+              'text-anchor': 'top',
+              'text-optional': true,
+              'text-allow-overlap': false,
+            },
+            paint: {
+              'text-color': '#ecfeff',
+              'text-halo-color': '#0f172a',
+              'text-halo-width': 1.5,
+            },
+          });
+
+          map.on('click', METAR_CIRCLE_ID, (e) => {
+            const feat = e.features?.[0];
+            if (!feat) return;
+            const p = feat.properties || {};
+            const html = `<div style="font:12px/1.4 system-ui,sans-serif;max-width:260px">
+              <strong style="color:#22d3ee">${p.station || p.id || ''}</strong>
+              <div style="margin-top:4px;color:#cbd5e1;word-break:break-all">${p.rawOb || 'No raw METAR'}</div>
+            </div>`;
+            if (popupRef.current) popupRef.current.remove();
+            popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: '280px' })
+              .setLngLat(e.lngLat)
+              .setHTML(html)
+              .addTo(map);
+          });
+
+          map.on('mouseenter', METAR_CIRCLE_ID, () => {
+            map.getCanvas().style.cursor = 'pointer';
+          });
+          map.on('mouseleave', METAR_CIRCLE_ID, () => {
+            map.getCanvas().style.cursor = '';
+          });
+        }
+
+        setMetarCount(enriched.features.length);
+      } catch (err) {
+        console.warn('[METARs]', err);
+        setMetarCount(0);
+      } finally {
+        setMetarLoading(false);
+      }
+    },
+    [metarsOn, clearMetars]
   );
 
   const renderTowerPills = useCallback(
@@ -369,23 +514,31 @@ export function RadarMap({
       updateRadar(map);
       updateRangeRings(map);
       renderTowerPills(map);
+      updateMetars(map);
     });
 
+    // Refresh METARs when map moves (debounced)
+    let moveTimer: number | undefined;
+    const onMoveEnd = () => {
+      window.clearTimeout(moveTimer);
+      moveTimer = window.setTimeout(() => updateMetars(map), 400);
+    };
+    map.on('moveend', onMoveEnd);
+
     return () => {
+      window.clearTimeout(moveTimer);
       map.remove();
       mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [basemap]);
 
-  // Pitch for 3D mode
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
     map.easeTo({ pitch: mode === '3D Radar' ? 55 : 0, duration: 400 });
   }, [mode, mapReady]);
 
-  // Radar / rings / pills when inputs change
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
@@ -394,29 +547,34 @@ export function RadarMap({
     renderTowerPills(map);
   }, [mapReady, updateRadar, updateRangeRings, renderTowerPills]);
 
-  // Fly to site when selected
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    updateMetars(map);
+  }, [mapReady, metarsOn, updateMetars]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
     map.flyTo({ center: [site.lon, site.lat], zoom: Math.max(map.getZoom(), 7), duration: 800 });
   }, [site.lat, site.lon, mapReady]);
 
-  // External target coords
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady || !targetCoords) return;
     map.flyTo({ center: targetCoords, zoom: Math.max(map.getZoom(), 8), duration: 800 });
   }, [targetCoords, mapReady]);
 
-  // Refresh warnings periodically
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
-    const id = window.setInterval(() => updateWarnings(map), 60_000);
+    const id = window.setInterval(() => {
+      updateWarnings(map);
+      if (metarsOn) updateMetars(map);
+    }, 120_000);
     return () => window.clearInterval(id);
-  }, [mapReady, updateWarnings]);
+  }, [mapReady, updateWarnings, updateMetars, metarsOn]);
 
-  // Silence unused selectedWarning for now (highlight can return later)
   void selectedWarning;
 
   return (
@@ -425,6 +583,20 @@ export function RadarMap({
         ref={containerRef}
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
       />
+
+      {/* METAR / station network toggle */}
+      <button
+        type="button"
+        onClick={() => setMetarsOn((v) => !v)}
+        className={`absolute bottom-6 left-3 z-20 rounded-full border px-3 py-1.5 text-xs font-semibold shadow-lg backdrop-blur transition ${
+          metarsOn
+            ? 'border-cyan-400/60 bg-cyan-950/80 text-cyan-200'
+            : 'border-white/20 bg-slate-950/80 text-slate-300 hover:border-white/40'
+        }`}
+        title="Toggle live METAR / weather station network"
+      >
+        {metarLoading ? 'METARs…' : metarsOn ? `METARs ON · ${metarCount}` : 'METARs OFF'}
+      </button>
     </div>
   );
 }
