@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { RadarMap, BasemapType, ModeTab, SpotterPin } from '../components/RadarMap';
-import { WeatherWiseRadarCard, ProductKey } from '../components/WeatherWiseRadarCard';
+import { RadarMap, BasemapType, ModeTab } from '../components/RadarMap';
+import { WeatherWiseRadarCard } from '../components/WeatherWiseRadarCard';
 import { WeatherWiseAlertsPanel, WeatherAlertItem } from '../components/WeatherWiseAlertsPanel';
 import { RADAR_SITES } from '../lib/radar-config';
 
@@ -37,25 +37,24 @@ export default function MesoVortexWorkstation() {
   const [maxRefWindow, setMaxRefWindow] = useState(10);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // Basemap State
   const [basemap, setBasemap] = useState<BasemapType>('satellite-streets');
   const [basemapStatus, setBasemapStatus] = useState('Satellite Streets (Default)');
 
-  // Display Controls
   const [gateFilter, setGateFilter] = useState(5);
   const [radarOpacity, setRadarOpacity] = useState(0.88);
   const [smoothing, setSmoothing] = useState(false);
   const [colorTable, setColorTable] = useState('nws');
 
-  // Overlays
   const [showLightning, setShowLightning] = useState(true);
   const [showStormTracks, setShowStormTracks] = useState(true);
   const [showRadarSites, setShowRadarSites] = useState(true);
+  const [showRadarPills, setShowRadarPills] = useState(true);
   const [showRangeRings, setShowRangeRings] = useState(true);
   const [showCounties, setShowCounties] = useState(true);
   const [showTornadoAnalysis, setShowTornadoAnalysis] = useState(true);
+  const [showLSR, setShowLSR] = useState(false);
+  const [showWatches, setShowWatches] = useState(true);
 
-  // Alerts Panel
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [liveAlerts, setLiveAlerts] = useState<WeatherAlertItem[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -107,8 +106,6 @@ export default function MesoVortexWorkstation() {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-[#070c14] select-none font-sans text-slate-100">
-      
-      {/* 1. TOP EDGE LEGEND BAR */}
       <aside aria-label="Product legend" className="flex h-[22px] shrink-0 items-center justify-between border-t border-slate-800 bg-slate-950 px-3 text-[9px] font-mono">
         <span className="font-bold text-slate-400 whitespace-nowrap">
           {product === 'max_ref' ? `MAX REF (${maxRefWindow} scans)` :
@@ -120,7 +117,7 @@ export default function MesoVortexWorkstation() {
            product === 'zdr' ? 'ZDR (dB)' :
            product === 'kdp' ? 'KDP (deg/km)' :
            product === 'tops' ? 'TOPS (kft)' :
-           product === 'vil' ? 'VIL (kg/m²)' :
+           product === 'vil' ? 'VIL (kg/m\u00b2)' :
            product.toUpperCase()}
         </span>
         <div className="flex h-2 w-72 overflow-hidden rounded border border-slate-700 mx-2">
@@ -142,7 +139,6 @@ export default function MesoVortexWorkstation() {
         <span className="text-slate-400">5 · 15 · 30 · 45 · 60 · 70+</span>
       </aside>
 
-      {/* 2. TOP WEATHERWISE NAVIGATION BAR */}
       <div className="pointer-events-none absolute top-7 left-0 right-0 z-40 flex items-center justify-between px-4">
         <div className="flex items-center gap-2 pointer-events-auto">
           <button
@@ -162,7 +158,7 @@ export default function MesoVortexWorkstation() {
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              🛰️ Satellite
+              Satellite
             </button>
             <button
               onClick={() => handleSelectBasemap('custom-weather')}
@@ -172,12 +168,11 @@ export default function MesoVortexWorkstation() {
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              🎨 Custom Mapbox
+              Custom
             </button>
           </div>
         </div>
 
-        {/* Center Pill */}
         <div className="pointer-events-auto flex flex-col items-center">
           <div className="flex items-center gap-2 rounded-full bg-white px-3 py-1 shadow-2xl border border-slate-200">
             <div
@@ -205,7 +200,6 @@ export default function MesoVortexWorkstation() {
                     tab === modeTab ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
-                  {modeTab === 'Radar' && <span>📡</span>}
                   {modeTab}
                 </button>
               ))}
@@ -213,7 +207,7 @@ export default function MesoVortexWorkstation() {
           </div>
 
           {tab === 'Outlooks' && (
-            <div className="mt-1.5 flex items-center gap-2 rounded-full bg-white px-3 py-1 shadow-xl border border-slate-200 text-xs font-bold text-slate-700 animate-fade-in">
+            <div className="mt-1.5 flex items-center gap-2 rounded-full bg-white px-3 py-1 shadow-xl border border-slate-200 text-xs font-bold text-slate-700">
               <span className="px-1">Categorical</span>
               <span className="text-slate-300">|</span>
               {(['Day 1', 'Day 2', 'Day 3'] as SpcDay[]).map((d) => (
@@ -231,17 +225,15 @@ export default function MesoVortexWorkstation() {
           )}
         </div>
 
-        {/* Alerts Pill */}
         <button
           onClick={() => setAlertsOpen((v) => !v)}
           className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-amber-400 hover:bg-amber-300 px-3 py-1.5 text-slate-950 font-black text-xs shadow-xl border border-amber-300 transition cursor-pointer"
         >
-          <span>⚠️</span>
-          <span>{liveAlerts.length || 188}</span>
+          <span>{liveAlerts.length || 0}</span>
+          <span>alerts</span>
         </button>
       </div>
 
-      {/* 3. FULL MAP CANVAS */}
       <div className="absolute inset-0">
         <RadarMap
           product={product}
@@ -261,7 +253,6 @@ export default function MesoVortexWorkstation() {
         />
       </div>
 
-      {/* 4. BOTTOM-LEFT RADAR CARD */}
       <WeatherWiseRadarCard
         siteId={currentSite.id}
         siteName={currentSite.name}
@@ -286,7 +277,10 @@ export default function MesoVortexWorkstation() {
         showStormTracks={showStormTracks}
         onToggleStormTracks={() => setShowStormTracks((v) => !v)}
         showRadarSites={showRadarSites}
-        onToggleRadarSites={() => setShowRadarSites((v) => !v)}
+        onToggleRadarSites={() => {
+          setShowRadarSites((v) => !v);
+          setShowRadarPills((v) => !v);
+        }}
         showRangeRings={showRangeRings}
         onToggleRangeRings={() => setShowRangeRings((v) => !v)}
         showCounties={showCounties}
@@ -295,27 +289,46 @@ export default function MesoVortexWorkstation() {
         onToggleTornadoAnalysis={() => setShowTornadoAnalysis((v) => !v)}
       />
 
-      {/* 5. RIGHT-SIDE ALERTS PANEL */}
       {alertsOpen && (
         <WeatherWiseAlertsPanel
           alerts={liveAlerts}
           onClose={() => setAlertsOpen(false)}
-          onSelectAlert={(alert) => console.log('Selected alert:', alert)}
+          onSelectAlert={() => {}}
         />
       )}
 
-      {/* Slide-out Menu */}
       {menuOpen && (
-        <div className="fixed inset-0 z-50 flex bg-black/60 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-50 flex bg-black/60 backdrop-blur-sm">
           <div className="w-80 bg-white p-5 shadow-2xl space-y-4 text-slate-800">
             <div className="flex items-center justify-between border-b pb-3 font-extrabold text-base">
-              <div className="flex items-center gap-2">
-                <Image src="/logo.png" alt="MesoVortex" width={24} height={24} className="rounded-full" />
-                <span>MesoVortex Menu</span>
-              </div>
+              <span>MesoVortex Menu</span>
               <button onClick={() => setMenuOpen(false)}>✕</button>
             </div>
             <div className="space-y-2 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRadarPills((v) => !v);
+                  setShowRadarSites((v) => !v);
+                }}
+                className="w-full p-2 text-left hover:bg-slate-100 rounded-lg"
+              >
+                {showRadarPills ? 'Hide' : 'Show'} radar site pills
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowLSR((v) => !v)}
+                className="w-full p-2 text-left hover:bg-slate-100 rounded-lg"
+              >
+                {showLSR ? 'Hide' : 'Show'} local storm reports
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowWatches((v) => !v)}
+                className="w-full p-2 text-left hover:bg-slate-100 rounded-lg"
+              >
+                {showWatches ? 'Hide' : 'Show'} watches
+              </button>
               <div
                 onClick={() => {
                   setRadarSite('KLZK');
@@ -323,7 +336,7 @@ export default function MesoVortexWorkstation() {
                 }}
                 className="p-2 hover:bg-slate-100 rounded-lg cursor-pointer"
               >
-                📡 Center on Little Rock (KLZK)
+                Center on Little Rock (KLZK)
               </div>
               <div
                 onClick={() => {
@@ -332,7 +345,7 @@ export default function MesoVortexWorkstation() {
                 }}
                 className="p-2 hover:bg-slate-100 rounded-lg cursor-pointer"
               >
-                📡 Center on Oklahoma City (KTLX)
+                Center on Oklahoma City (KTLX)
               </div>
             </div>
           </div>
