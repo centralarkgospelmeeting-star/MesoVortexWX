@@ -33,7 +33,7 @@ function play1050HzSiren(durationSeconds = 3) {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
 
-    osc.type = 'sine';
+     | osc.type = 'sine';
     const [product, setProduct] = useState<RadarProduct>('ref');
   const [tilt, setTilt] = useState('0.5');
   const [radarSite, setRadarSite] = useState('KLZK');
