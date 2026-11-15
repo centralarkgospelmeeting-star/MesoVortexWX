@@ -1,29 +1,74 @@
-import { fetchJsonWithTimeout, errorPayload } from '../../../../lib/api-utils';
+import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Composite radar tile timeline from RainViewer Weather Maps API.
+ * Free tier is limited (zoom, rate limits, no large composites) as of 2025/2026.
+ * For single-station (terminal) radar use /api/radar or /api/nexrad/frames (IEM).
+ */
 export async function GET() {
-  const source = 'https://api.rainviewer.com/public/weather-maps-timestamps';
-  const result = await fetchJsonWithTimeout(source, { timeoutMs: 10000 });
-  if (!result.ok) {
-    return Response.json(errorPayload({ tiles: [], attribution: 'RainViewer' }, source, result.error), {
-      headers: { 'Cache-Control': 'no-store' },
+  const source = 'https://api.rainviewer.com/public/weather-maps.json';
+
+  try {
+    const res = await fetch(source, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(10000),
     });
+
+    if (!res.ok) {
+      return NextResponse.json(
+        {
+          tiles: [],
+          attribution: 'RainViewer',
+          error: `RainViewer HTTP ${res.status}`,
+          _meta: { ok: false, source },
+        },
+        { status: 502, headers: { 'Cache-Control': 'no-store' } }
+      );
+    }
+
+    const data = await res.json();
+    const host = data.host || 'https://tilecache.rainviewer.com';
+    const past = data.radar?.past || [];
+
+    // Past frames only (nowcast discontinued for free use Jan 2026)
+    const tiles = past.slice(-12).map((frame: { time: number; path: string }) => ({
+      timestamp: frame.time,
+      // Free tier: keep zoom modest; path already includes /v2/radar/{ts}
+      url: `${host}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`,
+      time: new Date(frame.time * 1000).toISOString(),
+    }));
+
+    return NextResponse.json(
+      {
+        tiles,
+        attribution: 'RainViewer',
+        host,
+        generated: data.generated,
+        _meta: {
+          fetchedAt: new Date().toISOString(),
+          source,
+          ok: true,
+          count: tiles.length,
+          note: 'Composite tiles. Single-station radar: /api/radar?site=KLZK',
+        },
+      },
+      {
+        headers: {
+          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
+        },
+      }
+    );
+  } catch (err: any) {
+    return NextResponse.json(
+      {
+        tiles: [],
+        attribution: 'RainViewer',
+        error: err?.message || 'Failed to fetch RainViewer',
+        _meta: { ok: false, source },
+      },
+      { status: 502, headers: { 'Cache-Control': 'no-store' } }
+    );
   }
-
-  const timestamps = result.data.nowcast || result.data.radar || [];
-  const tiles = timestamps.slice(0, 6).map((ts: number) => ({
-    timestamp: ts,
-    url: `https://tilecache.rainviewer.com/v2/radar/${ts}/tiles/12/2048/2048/2/1_1.png`,
-  }));
-
-  return Response.json(
-    {
-      tiles,
-      attribution: 'RainViewer',
-      timestamp: new Date().toISOString(),
-      _meta: { fetchedAt: new Date().toISOString(), source, ok: true, count: tiles.length },
-    },
-    { headers: { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=120' } }
-  );
 }
