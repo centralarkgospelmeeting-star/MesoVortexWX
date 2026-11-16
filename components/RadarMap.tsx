@@ -144,6 +144,11 @@ export function RadarMap({
   const mapRef = useRef<MapLibreMap | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [tileError, setTileError] = useState<string | null>(null);
+  // True once the radar tile source has reported a successful load. Used to
+  // suppress false-positive 503/404 banners (e.g. historical frames or
+  // unrelated map sources failing while the live product renders fine).
+  const radarSourceHealthyRef = useRef(false);
+  const tileErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const site =
     RADAR_SITES.find((s) => s.id === radarSite || s.radarId === radarSite) ||
@@ -249,6 +254,10 @@ export function RadarMap({
   const updateRadar = useCallback(
     async (map: MapLibreMap) => {
       setTileError(null);
+      if (tileErrorTimerRef.current) {
+        clearTimeout(tileErrorTimerRef.current);
+        tileErrorTimerRef.current = null;
+      }
       let tileUrl = '';
 
       if (mode === 'Composite') {
@@ -312,6 +321,15 @@ export function RadarMap({
 
       if (map.getLayer(RADAR_LAYER_ID)) map.removeLayer(RADAR_LAYER_ID);
       if (map.getSource(RADAR_SOURCE_ID)) map.removeSource(RADAR_SOURCE_ID);
+
+      // New source: clear any prior banner state and health flag so a genuinely
+      // unavailable product still reports its own failure.
+      radarSourceHealthyRef.current = false;
+      if (tileErrorTimerRef.current) {
+        clearTimeout(tileErrorTimerRef.current);
+        tileErrorTimerRef.current = null;
+      }
+      setTileError(null);
 
       map.addSource(RADAR_SOURCE_ID, {
         type: 'raster',
@@ -419,11 +437,38 @@ export function RadarMap({
 
     mapRef.current = map;
 
+    // Radar tile status: only the radar product layer may raise the banner,
+    // and only when the current live source has not rendered successfully.
+    // Historical-frame failures (e.g. archived scans that 503) and failures
+    // from unrelated sources (basemap, NWS warnings) are ignored.
     map.on('error', (e: any) => {
+      if (e?.sourceId && e.sourceId !== RADAR_SOURCE_ID) return;
+
       const status = e?.error?.status || e?.status;
-      if (status === 404 || status === 503) {
+      if (status !== 404 && status !== 503) return;
+
+      // The live radar source already rendered -> ignore stray/history failures.
+      if (radarSourceHealthyRef.current) return;
+
+      if (tileErrorTimerRef.current) clearTimeout(tileErrorTimerRef.current);
+      tileErrorTimerRef.current = setTimeout(() => {
+        tileErrorTimerRef.current = null;
+        if (radarSourceHealthyRef.current) return;
         setTileError(`Tile Error (${status}): Data unavailable for this region.`);
+      }, 1200);
+    });
+
+    // Clear the banner as soon as the radar source loads successfully.
+    map.on('sourcedata', (e: any) => {
+      if (e?.sourceId !== RADAR_SOURCE_ID) return;
+      if (!e?.isSourceLoaded) return;
+
+      radarSourceHealthyRef.current = true;
+      if (tileErrorTimerRef.current) {
+        clearTimeout(tileErrorTimerRef.current);
+        tileErrorTimerRef.current = null;
       }
+      setTileError(null);
     });
 
     setTimeout(() => map.resize(), 100);
@@ -439,6 +484,11 @@ export function RadarMap({
     });
 
     return () => {
+      if (tileErrorTimerRef.current) {
+        clearTimeout(tileErrorTimerRef.current);
+        tileErrorTimerRef.current = null;
+      }
+      radarSourceHealthyRef.current = false;
       map.remove();
       mapRef.current = null;
     };
