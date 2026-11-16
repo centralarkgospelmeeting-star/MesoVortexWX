@@ -146,6 +146,15 @@ export function RadarMap({
   const [tileError, setTileError] = useState<string | null>(null);
 const [fastScanEnabled, setFastScanEnabled] = useState(true);
 const [sweepAngle, setSweepAngle] = useState(0);
+  useEffect(() => {
+  if (!fastScanEnabled) return;
+
+  const timer = setInterval(() => {
+    setSweepAngle((prev) => (prev + 3) % 360);
+  }, 16);
+
+  return () => clearInterval(timer);
+}, [fastScanEnabled]);
   // True once the radar tile source has reported a successful load. Used to
   // suppress false-positive 503/404 banners (e.g. historical frames or
   // unrelated map sources failing while the live product renders fine).
