@@ -6,6 +6,7 @@ import { RadarMap, BasemapType } from '../components/RadarMap';
 import { WeatherWiseRadarCard } from '../components/WeatherWiseRadarCard';
 import { WeatherWiseAlertsPanel, WeatherAlertItem } from '../components/WeatherWiseAlertsPanel';
 import { CrossSectionModal } from '../components/CrossSectionModal';
+import { SpotterNetworkPanel, SpotterReport } from '../components/SpotterNetworkPanel';
 import { computeVerticalCrossSection, CrossSectionResult } from '../lib/cross-section';
 import { RADAR_SITES } from '../lib/radar-config';
 
@@ -66,6 +67,16 @@ export default function MesoVortexWorkstation() {
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [liveAlerts, setLiveAlerts] = useState<WeatherAlertItem[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // ── Spotter Network State ─────────────────────────────────────────────────
+  const [spotterPanelOpen, setSpotterPanelOpen] = useState(false);
+  const [spotterData, setSpotterData] = useState<SpotterReport[]>([]);
+  const [spotterCount, setSpotterCount] = useState(0);
+
+  const handleSpottersUpdated = (data: SpotterReport[]) => {
+    setSpotterData(data);
+    setSpotterCount(data.length);
+  };
 
   const currentSite =
     RADAR_SITES.find((s) => s.id === radarSite) || RADAR_SITES[0];
@@ -243,14 +254,40 @@ export default function MesoVortexWorkstation() {
           )}
         </div>
 
-        {/* Alerts Pill */}
-        <button
-          onClick={() => setAlertsOpen((v) => !v)}
-          className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-amber-400 hover:bg-amber-300 px-3 py-1.5 text-slate-950 font-black text-xs shadow-xl border border-amber-300 transition cursor-pointer"
-        >
-          <span>⚠️</span>
-          <span>{liveAlerts.length || 188}</span>
-        </button>
+        {/* Right side — Alerts + Spotter Network buttons */}
+        <div className="pointer-events-auto flex items-center gap-2">
+          {/* Spotter Network Button */}
+          <button
+            onClick={() => setSpotterPanelOpen((v) => !v)}
+            title="Spotter Network — Live ground reports"
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-black text-xs shadow-xl border transition cursor-pointer ${
+              spotterPanelOpen
+                ? 'bg-cyan-600 border-cyan-500 text-white'
+                : spotterCount > 0
+                  ? 'bg-cyan-900/80 border-cyan-700 text-cyan-300 hover:bg-cyan-800'
+                  : 'bg-slate-900/80 border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+            }`}
+          >
+            <span>📡</span>
+            <span>Spotters</span>
+            {spotterCount > 0 && (
+              <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
+                spotterCount > 0 ? 'bg-cyan-500 text-white' : ''
+              }`}>
+                {spotterCount}
+              </span>
+            )}
+          </button>
+
+          {/* Alerts Button */}
+          <button
+            onClick={() => setAlertsOpen((v) => !v)}
+            className="flex items-center gap-1.5 rounded-full bg-amber-400 hover:bg-amber-300 px-3 py-1.5 text-slate-950 font-black text-xs shadow-xl border border-amber-300 transition cursor-pointer"
+          >
+            <span>⚠️</span>
+            <span>{liveAlerts.length || 188}</span>
+          </button>
+        </div>
       </div>
 
       {/* On-Map Instruction Pill when Cross-Section Slicer is Active */}
@@ -281,6 +318,7 @@ export default function MesoVortexWorkstation() {
           crossSectionMode={crossSectionMode}
           showRangeRings={showRangeRings}
           showRadarPills={showRadarSites}
+          spotterData={spotterData}
           onSelectSite={(id) => setRadarSite(id)}
           onCrossSectionComplete={async (pA, pB) => {
             const cut = await computeVerticalCrossSection(
@@ -348,6 +386,15 @@ export default function MesoVortexWorkstation() {
         />
       )}
 
+      {/* 7. SPOTTER NETWORK PANEL */}
+      <SpotterNetworkPanel
+        isOpen={spotterPanelOpen}
+        onClose={() => setSpotterPanelOpen(false)}
+        onSpottersUpdated={handleSpottersUpdated}
+        radarLat={currentSite.lat}
+        radarLon={currentSite.lon}
+      />
+
       {/* Slide-out Menu */}
       {menuOpen && (
         <div className="fixed inset-0 z-50 flex bg-black/60 backdrop-blur-sm animate-fade-in">
@@ -361,19 +408,25 @@ export default function MesoVortexWorkstation() {
             </div>
             <div className="space-y-2 text-xs font-bold">
               <div
-                onClick={() => {
-                  setRadarSite('KLZK');
-                  setMenuOpen(false);
-                }}
+                onClick={() => { setSpotterPanelOpen(true); setMenuOpen(false); }}
+                className="flex items-center gap-2 p-2 hover:bg-slate-100 rounded-lg cursor-pointer"
+              >
+                <span>📡</span>
+                <span>Spotter Network</span>
+                {spotterCount > 0 && (
+                  <span className="ml-auto rounded-full bg-cyan-100 px-2 py-0.5 text-[9px] text-cyan-700 font-bold">
+                    {spotterCount} active
+                  </span>
+                )}
+              </div>
+              <div
+                onClick={() => { setRadarSite('KLZK'); setMenuOpen(false); }}
                 className="p-2 hover:bg-slate-100 rounded-lg cursor-pointer"
               >
                 📡 Center on Little Rock (KLZK)
               </div>
               <div
-                onClick={() => {
-                  setRadarSite('KTLX');
-                  setMenuOpen(false);
-                }}
+                onClick={() => { setRadarSite('KTLX'); setMenuOpen(false); }}
                 className="p-2 hover:bg-slate-100 rounded-lg cursor-pointer"
               >
                 📡 Center on Oklahoma City (KTLX)

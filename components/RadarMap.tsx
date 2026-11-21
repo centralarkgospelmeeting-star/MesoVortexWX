@@ -6,6 +6,7 @@ import type { Map as MapLibreMap, StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { RADAR_SITES } from '../lib/radar-config';
 import { computeMaxReflectivityCanvas, interpolateReflectivityFrames } from '../lib/max-reflectivity';
+import type { SpotterReport } from './SpotterNetworkPanel';
 
 export type ModeTab = 'Radar' | '3D Radar' | 'Composite' | 'Satellite' | 'Models' | 'Outlooks';
 export type BasemapType = 'satellite-streets' | 'custom-weather' | 'mapbox' | 'satellite';
@@ -34,6 +35,7 @@ export interface RadarMapProps {
   crossSectionMode?: boolean;
   showRangeRings?: boolean;
   showRadarPills?: boolean;
+  spotterData?: SpotterReport[];          // Live spotter pins & reports
   onSelectSite?: (siteId: string) => void;
   onCrossSectionComplete?: (pointA: [number, number], pointB: [number, number]) => void;
   [key: string]: any;
@@ -100,6 +102,7 @@ export function RadarMap({
   radarOpacity = 0.88,
   crossSectionMode = false,
   showRadarPills = true,
+  spotterData = [],
   onSelectSite,
   onCrossSectionComplete,
 }: RadarMapProps) {
@@ -108,6 +111,7 @@ export function RadarMap({
   const siteMarkersRef = useRef<maplibregl.Marker[]>([]);
   const rhiMarkersRef = useRef<maplibregl.Marker[]>([]);
   const rhiPointsRef = useRef<[number, number][]>([]);
+  const spotterMarkersRef = useRef<maplibregl.Marker[]>([]);
 
   const [mapReady, setMapReady] = useState(false);
   const [tileError, setTileError] = useState<string | null>(null);
@@ -206,6 +210,96 @@ export function RadarMap({
       })
       .catch((err) => console.warn('[Warnings Notice]:', err));
   }, []);
+
+  // ── Spotter Network Markers ──────────────────────────────────────────────
+  // Renders live spotter positions & reports as map markers
+  const renderSpotterMarkers = useCallback(
+    (map: MapLibreMap, data: SpotterReport[]) => {
+      // Clear old spotter markers
+      spotterMarkersRef.current.forEach((m) => m.remove());
+      spotterMarkersRef.current = [];
+
+      data.forEach((s) => {
+        if (!s.lat || !s.lon) return;
+
+        const isReport = s.type === 'report' || !!s.hazard;
+        const h = (s.hazard || '').toLowerCase();
+
+        // Choose icon and color based on hazard type
+        let icon = '📡';
+        let color = '#06b6d4'; // cyan for position
+        let borderColor = '#0e7490';
+
+        if (isReport) {
+          if (h.includes('tornado')) { icon = '🌪'; color = '#dc2626'; borderColor = '#7f1d1d'; }
+          else if (h.includes('funnel') || h.includes('wall')) { icon = '🌀'; color = '#ea580c'; borderColor = '#7c2d12'; }
+          else if (h.includes('hail')) { icon = '🧊'; color = '#eab308'; borderColor = '#713f12'; }
+          else if (h.includes('wind') || h.includes('gust')) { icon = '💨'; color = '#f59e0b'; borderColor = '#78350f'; }
+          else if (h.includes('flood') || h.includes('water')) { icon = '🌊'; color = '#10b981'; borderColor = '#064e3b'; }
+          else if (h.includes('snow') || h.includes('ice') || h.includes('bliz')) { icon = '❄️'; color = '#38bdf8'; borderColor = '#0c4a6e'; }
+          else if (h.includes('fire') || h.includes('smoke')) { icon = '🔥'; color = '#f97316'; borderColor = '#7c2d12'; }
+          else { icon = '📋'; color = '#a78bfa'; borderColor = '#4c1d95'; }
+        }
+
+        // Build the marker element
+        const el = document.createElement('div');
+        el.style.cssText = `
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: ${isReport ? '28px' : '22px'};
+          height: ${isReport ? '28px' : '22px'};
+          border-radius: 50%;
+          background: ${color};
+          border: 2px solid ${borderColor};
+          box-shadow: 0 0 ${isReport ? '8px' : '4px'} ${color}99;
+          font-size: ${isReport ? '14px' : '11px'};
+          cursor: pointer;
+          transition: transform 0.1s;
+          z-index: ${isReport ? 10 : 5};
+        `;
+        el.textContent = icon;
+        el.title = `${s.name}${s.hazard ? ' — ' + s.hazard : ''}`;
+
+        // Hover effect
+        el.addEventListener('mouseenter', () => { el.style.transform = 'scale(1.25)'; });
+        el.addEventListener('mouseleave', () => { el.style.transform = 'scale(1)'; });
+
+        // Click: show popup
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const popup = new maplibregl.Popup({
+            closeButton: true,
+            className: 'mv-spotter-popup',
+            maxWidth: '260px',
+          })
+            .setLngLat([s.lon, s.lat])
+            .setHTML(`
+              <div style="font-family:sans-serif;font-size:11px;color:#e2e8f0;background:#0f172a;padding:10px;border-radius:8px;">
+                <div style="font-weight:700;font-size:13px;color:#fff;margin-bottom:4px;">
+                  ${icon} ${s.name}${s.verified ? ' <span style="color:#34d399;font-size:10px;">✓ Verified</span>' : ''}
+                </div>
+                ${s.hazard ? `<div style="color:${color};font-weight:600;margin-bottom:3px;">${s.hazard}</div>` : ''}
+                ${s.magnitude ? `<div style="color:#fbbf24;font-weight:700;font-size:12px;">${s.magnitude}</div>` : ''}
+                ${s.description ? `<div style="color:#cbd5e1;margin-top:4px;line-height:1.4;">${s.description}</div>` : ''}
+                <div style="color:#64748b;margin-top:6px;font-size:10px;">
+                  ${s.lat.toFixed(4)}°N ${Math.abs(s.lon).toFixed(4)}°W · ${s.timestamp}
+                </div>
+              </div>
+            `)
+            .addTo(map);
+          return popup;
+        });
+
+        const marker = new maplibregl.Marker({ element: el })
+          .setLngLat([s.lon, s.lat])
+          .addTo(map);
+
+        spotterMarkersRef.current.push(marker);
+      });
+    },
+    []
+  );
 
   const updateRadar = useCallback(
     async (map: MapLibreMap) => {
@@ -451,6 +545,13 @@ export function RadarMap({
       map.flyTo({ center: [site.lon, site.lat], zoom: 7.5, duration: 1100 });
     }
   }, [site.lon, site.lat, radarSite, mapReady]);
+
+  // Re-render spotter markers whenever spotterData changes
+  useEffect(() => {
+    if (mapRef.current && mapReady) {
+      renderSpotterMarkers(mapRef.current, spotterData ?? []);
+    }
+  }, [spotterData, mapReady, renderSpotterMarkers]);
 
   return (
     <div style={{ position: 'absolute', inset: 0, width: '100vw', height: '100vh', overflow: 'hidden', cursor: crossSectionMode ? 'crosshair' : 'default' }}>
