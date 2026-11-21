@@ -441,11 +441,13 @@ export default function MesoVortexWorkstation() {
         onOpenCrossSection={() => setCrossSectionMode(true)}
       />
 
-      <WeatherWiseAlertsPanel
-        isOpen={alertsOpen}
-        onClose={() => setAlertsOpen(false)}
-        alerts={liveAlerts}
-      />
+      {alertsOpen && (
+        <WeatherWiseAlertsPanel
+          alerts={liveAlerts}
+          onClose={() => setAlertsOpen(false)}
+          onSelectAlert={() => {}}
+        />
+      )}
 
       {crossSectionData && (
         <CrossSectionModal
