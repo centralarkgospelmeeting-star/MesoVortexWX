@@ -280,7 +280,7 @@ export default function MesoVortexWorkstation() {
           radarOpacity={radarOpacity}
           crossSectionMode={crossSectionMode}
           showRangeRings={showRangeRings}
-          showRadarPills={showRadarPills}
+          showRadarPills={showRadarSites}
           onSelectSite={(id) => setRadarSite(id)}
           onCrossSectionComplete={async (pA, pB) => {
             const cut = await computeVerticalCrossSection(

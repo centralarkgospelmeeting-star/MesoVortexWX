@@ -59,6 +59,9 @@ const WARNINGS_SOURCE_ID = 'mv-warnings-source';
 const WARNINGS_FILL_ID = 'mv-warnings-fill';
 const WARNINGS_LINE_OUTER_ID = 'mv-warnings-line-outer';
 const WARNINGS_LINE_INNER_ID = 'mv-warnings-line-inner';
+// IEM raster tile layer for ALL active NWS warnings/watches/advisories
+const WARNINGS_TILES_SOURCE_ID = 'mv-warnings-tiles-source';
+const WARNINGS_TILES_LAYER_ID = 'mv-warnings-tiles-layer';
 const RHI_LINE_SOURCE_ID = 'mv-rhi-baseline-source';
 const RHI_LINE_LAYER_ID = 'mv-rhi-baseline-layer';
 
@@ -114,16 +117,32 @@ export function RadarMap({
     RADAR_SITES[0];
 
   const updateWarnings = useCallback((map: MapLibreMap) => {
-    fetch('https://api.weather.gov/alerts/active?status=actual&message_type=alert')
+    // ── Layer A: IEM raster tile overlay — shows ALL active NWS warnings, watches & advisories instantly ──
+    // This renders every warning polygon that NWS issues, regardless of geometry availability in the API
+    if (!map.getSource(WARNINGS_TILES_SOURCE_ID)) {
+      map.addSource(WARNINGS_TILES_SOURCE_ID, {
+        type: 'raster',
+        tiles: [
+          'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/warnings_active/{z}/{x}/{y}.png',
+        ],
+        tileSize: 256,
+        attribution: '© Iowa Environmental Mesonet / NWS',
+      });
+      map.addLayer({
+        id: WARNINGS_TILES_LAYER_ID,
+        type: 'raster',
+        source: WARNINGS_TILES_SOURCE_ID,
+        paint: { 'raster-opacity': 0.75 },
+      });
+    }
+
+    // ── Layer B: NWS GeoJSON — clickable polygon layer for alerts that include direct geometry ──
+    // (Most alerts are zone/county-based with no geometry; Layer A covers those via IEM tiles)
+    fetch('https://api.weather.gov/alerts/active?status=actual&message_type=alert&limit=500')
       .then((res) => res.json())
       .then((geojson) => {
-        const polygonFeatures = (geojson.features || []).filter((f: any) => {
-          const event = f.properties?.event || '';
-          return (
-            f.geometry &&
-            (event.includes('Warning') || event.includes('Tornado') || event.includes('Thunderstorm'))
-          );
-        });
+        // Include ALL features that have polygon geometry (any event type)
+        const polygonFeatures = (geojson.features || []).filter((f: any) => f.geometry != null);
 
         const validGeoJSON = { type: 'FeatureCollection', features: polygonFeatures };
         const source = map.getSource(WARNINGS_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
@@ -142,11 +161,15 @@ export function RadarMap({
                 'match',
                 ['get', 'event'],
                 'Tornado Warning', '#dc2626',
+                'Tornado Watch', '#fbbf24',
                 'Severe Thunderstorm Warning', '#f59e0b',
                 'Flash Flood Warning', '#10b981',
+                'Winter Storm Warning', '#a78bfa',
+                'Blizzard Warning', '#7c3aed',
+                'High Wind Warning', '#f97316',
                 '#3b82f6',
               ],
-              'fill-opacity': 0.18,
+              'fill-opacity': 0.08,
             },
           });
 
@@ -158,12 +181,14 @@ export function RadarMap({
               'line-color': [
                 'match',
                 ['get', 'event'],
-                'Tornado Warning', '#dc2626',
-                'Severe Thunderstorm Warning', '#ffffff',
-                'Flash Flood Warning', '#059669',
+                'Tornado Warning', '#ff0000',
+                'Tornado Watch', '#fbbf24',
+                'Severe Thunderstorm Warning', '#ff9900',
+                'Flash Flood Warning', '#00cc66',
+                'Winter Storm Warning', '#9b8fe0',
                 '#1d4ed8',
               ],
-              'line-width': 3.5,
+              'line-width': 3,
             },
           });
 
@@ -172,15 +197,9 @@ export function RadarMap({
             type: 'line',
             source: WARNINGS_SOURCE_ID,
             paint: {
-              'line-color': [
-                'match',
-                ['get', 'event'],
-                'Tornado Warning', '#f87171',
-                'Severe Thunderstorm Warning', '#fbbf24',
-                'Flash Flood Warning', '#34d399',
-                '#60a5fa',
-              ],
-              'line-width': 1.8,
+              'line-color': '#ffffff',
+              'line-width': 1,
+              'line-opacity': 0.5,
             },
           });
         }
@@ -262,7 +281,13 @@ export function RadarMap({
         scheme: 'xyz',
       });
 
-      const beforeId = map.getLayer(WARNINGS_FILL_ID) ? WARNINGS_FILL_ID : undefined;
+      // Insert radar BELOW the warning overlay layers so warnings appear on top
+      const beforeId =
+        map.getLayer(WARNINGS_TILES_LAYER_ID)
+          ? WARNINGS_TILES_LAYER_ID
+          : map.getLayer(WARNINGS_FILL_ID)
+            ? WARNINGS_FILL_ID
+            : undefined;
 
       map.addLayer(
         {
