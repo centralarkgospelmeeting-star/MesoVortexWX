@@ -17,7 +17,7 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
 }
 
 function filterByRadius(features: any[], lat: number | null, lon: number | null, radiusKm: number): any[] {
-  if (lat == null || lon == null || isNaN(lat) || isNaN(lon)) return features;
+  if (lat == null || lon == null || isNaN(lat) || isNaN(lon) || radiusKm >= 10000) return features;
   return features.filter((f) => {
     const coords = f?.geometry?.coordinates;
     if (!coords || coords.length < 2) return false;
@@ -25,38 +25,60 @@ function filterByRadius(features: any[], lat: number | null, lon: number | null,
   });
 }
 
-function normalizeToGeoJSON(data: any): any[] {
-  if (Array.isArray(data?.features)) return data.features;
+// ─── GR Placefile Parser for Spotter Network ─────────────────────────────────
+// Parses the live https://www.spotternetwork.org/feeds/gr.txt feed used by WeatherWise/GRLevelX
+function parseGRFeed(text: string): any[] {
+  const features: any[] = [];
+  const blocks = text.split(/Object:\s*/);
 
-  if (Array.isArray(data)) {
-    return data
-      .filter((r: any) => r.lat != null && (r.lon != null || r.lng != null))
-      .map((r: any) => ({
-        type: 'Feature',
-        geometry: {
-          type: 'Point',
-          coordinates: [Number(r.lon ?? r.lng), Number(r.lat)],
-        },
-        properties: {
-          id: r.id ?? r.spotter_id ?? `sn-${Date.now()}-${Math.random()}`,
-          name: r.name ?? r.callsign ?? r.handle ?? 'Spotter',
-          callsign: r.callsign ?? r.handle,
-          time: r.time ?? r.timestamp ?? r.reported_at ?? new Date().toISOString(),
-          hazard: r.hazard ?? r.type ?? r.report_type,
-          description: r.report ?? r.text ?? r.description ?? r.remark,
-          magnitude: r.magnitude ?? r.hail_size ?? r.wind_speed,
-          verified: r.verified ?? false,
-          ...r,
-        },
-      }));
+  for (let i = 1; i < blocks.length; i++) {
+    const block = blocks[i];
+    const lines = block.split('\n');
+    const coordLine = lines[0].trim();
+    const [latStr, lonStr] = coordLine.split(',');
+    const lat = parseFloat(latStr);
+    const lon = parseFloat(lonStr);
+    if (isNaN(lat) || isNaN(lon)) continue;
+
+    // Find Icon line which contains the metadata string
+    const iconLine = lines.find((l) => l.startsWith('Icon:'));
+    let rawInfo = '';
+    if (iconLine) {
+      const match = iconLine.match(/"([^"]*)"/);
+      if (match) rawInfo = match[1];
+    }
+
+    // Find Text line if any
+    const textLine = lines.find((l) => l.startsWith('Text:'));
+    let textLabel = '';
+    if (textLine) {
+      const match = textLine.match(/"([^"]*)"/);
+      if (match) textLabel = match[1];
+    }
+
+    const infoParts = rawInfo.split(/\\n|\n/);
+    const name = infoParts[0] || textLabel || 'Live Spotter';
+    const time = infoParts[1] || '';
+    const status = infoParts[2] || 'STATIONARY';
+    const extraDetails = infoParts.slice(3).filter(Boolean).join('\n');
+
+    features.push({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [lon, lat] },
+      properties: {
+        id: `sn-pos-${i}-${lat.toFixed(4)}-${lon.toFixed(4)}`,
+        name,
+        callsign: textLabel && textLabel !== name ? textLabel : undefined,
+        time,
+        status,
+        description: extraDetails || status,
+        extraDetails,
+        type: 'position',
+      },
+    });
   }
 
-  if (data?.spotters || data?.positions || data?.reports) {
-    const list = data.spotters ?? data.positions ?? data.reports ?? [];
-    return normalizeToGeoJSON(list);
-  }
-
-  return [];
+  return features;
 }
 
 // ─── Route Handler ────────────────────────────────────────────────────────────
@@ -64,151 +86,84 @@ function normalizeToGeoJSON(data: any): any[] {
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const mode = (searchParams.get('mode') || 'positions').toLowerCase();
-  const user = searchParams.get('user') || '';
-  const pass = searchParams.get('pass') || '';
   const lat = searchParams.get('lat') ? Number(searchParams.get('lat')) : null;
   const lon = searchParams.get('lon') ? Number(searchParams.get('lon')) : null;
-  const radiusKm = Number(searchParams.get('radiusKm') || 500);
+  const radiusKm = Number(searchParams.get('radiusKm') || 25000); // default to nationwide
 
-  // ── A: IEM Local Storm Reports (always public — no auth needed) ──────────
-  if (mode === 'lsr') {
+  // ── A: Live Spotter Positions (gr.txt - official public WeatherWise/GR feed) ──
+  if (mode === 'positions') {
     try {
-      const hours = Number(searchParams.get('hours') || 3);
-      const url = `https://mesonet.agron.iastate.edu/geojson/lsr.geojson?hours=${hours}`;
-      const res = await fetch(url, { headers: { 'User-Agent': 'MesoVortexWX/1.0' } });
-      if (!res.ok) throw new Error(`IEM LSR returned ${res.status}`);
-      const data = await res.json();
+      const res = await fetch('https://www.spotternetwork.org/feeds/gr.txt', {
+        headers: { 'User-Agent': 'MesoVortexWX/1.0', Accept: 'text/plain' },
+        next: { revalidate: 30 },
+      });
 
+      if (res.ok) {
+        const text = await res.text();
+        let features = parseGRFeed(text);
+        if (lat && lon && radiusKm < 10000) {
+          features = filterByRadius(features, lat, lon, radiusKm);
+        }
+
+        return NextResponse.json({
+          type: 'FeatureCollection',
+          features,
+          meta: {
+            source: 'Spotter Network (GR Feed)',
+            mode: 'positions',
+            count: features.length,
+            fetchedAt: new Date().toISOString(),
+          },
+        });
+      }
+    } catch (err: any) {
+      console.warn('[Spotter Positions Error]:', err);
+    }
+  }
+
+  // ── B: Local Storm Reports (IEM LSR / NWS Ground Reports) ─────────────────
+  try {
+    const hours = Number(searchParams.get('hours') || 4);
+    const url = `https://mesonet.agron.iastate.edu/geojson/lsr.geojson?hours=${hours}`;
+    const res = await fetch(url, { headers: { 'User-Agent': 'MesoVortexWX/1.0' } });
+
+    if (res.ok) {
+      const data = await res.json();
       let features = (data.features || []).map((f: any) => ({
         type: 'Feature',
         geometry: f.geometry,
         properties: {
           id: `lsr-${f.properties?.wfo}-${f.properties?.valid}-${Math.random()}`,
-          name: f.properties?.source || 'LSR Report',
+          name: f.properties?.source || 'Storm Spotter',
           callsign: f.properties?.source,
           time: f.properties?.valid,
           hazard: f.properties?.typetext || f.properties?.type,
-          description: f.properties?.remark,
+          description: f.properties?.remark || f.properties?.typetext,
           magnitude: f.properties?.magnitude
             ? `${f.properties.magnitude}${f.properties.magf ? ' ' + f.properties.magf : ''}`
             : undefined,
           verified: true,
+          type: 'report',
         },
       }));
 
-      features = filterByRadius(features, lat, lon, radiusKm);
+      if (lat && lon && radiusKm < 10000) {
+        features = filterByRadius(features, lat, lon, radiusKm);
+      }
 
       return NextResponse.json({
         type: 'FeatureCollection',
         features,
-        meta: { source: 'IEM LSR', mode: 'lsr', count: features.length, fetchedAt: new Date().toISOString() },
-      });
-    } catch (err: any) {
-      return NextResponse.json({
-        type: 'FeatureCollection',
-        features: [],
-        meta: { source: 'IEM LSR', mode: 'lsr', count: 0, error: String(err?.message || err), fetchedAt: new Date().toISOString() },
+        meta: { source: 'IEM LSR / NWS', mode: 'reports', count: features.length, fetchedAt: new Date().toISOString() },
       });
     }
+  } catch (err: any) {
+    // fallback
   }
-
-  // ── B: Spotter Network API (requires credentials) ─────────────────────────
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    'User-Agent': 'MesoVortexWX/1.0',
-    'Cache-Control': 'no-cache',
-  };
-
-  // Basic-auth if credentials provided
-  if (user && pass) {
-    headers['Authorization'] = `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`;
-  }
-
-  // Try multiple known Spotter Network endpoint patterns
-  const endpointCandidates =
-    mode === 'reports'
-      ? [
-          'https://www.spotternetwork.org/feeds/reports.json',
-          'https://www.spotternetwork.org/api/reports',
-          'https://www.spotternetwork.org/feeds/gr_reports.txt',
-        ]
-      : [
-          'https://www.spotternetwork.org/feeds/positions.json',
-          'https://www.spotternetwork.org/api/spotters',
-          'https://www.spotternetwork.org/feeds/gr.txt',
-        ];
-
-  let features: any[] = [];
-  let usedEndpoint = '';
-  let fetchError = '';
-
-  for (const endpoint of endpointCandidates) {
-    try {
-      const res = await fetch(endpoint, { headers, signal: AbortSignal.timeout(8000) });
-      if (!res.ok) continue;
-
-      const contentType = res.headers.get('content-type') || '';
-      let data: any;
-
-      if (contentType.includes('json')) {
-        data = await res.json();
-        features = normalizeToGeoJSON(data);
-      } else {
-        // Plain-text GR feed — parse tab-separated format
-        const text = await res.text();
-        features = parseGRFeed(text, mode);
-      }
-
-      if (features.length >= 0) {
-        usedEndpoint = endpoint;
-        break;
-      }
-    } catch (err: any) {
-      fetchError = String(err?.message || err);
-      continue;
-    }
-  }
-
-  // Filter by radius
-  features = filterByRadius(features, lat, lon, radiusKm);
 
   return NextResponse.json({
     type: 'FeatureCollection',
-    features,
-    meta: {
-      source: 'Spotter Network',
-      mode,
-      count: features.length,
-      endpoint: usedEndpoint || 'none',
-      authenticated: !!(user && pass),
-      fetchedAt: new Date().toISOString(),
-      ...(fetchError && features.length === 0 ? { warning: fetchError } : {}),
-    },
-  });
-}
-
-// ─── GR Text Feed Parser ──────────────────────────────────────────────────────
-// Spotter Network's GR-compatible feed is tab-separated with lat/lon fields
-
-function parseGRFeed(text: string, mode: string): any[] {
-  const lines = text.split('\n').filter((l) => l.trim() && !l.startsWith(';') && !l.startsWith('#'));
-  return lines.flatMap((line, i) => {
-    const parts = line.split(/\t|,/).map((p) => p.trim());
-    // GR feed format: lat, lon, name, [optional fields...]
-    if (parts.length < 3) return [];
-    const lat = parseFloat(parts[0]);
-    const lon = parseFloat(parts[1]);
-    if (isNaN(lat) || isNaN(lon)) return [];
-    return [{
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [lon, lat] },
-      properties: {
-        id: `gr-${mode}-${i}`,
-        name: parts[2] || 'Spotter',
-        time: parts[3] || new Date().toISOString(),
-        hazard: mode === 'reports' ? (parts[4] || 'Report') : undefined,
-        description: parts.slice(4).join(' ') || undefined,
-      },
-    }];
+    features: [],
+    meta: { source: 'Spotter Network', count: 0, fetchedAt: new Date().toISOString() },
   });
 }

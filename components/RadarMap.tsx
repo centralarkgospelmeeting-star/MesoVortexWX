@@ -211,8 +211,8 @@ export function RadarMap({
       .catch((err) => console.warn('[Warnings Notice]:', err));
   }, []);
 
-  // ── Spotter Network Markers ──────────────────────────────────────────────
-  // Renders live spotter positions & reports as map markers
+  // ── Spotter Network Markers (WeatherWise & WeatherFront Red Dot Design) ───
+  // Renders live spotters as distinct red dots; clicking opens spotter dossier
   const renderSpotterMarkers = useCallback(
     (map: MapLibreMap, data: SpotterReport[]) => {
       // Clear old spotter markers
@@ -222,73 +222,102 @@ export function RadarMap({
       data.forEach((s) => {
         if (!s.lat || !s.lon) return;
 
-        const isReport = s.type === 'report' || !!s.hazard;
-        const h = (s.hazard || '').toLowerCase();
-
-        // Choose icon and color based on hazard type
-        let icon = '📡';
-        let color = '#06b6d4'; // cyan for position
-        let borderColor = '#0e7490';
-
-        if (isReport) {
-          if (h.includes('tornado')) { icon = '🌪'; color = '#dc2626'; borderColor = '#7f1d1d'; }
-          else if (h.includes('funnel') || h.includes('wall')) { icon = '🌀'; color = '#ea580c'; borderColor = '#7c2d12'; }
-          else if (h.includes('hail')) { icon = '🧊'; color = '#eab308'; borderColor = '#713f12'; }
-          else if (h.includes('wind') || h.includes('gust')) { icon = '💨'; color = '#f59e0b'; borderColor = '#78350f'; }
-          else if (h.includes('flood') || h.includes('water')) { icon = '🌊'; color = '#10b981'; borderColor = '#064e3b'; }
-          else if (h.includes('snow') || h.includes('ice') || h.includes('bliz')) { icon = '❄️'; color = '#38bdf8'; borderColor = '#0c4a6e'; }
-          else if (h.includes('fire') || h.includes('smoke')) { icon = '🔥'; color = '#f97316'; borderColor = '#7c2d12'; }
-          else { icon = '📋'; color = '#a78bfa'; borderColor = '#4c1d95'; }
-        }
-
-        // Build the marker element
+        // Container
         const el = document.createElement('div');
-        el.style.cssText = `
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: ${isReport ? '28px' : '22px'};
-          height: ${isReport ? '28px' : '22px'};
-          border-radius: 50%;
-          background: ${color};
-          border: 2px solid ${borderColor};
-          box-shadow: 0 0 ${isReport ? '8px' : '4px'} ${color}99;
-          font-size: ${isReport ? '14px' : '11px'};
-          cursor: pointer;
-          transition: transform 0.1s;
-          z-index: ${isReport ? 10 : 5};
-        `;
-        el.textContent = icon;
-        el.title = `${s.name}${s.hazard ? ' — ' + s.hazard : ''}`;
+        el.className = 'spotter-dot-marker';
+        el.title = `${s.name}${s.status ? ' (' + s.status + ')' : ''}`;
 
-        // Hover effect
-        el.addEventListener('mouseenter', () => { el.style.transform = 'scale(1.25)'; });
-        el.addEventListener('mouseleave', () => { el.style.transform = 'scale(1)'; });
+        // Outer pulsing ring for live effect
+        const pulse = document.createElement('div');
+        pulse.className = 'spotter-dot-pulse';
 
-        // Click: show popup
+        // Core Red Dot (WeatherWise & WeatherFront style)
+        const dot = document.createElement('div');
+        dot.className = 'spotter-dot-inner';
+
+        el.appendChild(pulse);
+        el.appendChild(dot);
+
+        // Click Handler: WeatherWise & WeatherFront dark info popup
         el.addEventListener('click', (e) => {
           e.stopPropagation();
-          const popup = new maplibregl.Popup({
+
+          // Format extra fields (Phone, Email, Notes, Ham, etc.)
+          const extraLines = (s.extraDetails || '').split('\n').filter(Boolean);
+          const detailsHtml = extraLines.length > 0
+            ? extraLines.map((line) => {
+                const sepIdx = line.indexOf(':');
+                if (sepIdx > -1) {
+                  const label = line.slice(0, sepIdx).trim();
+                  const val = line.slice(sepIdx + 1).trim();
+                  return `
+                    <div style="display:flex; justify-content:space-between; gap:8px; font-size:11px; padding:3px 0; border-top:1px solid rgba(255,255,255,0.06);">
+                      <span style="color:#64748b; font-weight:600;">${label}:</span>
+                      <span style="color:#e2e8f0; font-weight:500; text-align:right; word-break:break-word;">${val}</span>
+                    </div>
+                  `;
+                }
+                return `<div style="font-size:10px; color:#94a3b8; font-style:italic; padding-top:2px;">${line}</div>`;
+              }).join('')
+            : (s.description ? `<div style="font-size:11px; color:#94a3b8; padding-top:2px;">${s.description}</div>` : '');
+
+          const isMobile = (s.status || '').toUpperCase().includes('MOBILE');
+
+          new maplibregl.Popup({
             closeButton: true,
             className: 'mv-spotter-popup',
-            maxWidth: '260px',
+            maxWidth: '320px',
+            offset: [0, -8],
           })
             .setLngLat([s.lon, s.lat])
             .setHTML(`
-              <div style="font-family:sans-serif;font-size:11px;color:#e2e8f0;background:#0f172a;padding:10px;border-radius:8px;">
-                <div style="font-weight:700;font-size:13px;color:#fff;margin-bottom:4px;">
-                  ${icon} ${s.name}${s.verified ? ' <span style="color:#34d399;font-size:10px;">✓ Verified</span>' : ''}
+              <div style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:#080e18; color:#f8fafc; padding:14px; border-radius:12px; min-width:250px; box-shadow:0 20px 35px -5px rgba(0,0,0,0.85); border:1px solid rgba(255,255,255,0.12);">
+                
+                <!-- Header: Badge & Status -->
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.08);">
+                  <div style="display:flex; align-items:center; gap:6px;">
+                    <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#ef4444; box-shadow:0 0 8px #ef4444;"></span>
+                    <span style="font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; color:#f87171;">Spotter Network</span>
+                  </div>
+                  <span style="font-size:9px; font-weight:800; background:${isMobile ? '#0369a1' : '#1e293b'}; color:${isMobile ? '#38bdf8' : '#cbd5e1'}; padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.04em;">
+                    ${s.status || 'STATIONARY'}
+                  </span>
                 </div>
-                ${s.hazard ? `<div style="color:${color};font-weight:600;margin-bottom:3px;">${s.hazard}</div>` : ''}
-                ${s.magnitude ? `<div style="color:#fbbf24;font-weight:700;font-size:12px;">${s.magnitude}</div>` : ''}
-                ${s.description ? `<div style="color:#cbd5e1;margin-top:4px;line-height:1.4;">${s.description}</div>` : ''}
-                <div style="color:#64748b;margin-top:6px;font-size:10px;">
-                  ${s.lat.toFixed(4)}°N ${Math.abs(s.lon).toFixed(4)}°W · ${s.timestamp}
+
+                <!-- Spotter Name -->
+                <div style="font-size:15px; font-weight:800; color:#ffffff; line-height:1.2; margin-bottom:2px; letter-spacing:-0.01em;">
+                  ${s.name}
                 </div>
+                ${s.callsign ? `<div style="font-size:11px; font-family:monospace; font-weight:600; color:#38bdf8; margin-bottom:8px;">Callsign: ${s.callsign}</div>` : '<div style="margin-bottom:6px;"></div>'}
+
+                <!-- Location & Time Box -->
+                <div style="background:#0f172a; border-radius:8px; padding:8px 10px; margin:8px 0; border:1px solid rgba(255,255,255,0.08); font-size:11px; font-family:monospace;">
+                  <div style="display:flex; justify-content:space-between; color:#94a3b8; margin-bottom:4px;">
+                    <span>Position:</span>
+                    <span style="color:#f1f5f9; font-weight:bold;">${s.lat.toFixed(4)}°N, ${Math.abs(s.lon).toFixed(4)}°W</span>
+                  </div>
+                  ${(s.time || s.timestamp) ? `
+                  <div style="display:flex; justify-content:space-between; color:#94a3b8;">
+                    <span>Reported:</span>
+                    <span style="color:#e2e8f0;">${s.time || s.timestamp}</span>
+                  </div>` : ''}
+                </div>
+
+                <!-- Ground Observation Alert if present -->
+                ${s.hazard ? `
+                <div style="margin:8px 0; padding:6px 9px; border-radius:6px; background:#450a0a; border:1px solid #7f1d1d; font-size:11px; font-weight:bold; color:#fca5a5; display:flex; align-items:center; gap:6px;">
+                  <span>⚠️</span>
+                  <span>${s.hazard}${s.magnitude ? ` · ${s.magnitude}` : ''}</span>
+                </div>` : ''}
+
+                <!-- Extra Details / Skywarn / Contact -->
+                ${detailsHtml ? `
+                <div style="margin-top:8px; display:flex; flex-direction:column; gap:2px;">
+                  ${detailsHtml}
+                </div>` : ''}
               </div>
             `)
             .addTo(map);
-          return popup;
         });
 
         const marker = new maplibregl.Marker({ element: el })

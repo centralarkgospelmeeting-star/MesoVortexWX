@@ -11,7 +11,10 @@ export type SpotterReport = {
   lat: number;
   lon: number;
   timestamp: string;        // ISO or human-readable
+  time?: string;
   type: 'position' | 'report';
+  status?: string;          // STATIONARY, MOBILE, etc.
+  extraDetails?: string;    // Contact, notes, SKYWARN certs
   hazard?: string;
   description?: string;
   magnitude?: string;       // e.g. hail size, wind speed
@@ -125,6 +128,8 @@ export function SpotterNetworkPanel({ isOpen, onClose, onSpottersUpdated, radarL
             lon: f.geometry?.coordinates?.[0] ?? 0,
             timestamp: f.properties?.time || f.properties?.timestamp || new Date().toISOString(),
             type: f.properties?.report ? 'report' : 'position',
+            status: f.properties?.status || 'STATIONARY',
+            extraDetails: f.properties?.extraDetails,
             hazard: f.properties?.hazard || f.properties?.type || f.properties?.report_type,
             description: f.properties?.description || f.properties?.report || f.properties?.text,
             magnitude: f.properties?.magnitude || f.properties?.hail_size || f.properties?.wind_speed,

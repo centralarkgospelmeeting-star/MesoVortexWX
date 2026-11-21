@@ -98,3 +98,77 @@ html, body {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.4; transform: scale(1.2); }
 }
+
+/* ── WeatherWise & WeatherFront Live Spotter Red Dot Markers ── */
+.spotter-dot-marker {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 45;
+  user-select: none;
+}
+
+.spotter-dot-inner {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #ef4444;
+  border: 1.5px solid #ffffff;
+  box-shadow: 0 0 8px #ef4444, 0 0 16px rgba(239, 68, 68, 0.65);
+  transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.spotter-dot-marker:hover .spotter-dot-inner {
+  transform: scale(1.4);
+  background-color: #ff1111;
+  box-shadow: 0 0 12px #ff1111, 0 0 24px rgba(255, 17, 17, 0.9);
+}
+
+.spotter-dot-pulse {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(239, 68, 68, 0.7);
+  animation: spotter-ping 2.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+@keyframes spotter-ping {
+  0% { transform: scale(0.6); opacity: 0.9; }
+  75%, 100% { transform: scale(2.0); opacity: 0; }
+}
+
+/* ── WeatherWise & WeatherFront Dark Theme Spotter Popup ── */
+.mv-spotter-popup .maplibregl-popup-content {
+  background: transparent !important;
+  color: #f1f5f9 !important;
+  border: none !important;
+  border-radius: 12px !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+.mv-spotter-popup .maplibregl-popup-close-button {
+  color: #94a3b8 !important;
+  font-size: 16px !important;
+  padding: 6px 10px !important;
+  top: 8px !important;
+  right: 8px !important;
+  outline: none !important;
+  z-index: 10 !important;
+  transition: color 0.15s ease !important;
+}
+
+.mv-spotter-popup .maplibregl-popup-close-button:hover {
+  color: #ffffff !important;
+  background: transparent !important;
+}
+
+.mv-spotter-popup .maplibregl-popup-tip {
+  border-top-color: #080e18 !important;
+}

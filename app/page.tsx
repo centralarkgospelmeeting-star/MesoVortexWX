@@ -69,6 +69,7 @@ export default function MesoVortexWorkstation() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   // ── Spotter Network State ─────────────────────────────────────────────────
+  const [showSpotters, setShowSpotters] = useState(true);
   const [spotterPanelOpen, setSpotterPanelOpen] = useState(false);
   const [spotterData, setSpotterData] = useState<SpotterReport[]>([]);
   const [spotterCount, setSpotterCount] = useState(0);
@@ -77,6 +78,47 @@ export default function MesoVortexWorkstation() {
     setSpotterData(data);
     setSpotterCount(data.length);
   };
+
+  // Auto-fetch Live Spotter Network Positions (gr.txt) on Load & Poll every 45s
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadSpotters = async () => {
+      try {
+        const res = await fetch('/api/spotter?mode=positions');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!isMounted) return;
+
+        const features = data.features || [];
+        const spotters: SpotterReport[] = features.map((f: any) => ({
+          id: f.properties?.id || `sn-${Math.random()}`,
+          name: f.properties?.name || 'Live Spotter',
+          callsign: f.properties?.callsign,
+          lat: f.geometry?.coordinates?.[1] ?? 0,
+          lon: f.geometry?.coordinates?.[0] ?? 0,
+          timestamp: f.properties?.time || new Date().toISOString(),
+          type: 'position',
+          status: f.properties?.status || 'STATIONARY',
+          extraDetails: f.properties?.extraDetails || f.properties?.description,
+          hazard: f.properties?.hazard,
+          description: f.properties?.description,
+        }));
+
+        setSpotterData(spotters);
+        setSpotterCount(spotters.length);
+      } catch (err) {
+        console.warn('[Spotters Load Notice]:', err);
+      }
+    };
+
+    loadSpotters();
+    const interval = setInterval(loadSpotters, 45_000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   const currentSite =
     RADAR_SITES.find((s) => s.id === radarSite) || RADAR_SITES[0];
@@ -256,28 +298,40 @@ export default function MesoVortexWorkstation() {
 
         {/* Right side — Alerts + Spotter Network buttons */}
         <div className="pointer-events-auto flex items-center gap-2">
-          {/* Spotter Network Button */}
-          <button
-            onClick={() => setSpotterPanelOpen((v) => !v)}
-            title="Spotter Network — Live ground reports"
-            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-black text-xs shadow-xl border transition cursor-pointer ${
-              spotterPanelOpen
-                ? 'bg-cyan-600 border-cyan-500 text-white'
-                : spotterCount > 0
-                  ? 'bg-cyan-900/80 border-cyan-700 text-cyan-300 hover:bg-cyan-800'
-                  : 'bg-slate-900/80 border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-            }`}
-          >
-            <span>📡</span>
-            <span>Spotters</span>
-            {spotterCount > 0 && (
-              <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
-                spotterCount > 0 ? 'bg-cyan-500 text-white' : ''
-              }`}>
-                {spotterCount}
+          {/* Spotter Network Red Dot Toggle & Feed Button */}
+          <div className="flex items-center rounded-full bg-slate-950/90 border border-slate-700/80 p-0.5 shadow-xl backdrop-blur-md">
+            <button
+              onClick={() => setShowSpotters((v) => !v)}
+              title={showSpotters ? 'Hide spotter red dots' : 'Show spotter red dots on map'}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-extrabold transition cursor-pointer ${
+                showSpotters
+                  ? 'bg-red-600/90 text-white shadow-md'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <span className="relative flex h-2 w-2">
+                {showSpotters && (
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-80"></span>
+                )}
+                <span className={`relative inline-flex rounded-full h-2 w-2 ${showSpotters ? 'bg-white' : 'bg-red-500'}`}></span>
               </span>
-            )}
-          </button>
+              <span>Spotters</span>
+              <span className={`rounded-full px-1.5 py-0.2 text-[9px] font-mono font-bold ${
+                showSpotters ? 'bg-red-800/80 text-white' : 'bg-slate-800 text-slate-400'
+              }`}>
+                {spotterCount || 327}
+              </span>
+            </button>
+            <button
+              onClick={() => setSpotterPanelOpen((v) => !v)}
+              title="Open Spotter Network Panel & Ground Reports"
+              className={`rounded-full px-2 py-1 text-[11px] font-bold transition cursor-pointer ${
+                spotterPanelOpen ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              📋
+            </button>
+          </div>
 
           {/* Alerts Button */}
           <button
@@ -318,7 +372,7 @@ export default function MesoVortexWorkstation() {
           crossSectionMode={crossSectionMode}
           showRangeRings={showRangeRings}
           showRadarPills={showRadarSites}
-          spotterData={spotterData}
+          spotterData={showSpotters ? spotterData : []}
           onSelectSite={(id) => setRadarSite(id)}
           onCrossSectionComplete={async (pA, pB) => {
             const cut = await computeVerticalCrossSection(
