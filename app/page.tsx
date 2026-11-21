@@ -372,8 +372,8 @@ export default function MesoVortexWorkstation() {
             setScanToast(`⚡ FastScan: ${info.site} ${info.timestamp} (${info.latencySec}s latency)`);
             setTimeout(() => setScanToast(null), 3800);
           }}
-          onSelectSite={(id) => setRadarSite(id)}
-          onCrossSectionComplete={async (pA, pB) => {
+          onSelectSite={(id: string) => setRadarSite(id)}
+          onCrossSectionComplete={async (pA: [number, number], pB: [number, number]) => {
             const cut = await computeVerticalCrossSection(
               pA,
               pB,
@@ -433,7 +433,7 @@ export default function MesoVortexWorkstation() {
         flashReflectivity={flashReflectivity}
         onToggleFlashReflectivity={() => setFlashReflectivity((v) => !v)}
         flashRange={flashRange}
-        onSelectFlashRange={(range, preset) => {
+        onSelectFlashRange={(range: [number, number], preset: string) => {
           setFlashRange(range);
           setFlashPreset(preset);
         }}
