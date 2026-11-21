@@ -5,8 +5,6 @@ import Image from 'next/image';
 import { RadarMap, BasemapType, ModeTab } from '../components/RadarMap';
 import { WeatherWiseRadarCard } from '../components/WeatherWiseRadarCard';
 import { WeatherWiseAlertsPanel, WeatherAlertItem } from '../components/WeatherWiseAlertsPanel';
-import { CrossSectionModal } from '../components/CrossSectionModal';
-import { computeVerticalCrossSection, CrossSectionResult } from '../lib/cross-section';
 import { RADAR_SITES } from '../lib/radar-config';
 
 type RadarProduct =
@@ -46,18 +44,17 @@ export default function MesoVortexWorkstation() {
   const [maxRefWindow, setMaxRefWindow] = useState(10);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // Solves line 283 error: explicitly declared state
-  const [showRadarPills, setShowRadarPills] = useState(true);
+  // FastScan Ultra-Low Latency & Animation
+  const [fastScan, setFastScan] = useState(true);
+  const [radarSweepAnim, setRadarSweepAnim] = useState(true);
+  const [flashCoreRange, setFlashCoreRange] = useState(true);
 
-  // Synchronized features
+  // Layer Toggles
+  const [showSpotters, setShowSpotters] = useState(true);
   const [showLightning, setShowLightning] = useState(true);
   const [showMcd, setShowMcd] = useState(true);
-  const [showRangeRings, setShowRangeRings] = useState(true);
+  const [showRadarPills, setShowRadarPills] = useState(true);
   const [radarOpacity, setRadarOpacity] = useState(0.88);
-
-  // Cross-Section State
-  const [crossSectionMode, setCrossSectionMode] = useState(false);
-  const [crossSectionData, setCrossSectionData] = useState<CrossSectionResult | null>(null);
 
   // Basemap State
   const [basemap, setBasemap] = useState<BasemapType>('satellite-streets');
@@ -322,20 +319,6 @@ export default function MesoVortexWorkstation() {
         </button>
       </div>
 
-      {/* Cross-Section Instruction Pill */}
-      {crossSectionMode && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-full border border-cyan-400 bg-slate-950/95 px-4 py-2 font-mono text-xs font-bold text-cyan-300 shadow-2xl backdrop-blur-xl animate-pulse">
-          <span>✂️</span>
-          <span>Click Point A, then Point B across a storm on the map</span>
-          <button
-            onClick={() => setCrossSectionMode(false)}
-            className="ml-2 rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400 hover:text-white"
-          >
-            Cancel
-          </button>
-        </div>
-      )}
-
       {/* 3. FULL MAP CANVAS */}
       <div className="absolute inset-0">
         <RadarMap
@@ -347,25 +330,16 @@ export default function MesoVortexWorkstation() {
           basemap={basemap}
           spcDay={spcDay}
           radarOpacity={radarOpacity}
-          crossSectionMode={crossSectionMode}
           frameUrl={currentFrame?.tileUrl ?? null}
           frameTime={currentFrame?.time}
-          showRangeRings={showRangeRings}
-          showRadarPills={showRadarPills}
+          fastScan={fastScan}
+          radarSweepAnim={radarSweepAnim}
+          flashCoreRange={flashCoreRange}
+          showSpotters={showSpotters}
           showLightning={showLightning}
           showMcd={showMcd}
+          showRadarPills={showRadarPills}
           onSelectSite={(id) => setRadarSite(id)}
-          onCrossSectionComplete={async (pA, pB) => {
-            const cut = await computeVerticalCrossSection(
-              pA,
-              pB,
-              currentSite.radarId,
-              currentSite.lat,
-              currentSite.lon
-            );
-            setCrossSectionData(cut);
-            setCrossSectionMode(false);
-          }}
         />
       </div>
 
@@ -381,18 +355,9 @@ export default function MesoVortexWorkstation() {
         onSelectTilt={(t) => setTilt(t)}
         onSelectMaxRefWindow={(w) => setMaxRefWindow(w)}
         onTogglePlay={() => setIsPlaying((p) => !p)}
-        onOpenCrossSection={() => setCrossSectionMode(true)}
       />
 
-      {/* 5. 3D VERTICAL CROSS-SECTION (RHI) MODAL */}
-      {crossSectionData && (
-        <CrossSectionModal
-          data={crossSectionData}
-          onClose={() => setCrossSectionData(null)}
-        />
-      )}
-
-      {/* 6. RIGHT-SIDE ALERTS PANEL */}
+      {/* 5. RIGHT-SIDE ALERTS PANEL */}
       {alertsOpen && (
         <WeatherWiseAlertsPanel
           alerts={liveAlerts}
@@ -403,8 +368,8 @@ export default function MesoVortexWorkstation() {
 
       {/* Slide-out Menu */}
       {menuOpen && (
-        <div className="fixed inset-0 z-50 flex bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="w-80 bg-white p-5 shadow-2xl space-y-4 text-slate-800">
+        <div className="fixed inset-0 z-50 flex bg-black/60 backdrop-blur-sm animate-fade-in font-sans">
+          <div className="w-84 bg-white p-5 shadow-2xl space-y-4 text-slate-800">
             <div className="flex items-center justify-between border-b pb-3 font-extrabold text-base">
               <div className="flex items-center gap-2">
                 <Image src="/logo.png" alt="MesoVortex" width={24} height={24} className="rounded-full" />
@@ -412,32 +377,74 @@ export default function MesoVortexWorkstation() {
               </div>
               <button onClick={() => setMenuOpen(false)}>✕</button>
             </div>
-            <div className="space-y-2 text-xs font-bold">
-              <label className="flex items-center justify-between p-2 hover:bg-slate-100 rounded-lg cursor-pointer">
-                <span>🛰️ Radar Station Badges</span>
+
+            <div className="space-y-1.5 text-xs font-bold">
+              {/* Spotter Network Red Dots Toggle */}
+              <label className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-100 cursor-pointer">
+                <span className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-red-600 animate-pulse" />
+                  <span>Spotter Network (Live Red Dots)</span>
+                </span>
                 <input
                   type="checkbox"
-                  checked={showRadarPills}
-                  onChange={(e) => setShowRadarPills(e.target.checked)}
+                  checked={showSpotters}
+                  onChange={(e) => setShowSpotters(e.target.checked)}
+                  className="accent-red-600 h-4 w-4 rounded"
+                />
+              </label>
+
+              {/* FastScan 8s Cycle */}
+              <label className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-100 cursor-pointer">
+                <span>⚡ FastScan (8s Ultra-Low Latency)</span>
+                <input
+                  type="checkbox"
+                  checked={fastScan}
+                  onChange={(e) => setFastScan(e.target.checked)}
                   className="accent-blue-600 h-4 w-4 rounded"
                 />
               </label>
-              <label className="flex items-center justify-between p-2 hover:bg-slate-100 rounded-lg cursor-pointer">
+
+              {/* Radar Rotating Sweep Beam Animation */}
+              <label className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-100 cursor-pointer">
+                <span>📡 Radar Sweep Beam Animation</span>
+                <input
+                  type="checkbox"
+                  checked={radarSweepAnim}
+                  onChange={(e) => setRadarSweepAnim(e.target.checked)}
+                  className="accent-cyan-600 h-4 w-4 rounded"
+                />
+              </label>
+
+              {/* Flash Reflectivity Hail Core Enhancement */}
+              <label className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-100 cursor-pointer">
+                <span>⚡ Flash Reflectivity Value Range (Cores)</span>
+                <input
+                  type="checkbox"
+                  checked={flashCoreRange}
+                  onChange={(e) => setFlashCoreRange(e.target.checked)}
+                  className="accent-purple-600 h-4 w-4 rounded"
+                />
+              </label>
+
+              {/* Synchronized Lightning */}
+              <label className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-100 cursor-pointer">
                 <span>⚡ Synchronized Lightning (US/CA/CO)</span>
                 <input
                   type="checkbox"
                   checked={showLightning}
                   onChange={(e) => setShowLightning(e.target.checked)}
-                  className="accent-blue-600 h-4 w-4 rounded"
+                  className="accent-amber-500 h-4 w-4 rounded"
                 />
               </label>
-              <label className="flex items-center justify-between p-2 hover:bg-slate-100 rounded-lg cursor-pointer">
-                <span>📝 SPC Mesoscale Discussions</span>
+
+              {/* SPC Mesoscale Discussions */}
+              <label className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-100 cursor-pointer">
+                <span>📝 SPC Mesoscale Discussions (MCD)</span>
                 <input
                   type="checkbox"
                   checked={showMcd}
                   onChange={(e) => setShowMcd(e.target.checked)}
-                  className="accent-blue-600 h-4 w-4 rounded"
+                  className="accent-orange-500 h-4 w-4 rounded"
                 />
               </label>
             </div>
