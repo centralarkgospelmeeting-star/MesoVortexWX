@@ -1,10 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { RadarMap, BasemapType, ModeTab } from '../components/RadarMap';
+import { RadarMap, BasemapType } from '../components/RadarMap';
 import { WeatherWiseRadarCard } from '../components/WeatherWiseRadarCard';
 import { WeatherWiseAlertsPanel, WeatherAlertItem } from '../components/WeatherWiseAlertsPanel';
+import { CrossSectionModal } from '../components/CrossSectionModal';
+import { SpotterNetworkPanel, SpotterReport } from '../components/SpotterNetworkPanel';
+import { computeVerticalCrossSection, CrossSectionResult } from '../lib/cross-section';
 import { RADAR_SITES } from '../lib/radar-config';
 
 type RadarProduct =
@@ -24,19 +27,13 @@ type RadarProduct =
   | 'hhc'
   | 'qpe';
 
+type TopTab = 'Radar' | 'Composite' | 'Satellite' | 'Outlooks';
 type SpcDay = 'Day 1' | 'Day 2' | 'Day 3';
-
-type Frame = {
-  time: string;
-  label: string;
-  tileUrl: string;
-  ageMinutes: number;
-};
 
 const BASEMAP_STORAGE_KEY = 'mesovortex_basemap_preference';
 
 export default function MesoVortexWorkstation() {
-  const [tab, setTab] = useState<ModeTab>('Radar');
+  const [tab, setTab] = useState<TopTab>('Radar');
   const [spcDay, setSpcDay] = useState<SpcDay>('Day 1');
   const [product, setProduct] = useState<RadarProduct>('ref');
   const [tilt, setTilt] = useState('0.5');
@@ -44,97 +41,96 @@ export default function MesoVortexWorkstation() {
   const [maxRefWindow, setMaxRefWindow] = useState(10);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // FastScan Ultra-Low Latency & Animation
-  const [fastScan, setFastScan] = useState(true);
-  const [radarSweepAnim, setRadarSweepAnim] = useState(true);
-  const [flashCoreRange, setFlashCoreRange] = useState(true);
-
-  // Layer Toggles
-  const [showSpotters, setShowSpotters] = useState(true);
-  const [showLightning, setShowLightning] = useState(true);
-  const [showMcd, setShowMcd] = useState(true);
-  const [showRadarPills, setShowRadarPills] = useState(true);
-  const [radarOpacity, setRadarOpacity] = useState(0.88);
+  // 3D Cross-Section State
+  const [crossSectionMode, setCrossSectionMode] = useState(false);
+  const [crossSectionData, setCrossSectionData] = useState<CrossSectionResult | null>(null);
 
   // Basemap State
   const [basemap, setBasemap] = useState<BasemapType>('satellite-streets');
   const [basemapStatus, setBasemapStatus] = useState('Satellite Streets (Default)');
 
-  // Loop & Synchronized Frames
-  const [frames, setFrames] = useState<Frame[]>([]);
-  const [frameIndex, setFrameIndex] = useState(0);
-  const [loopLoading, setLoopLoading] = useState(false);
-  const playTimerRef = useRef<number | null>(null);
+  // Display Controls
+  const [gateFilter, setGateFilter] = useState(5);
+  const [radarOpacity, setRadarOpacity] = useState(0.88);
+  const [smoothing, setSmoothing] = useState(false);
+  const [colorTable, setColorTable] = useState('nws');
+
+  // Overlays
+  const [showLightning, setShowLightning] = useState(true);
+  const [showStormTracks, setShowStormTracks] = useState(true);
+  const [showRadarSites, setShowRadarSites] = useState(true);
+  const [showRangeRings, setShowRangeRings] = useState(true);
+  const [showCounties, setShowCounties] = useState(true);
+  const [showTornadoAnalysis, setShowTornadoAnalysis] = useState(true);
 
   // Alerts Panel state
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [liveAlerts, setLiveAlerts] = useState<WeatherAlertItem[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // ── Spotter Network State ─────────────────────────────────────────────────
+  const [showSpotters, setShowSpotters] = useState(true);
+  const [spotterPanelOpen, setSpotterPanelOpen] = useState(false);
+  const [spotterData, setSpotterData] = useState<SpotterReport[]>([]);
+  const [spotterCount, setSpotterCount] = useState(0);
+
+  // ── FastScan, Sweep Animation & Flash Reflectivity State ─────────────────
+  const [fastScan, setFastScan] = useState(true);
+  const [scanLatency, setScanLatency] = useState('2.4s');
+  const [sweepAnimation, setSweepAnimation] = useState(true);
+  const [flashReflectivity, setFlashReflectivity] = useState(false);
+  const [flashRange, setFlashRange] = useState<[number, number]>([60, 80]);
+  const [flashPreset, setFlashPreset] = useState('hail');
+  const [scanToast, setScanToast] = useState<string | null>(null);
+
+  const handleSpottersUpdated = (data: SpotterReport[]) => {
+    setSpotterData(data);
+    setSpotterCount(data.length);
+  };
+
+  // Auto-fetch Live Spotter Network Positions (gr.txt) on Load & Poll every 45s
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadSpotters = async () => {
+      try {
+        const res = await fetch('/api/spotter?mode=positions');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!isMounted) return;
+
+        const features = data.features || [];
+        const spotters: SpotterReport[] = features.map((f: any) => ({
+          id: f.properties?.id || `sn-${Math.random()}`,
+          name: f.properties?.name || 'Live Spotter',
+          callsign: f.properties?.callsign,
+          lat: f.geometry?.coordinates?.[1] ?? 0,
+          lon: f.geometry?.coordinates?.[0] ?? 0,
+          timestamp: f.properties?.time || new Date().toISOString(),
+          type: 'position',
+          status: f.properties?.status || 'STATIONARY',
+          extraDetails: f.properties?.extraDetails || f.properties?.description,
+          hazard: f.properties?.hazard,
+          description: f.properties?.description,
+        }));
+
+        setSpotterData(spotters);
+        setSpotterCount(spotters.length);
+      } catch (err) {
+        console.warn('[Spotters Load Notice]:', err);
+      }
+    };
+
+    loadSpotters();
+    const interval = setInterval(loadSpotters, 45_000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   const currentSite =
     RADAR_SITES.find((s) => s.id === radarSite) || RADAR_SITES[0];
-  const currentFrame = frames[frameIndex] || null;
-
-  // Load Frames for Synchronized Radar Playback
-  const loadFrames = useCallback(async () => {
-    setLoopLoading(true);
-    try {
-      const res = await fetch(
-        `/api/nexrad/frames?site=${encodeURIComponent(currentSite.radarId)}&product=${encodeURIComponent(product)}&tilt=${encodeURIComponent(tilt)}&hours=1.5`,
-        { cache: 'no-store' }
-      );
-      const data = await res.json();
-      if (res.ok && Array.isArray(data.frames) && data.frames.length > 0) {
-        setFrames(data.frames);
-        setFrameIndex(data.frames.length - 1);
-      } else {
-        setFrames([]);
-        setFrameIndex(0);
-      }
-    } catch {
-      setFrames([]);
-    } finally {
-      setLoopLoading(false);
-    }
-  }, [currentSite.radarId, product, tilt]);
-
-  useEffect(() => {
-    void loadFrames();
-  }, [loadFrames]);
-
-  // Playback timer
-  useEffect(() => {
-    if (playTimerRef.current) {
-      window.clearInterval(playTimerRef.current);
-      playTimerRef.current = null;
-    }
-    if (!isPlaying || frames.length < 2) return;
-
-    playTimerRef.current = window.setInterval(() => {
-      setFrameIndex((prev) => (prev + 1 >= frames.length ? 0 : prev + 1));
-    }, 650);
-
-    return () => {
-      if (playTimerRef.current) window.clearInterval(playTimerRef.current);
-    };
-  }, [isPlaying, frames.length]);
-
-  const stepFrame = (dir: -1 | 1) => {
-    setIsPlaying(false);
-    setFrameIndex((prev) => {
-      const next = prev + dir;
-      if (next < 0) return frames.length - 1;
-      if (next >= frames.length) return 0;
-      return next;
-    });
-  };
-
-  const goToLive = () => {
-    if (frames.length > 0) {
-      setFrameIndex(frames.length - 1);
-      setIsPlaying(false);
-    }
-  };
 
   useEffect(() => {
     try {
@@ -158,7 +154,6 @@ export default function MesoVortexWorkstation() {
     }
   };
 
-  // Fetch real-time NWS Alerts
   useEffect(() => {
     fetch('https://api.weather.gov/alerts/active?status=actual&message_type=alert')
       .then((res) => res.json())
@@ -274,8 +269,9 @@ export default function MesoVortexWorkstation() {
               🔍
             </button>
 
+            {/* Mode Switcher Tabs */}
             <div className="flex items-center gap-1 font-bold text-xs">
-              {(['Radar', 'Composite', 'Satellite', 'Outlooks'] as ModeTab[]).map((modeTab) => (
+              {(['Radar', 'Composite', 'Satellite', 'Outlooks'] as TopTab[]).map((modeTab) => (
                 <button
                   key={modeTab}
                   onClick={() => setTab(modeTab)}
@@ -309,15 +305,67 @@ export default function MesoVortexWorkstation() {
           )}
         </div>
 
-        {/* Alerts Pill */}
-        <button
-          onClick={() => setAlertsOpen((v) => !v)}
-          className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-amber-400 hover:bg-amber-300 px-3 py-1.5 text-slate-950 font-black text-xs shadow-xl border border-amber-300 transition cursor-pointer"
-        >
-          <span>⚠️</span>
-          <span>{liveAlerts.length || 188}</span>
-        </button>
+        {/* Right side — Alerts + Spotter Network buttons */}
+        <div className="pointer-events-auto flex items-center gap-2">
+          {/* Spotter Network Red Dot Toggle & Feed Button */}
+          <div className="flex items-center rounded-full bg-slate-950/90 border border-slate-700/80 p-0.5 shadow-xl backdrop-blur-md">
+            <button
+              onClick={() => setShowSpotters((v) => !v)}
+              title={showSpotters ? 'Hide spotter red dots' : 'Show spotter red dots on map'}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-extrabold transition cursor-pointer ${
+                showSpotters
+                  ? 'bg-red-600/90 text-white shadow-md'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <span className="relative flex h-2 w-2">
+                {showSpotters && (
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-80"></span>
+                )}
+                <span className={`relative inline-flex rounded-full h-2 w-2 ${showSpotters ? 'bg-white' : 'bg-red-500'}`}></span>
+              </span>
+              <span>Spotters</span>
+              <span className={`rounded-full px-1.5 py-0.2 text-[9px] font-mono font-bold ${
+                showSpotters ? 'bg-red-800/80 text-white' : 'bg-slate-800 text-slate-400'
+              }`}>
+                {spotterCount || 327}
+              </span>
+            </button>
+            <button
+              onClick={() => setSpotterPanelOpen((v) => !v)}
+              title="Open Spotter Network Panel & Ground Reports"
+              className={`rounded-full px-2 py-1 text-[11px] font-bold transition cursor-pointer ${
+                spotterPanelOpen ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              📋
+            </button>
+          </div>
+
+          {/* Alerts Button */}
+          <button
+            onClick={() => setAlertsOpen((v) => !v)}
+            className="flex items-center gap-1.5 rounded-full bg-amber-400 hover:bg-amber-300 px-3 py-1.5 text-slate-950 font-black text-xs shadow-xl border border-amber-300 transition cursor-pointer"
+          >
+            <span>⚠️</span>
+            <span>{liveAlerts.length || 188}</span>
+          </button>
+        </div>
       </div>
+
+      {/* On-Map Instruction Pill when Cross-Section Slicer is Active */}
+      {crossSectionMode && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-full border border-cyan-400 bg-slate-950/95 px-4 py-2 font-mono text-xs font-bold text-cyan-300 shadow-2xl backdrop-blur-xl animate-pulse">
+          <span>✂️</span>
+          <span>Click Point A, then Point B across a storm on the map</span>
+          <button
+            onClick={() => setCrossSectionMode(false)}
+            className="ml-2 rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400 hover:text-white"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       {/* 3. FULL MAP CANVAS */}
       <div className="absolute inset-0">
@@ -330,18 +378,41 @@ export default function MesoVortexWorkstation() {
           basemap={basemap}
           spcDay={spcDay}
           radarOpacity={radarOpacity}
-          frameUrl={currentFrame?.tileUrl ?? null}
-          frameTime={currentFrame?.time}
+          crossSectionMode={crossSectionMode}
+          showRangeRings={showRangeRings}
+          showRadarPills={showRadarSites}
+          spotterData={showSpotters ? spotterData : []}
+          sweepAnimation={sweepAnimation}
           fastScan={fastScan}
-          radarSweepAnim={radarSweepAnim}
-          flashCoreRange={flashCoreRange}
-          showSpotters={showSpotters}
-          showLightning={showLightning}
-          showMcd={showMcd}
-          showRadarPills={showRadarPills}
+          flashReflectivity={flashReflectivity}
+          flashRange={flashRange}
+          onNewScan={(info) => {
+            setScanLatency(`${info.latencySec}s`);
+            setScanToast(`⚡ FastScan: ${info.site} ${info.timestamp} (${info.latencySec}s latency)`);
+            setTimeout(() => setScanToast(null), 3800);
+          }}
           onSelectSite={(id) => setRadarSite(id)}
+          onCrossSectionComplete={async (pA, pB) => {
+            const cut = await computeVerticalCrossSection(
+              pA,
+              pB,
+              currentSite.radarId,
+              currentSite.lat,
+              currentSite.lon
+            );
+            setCrossSectionData(cut);
+            setCrossSectionMode(false);
+          }}
         />
       </div>
+
+      {/* FastScan New Scan Arrived Toast */}
+      {scanToast && (
+        <div className="absolute top-20 right-5 z-40 flex items-center gap-2 rounded-xl border border-emerald-500/80 bg-slate-950/95 px-3.5 py-2 font-mono text-xs font-bold text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.4)] backdrop-blur-md animate-fade-in">
+          <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+          <span>{scanToast}</span>
+        </div>
+      )}
 
       {/* 4. BOTTOM-LEFT RADAR CARD */}
       <WeatherWiseRadarCard
@@ -355,9 +426,51 @@ export default function MesoVortexWorkstation() {
         onSelectTilt={(t) => setTilt(t)}
         onSelectMaxRefWindow={(w) => setMaxRefWindow(w)}
         onTogglePlay={() => setIsPlaying((p) => !p)}
+        gateFilter={gateFilter}
+        onChangeGateFilter={(val) => setGateFilter(val)}
+        opacity={radarOpacity}
+        onChangeOpacity={(val) => setRadarOpacity(val)}
+        smoothing={smoothing}
+        onToggleSmoothing={() => setSmoothing((v) => !v)}
+        colorTable={colorTable}
+        onChangeColorTable={(tbl) => setColorTable(tbl)}
+        showLightning={showLightning}
+        onToggleLightning={() => setShowLightning((v) => !v)}
+        showStormTracks={showStormTracks}
+        onToggleStormTracks={() => setShowStormTracks((v) => !v)}
+        showRadarSites={showRadarSites}
+        onToggleRadarSites={() => setShowRadarSites((v) => !v)}
+        showRangeRings={showRangeRings}
+        onToggleRangeRings={() => setShowRangeRings((v) => !v)}
+        showCounties={showCounties}
+        onToggleCounties={() => setShowCounties((v) => !v)}
+        showTornadoAnalysis={showTornadoAnalysis}
+        onToggleTornadoAnalysis={() => setShowTornadoAnalysis((v) => !v)}
+        fastScan={fastScan}
+        onToggleFastScan={() => setFastScan((v) => !v)}
+        scanLatency={scanLatency}
+        sweepAnimation={sweepAnimation}
+        onToggleSweepAnimation={() => setSweepAnimation((v) => !v)}
+        flashReflectivity={flashReflectivity}
+        onToggleFlashReflectivity={() => setFlashReflectivity((v) => !v)}
+        flashRange={flashRange}
+        onSelectFlashRange={(range, preset) => {
+          setFlashRange(range);
+          setFlashPreset(preset);
+        }}
+        flashPreset={flashPreset}
+        onOpenCrossSection={() => setCrossSectionMode(true)}
       />
 
-      {/* 5. RIGHT-SIDE ALERTS PANEL */}
+      {/* 5. 3D VERTICAL CROSS-SECTION (RHI) MODAL */}
+      {crossSectionData && (
+        <CrossSectionModal
+          data={crossSectionData}
+          onClose={() => setCrossSectionData(null)}
+        />
+      )}
+
+      {/* 6. RIGHT-SIDE ALERTS PANEL */}
       {alertsOpen && (
         <WeatherWiseAlertsPanel
           alerts={liveAlerts}
@@ -366,10 +479,19 @@ export default function MesoVortexWorkstation() {
         />
       )}
 
+      {/* 7. SPOTTER NETWORK PANEL */}
+      <SpotterNetworkPanel
+        isOpen={spotterPanelOpen}
+        onClose={() => setSpotterPanelOpen(false)}
+        onSpottersUpdated={handleSpottersUpdated}
+        radarLat={currentSite.lat}
+        radarLon={currentSite.lon}
+      />
+
       {/* Slide-out Menu */}
       {menuOpen && (
-        <div className="fixed inset-0 z-50 flex bg-black/60 backdrop-blur-sm animate-fade-in font-sans">
-          <div className="w-84 bg-white p-5 shadow-2xl space-y-4 text-slate-800">
+        <div className="fixed inset-0 z-50 flex bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="w-80 bg-white p-5 shadow-2xl space-y-4 text-slate-800">
             <div className="flex items-center justify-between border-b pb-3 font-extrabold text-base">
               <div className="flex items-center gap-2">
                 <Image src="/logo.png" alt="MesoVortex" width={24} height={24} className="rounded-full" />
@@ -377,76 +499,31 @@ export default function MesoVortexWorkstation() {
               </div>
               <button onClick={() => setMenuOpen(false)}>✕</button>
             </div>
-
-            <div className="space-y-1.5 text-xs font-bold">
-              {/* Spotter Network Red Dots Toggle */}
-              <label className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-100 cursor-pointer">
-                <span className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-red-600 animate-pulse" />
-                  <span>Spotter Network (Live Red Dots)</span>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={showSpotters}
-                  onChange={(e) => setShowSpotters(e.target.checked)}
-                  className="accent-red-600 h-4 w-4 rounded"
-                />
-              </label>
-
-              {/* FastScan 8s Cycle */}
-              <label className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-100 cursor-pointer">
-                <span>⚡ FastScan (8s Ultra-Low Latency)</span>
-                <input
-                  type="checkbox"
-                  checked={fastScan}
-                  onChange={(e) => setFastScan(e.target.checked)}
-                  className="accent-blue-600 h-4 w-4 rounded"
-                />
-              </label>
-
-              {/* Radar Rotating Sweep Beam Animation */}
-              <label className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-100 cursor-pointer">
-                <span>📡 Radar Sweep Beam Animation</span>
-                <input
-                  type="checkbox"
-                  checked={radarSweepAnim}
-                  onChange={(e) => setRadarSweepAnim(e.target.checked)}
-                  className="accent-cyan-600 h-4 w-4 rounded"
-                />
-              </label>
-
-              {/* Flash Reflectivity Hail Core Enhancement */}
-              <label className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-100 cursor-pointer">
-                <span>⚡ Flash Reflectivity Value Range (Cores)</span>
-                <input
-                  type="checkbox"
-                  checked={flashCoreRange}
-                  onChange={(e) => setFlashCoreRange(e.target.checked)}
-                  className="accent-purple-600 h-4 w-4 rounded"
-                />
-              </label>
-
-              {/* Synchronized Lightning */}
-              <label className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-100 cursor-pointer">
-                <span>⚡ Synchronized Lightning (US/CA/CO)</span>
-                <input
-                  type="checkbox"
-                  checked={showLightning}
-                  onChange={(e) => setShowLightning(e.target.checked)}
-                  className="accent-amber-500 h-4 w-4 rounded"
-                />
-              </label>
-
-              {/* SPC Mesoscale Discussions */}
-              <label className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-100 cursor-pointer">
-                <span>📝 SPC Mesoscale Discussions (MCD)</span>
-                <input
-                  type="checkbox"
-                  checked={showMcd}
-                  onChange={(e) => setShowMcd(e.target.checked)}
-                  className="accent-orange-500 h-4 w-4 rounded"
-                />
-              </label>
+            <div className="space-y-2 text-xs font-bold">
+              <div
+                onClick={() => { setSpotterPanelOpen(true); setMenuOpen(false); }}
+                className="flex items-center gap-2 p-2 hover:bg-slate-100 rounded-lg cursor-pointer"
+              >
+                <span>📡</span>
+                <span>Spotter Network</span>
+                {spotterCount > 0 && (
+                  <span className="ml-auto rounded-full bg-cyan-100 px-2 py-0.5 text-[9px] text-cyan-700 font-bold">
+                    {spotterCount} active
+                  </span>
+                )}
+              </div>
+              <div
+                onClick={() => { setRadarSite('KLZK'); setMenuOpen(false); }}
+                className="p-2 hover:bg-slate-100 rounded-lg cursor-pointer"
+              >
+                📡 Center on Little Rock (KLZK)
+              </div>
+              <div
+                onClick={() => { setRadarSite('KTLX'); setMenuOpen(false); }}
+                className="p-2 hover:bg-slate-100 rounded-lg cursor-pointer"
+              >
+                📡 Center on Oklahoma City (KTLX)
+              </div>
             </div>
           </div>
           <div className="flex-1" onClick={() => setMenuOpen(false)} />
