@@ -31,14 +31,11 @@ export interface RadarMapProps {
   basemap?: BasemapType | string;
   spcDay?: 'Day 1' | 'Day 2' | 'Day 3' | string;
   radarOpacity?: number;
+  crossSectionMode?: boolean;
   showRangeRings?: boolean;
   showRadarPills?: boolean;
-  showLightning?: boolean;
-  showLSR?: boolean;
-  showWatches?: boolean;
-  spotterReports?: SpotterPin[];
   onSelectSite?: (siteId: string) => void;
-  onSelectWarningFromMap?: (w: any) => void;
+  onCrossSectionComplete?: (pointA: [number, number], pointB: [number, number]) => void;
   [key: string]: any;
 }
 
@@ -62,12 +59,8 @@ const WARNINGS_SOURCE_ID = 'mv-warnings-source';
 const WARNINGS_FILL_ID = 'mv-warnings-fill';
 const WARNINGS_LINE_OUTER_ID = 'mv-warnings-line-outer';
 const WARNINGS_LINE_INNER_ID = 'mv-warnings-line-inner';
-const SPC_SOURCE_ID = 'mv-spc-source';
-const SPC_FILL_ID = 'mv-spc-fill';
-const SPC_LINE_ID = 'mv-spc-line';
-const RINGS_SOURCE_ID = 'mv-rings-source';
-const RINGS_LAYER_ID = 'mv-rings-layer';
-const RINGS_LABEL_ID = 'mv-rings-label';
+const RHI_LINE_SOURCE_ID = 'mv-rhi-baseline-source';
+const RHI_LINE_LAYER_ID = 'mv-rhi-baseline-layer';
 
 function buildMapboxRasterStyle(basemap: BasemapType | string): StyleSpecification {
   const isCustom = basemap === 'custom-weather' || basemap === 'mapbox';
@@ -94,39 +87,6 @@ function buildMapboxRasterStyle(basemap: BasemapType | string): StyleSpecificati
   };
 }
 
-function makeRangeRings(lat: number, lon: number) {
-  const rings = [25, 50, 100, 124];
-  const features: any[] = [];
-
-  rings.forEach((nm) => {
-    const coords: [number, number][] = [];
-    const pts = 64;
-    const radDeg = (nm * 1.852) / 111.32;
-
-    for (let i = 0; i <= pts; i++) {
-      const a = (i * 2 * Math.PI) / pts;
-      coords.push([
-        lon + (radDeg * Math.cos(a)) / Math.cos((lat * Math.PI) / 180),
-        lat + radDeg * Math.sin(a),
-      ]);
-    }
-
-    features.push({
-      type: 'Feature',
-      geometry: { type: 'LineString', coordinates: coords },
-      properties: { label: `${nm} nm` },
-    });
-
-    features.push({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [lon, lat + radDeg] },
-      properties: { label: `${nm} nm` },
-    });
-  });
-
-  return { type: 'FeatureCollection', features };
-}
-
 export function RadarMap({
   product = 'ref',
   radarSite = 'KLZK',
@@ -135,14 +95,17 @@ export function RadarMap({
   maxRefWindow = 10,
   basemap = 'satellite-streets',
   radarOpacity = 0.88,
-  showRangeRings = true,
+  crossSectionMode = false,
   showRadarPills = true,
   onSelectSite,
-  onSelectWarningFromMap,
+  onCrossSectionComplete,
 }: RadarMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const siteMarkersRef = useRef<maplibregl.Marker[]>([]);
+  const rhiMarkersRef = useRef<maplibregl.Marker[]>([]);
+  const rhiPointsRef = useRef<[number, number][]>([]);
+
   const [mapReady, setMapReady] = useState(false);
   const [tileError, setTileError] = useState<string | null>(null);
 
@@ -220,32 +183,10 @@ export function RadarMap({
               'line-width': 1.8,
             },
           });
-
-          map.on('click', WARNINGS_FILL_ID, (e) => {
-            const props = e.features?.[0]?.properties;
-            if (!props) return;
-            if (onSelectWarningFromMap) onSelectWarningFromMap(props);
-
-            const isTor = props.event === 'Tornado Warning';
-            new maplibregl.Popup({ closeButton: true, offset: 12 })
-              .setLngLat(e.lngLat)
-              .setHTML(
-                `<div style="font-family:system-ui;padding:6px;max-width:260px;color:#0f172a;">
-                  <span style="background:${isTor ? '#dc2626' : '#d97706'};color:#fff;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:900;text-transform:uppercase;">
-                    ${props.event}
-                  </span>
-                  <div style="font-size:12px;font-weight:800;margin-top:6px;line-height:1.3;">
-                    ${props.headline || props.description || 'Active Warning'}
-                  </div>
-                  <div style="font-size:10px;color:#64748b;margin-top:4px;">${props.areaDesc || ''}</div>
-                </div>`
-              )
-              .addTo(map);
-          });
         }
       })
       .catch((err) => console.warn('[Warnings Notice]:', err));
-  }, [onSelectWarningFromMap]);
+  }, []);
 
   const updateRadar = useCallback(
     async (map: MapLibreMap) => {
@@ -339,48 +280,6 @@ export function RadarMap({
     [mode, product, tilt, maxRefWindow, site.radarId, radarOpacity]
   );
 
-  const updateRangeRings = useCallback((map: MapLibreMap, lat: number, lon: number) => {
-    const geojson = makeRangeRings(lat, lon);
-    const source = map.getSource(RINGS_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
-
-    if (source) {
-      source.setData(geojson as any);
-    } else {
-      map.addSource(RINGS_SOURCE_ID, { type: 'geojson', data: geojson as any });
-
-      map.addLayer({
-        id: RINGS_LAYER_ID,
-        type: 'line',
-        source: RINGS_SOURCE_ID,
-        filter: ['==', '$type', 'LineString'],
-        paint: {
-          'line-color': '#38bdf8',
-          'line-width': 1.2,
-          'line-dasharray': [4, 4],
-          'line-opacity': 0.65,
-        },
-      });
-
-      map.addLayer({
-        id: RINGS_LABEL_ID,
-        type: 'symbol',
-        source: RINGS_SOURCE_ID,
-        filter: ['==', '$type', 'Point'],
-        layout: {
-          'text-field': ['get', 'label'],
-          'text-size': 10,
-          'text-offset': [0, -1],
-          'text-anchor': 'bottom',
-        },
-        paint: {
-          'text-color': '#38bdf8',
-          'text-halo-color': '#020617',
-          'text-halo-width': 1.5,
-        },
-      });
-    }
-  }, []);
-
   const renderTowerPills = useCallback(
     (map: MapLibreMap) => {
       siteMarkersRef.current.forEach((m) => m.remove());
@@ -407,6 +306,7 @@ export function RadarMap({
     [radarSite, onSelectSite]
   );
 
+  // Initialize Map
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -425,41 +325,93 @@ export function RadarMap({
 
     mapRef.current = map;
 
-    map.on('error', (e: any) => {
-      const status = e?.error?.status || e?.status;
-      if (status === 404 || status === 503) {
-        setTileError(`Tile Error (${status}): Data unavailable for this region.`);
-      }
-    });
-
-    setTimeout(() => map.resize(), 100);
-    setTimeout(() => map.resize(), 300);
-
     map.on('load', () => {
       setMapReady(true);
       map.resize();
       updateWarnings(map);
       updateRadar(map);
-      updateRangeRings(map, site.lat, site.lon);
       if (showRadarPills) renderTowerPills(map);
+    });
+
+    // Cross-Section baseline click handler
+    map.on('click', (e) => {
+      if (!crossSectionMode) return;
+
+      const coords: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+      rhiPointsRef.current.push(coords);
+
+      // Create "A" or "B" marker
+      const isPointA = rhiPointsRef.current.length === 1;
+      const markerEl = document.createElement('div');
+      markerEl.className = `flex h-6 w-6 items-center justify-center rounded-full font-black text-xs text-white shadow-xl ${
+        isPointA ? 'bg-cyan-500 border-2 border-white' : 'bg-purple-600 border-2 border-white'
+      }`;
+      markerEl.innerText = isPointA ? 'A' : 'B';
+
+      const marker = new maplibregl.Marker({ element: markerEl })
+        .setLngLat(coords)
+        .addTo(map);
+      rhiMarkersRef.current.push(marker);
+
+      if (rhiPointsRef.current.length === 2) {
+        const [pA, pB] = rhiPointsRef.current;
+
+        // Draw connecting baseline
+        const geojson = {
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: [pA, pB],
+          },
+        };
+
+        if (map.getSource(RHI_LINE_SOURCE_ID)) {
+          (map.getSource(RHI_LINE_SOURCE_ID) as maplibregl.GeoJSONSource).setData(geojson as any);
+        } else {
+          map.addSource(RHI_LINE_SOURCE_ID, { type: 'geojson', data: geojson as any });
+          map.addLayer({
+            id: RHI_LINE_LAYER_ID,
+            type: 'line',
+            source: RHI_LINE_SOURCE_ID,
+            paint: {
+              'line-color': '#06b6d4',
+              'line-width': 3,
+              'line-dasharray': [3, 2],
+            },
+          });
+        }
+
+        if (onCrossSectionComplete) {
+          onCrossSectionComplete(pA, pB);
+        }
+
+        rhiPointsRef.current = [];
+      }
     });
 
     return () => {
       siteMarkersRef.current.forEach((m) => m.remove());
       siteMarkersRef.current = [];
+      rhiMarkersRef.current.forEach((m) => m.remove());
+      rhiMarkersRef.current = [];
       map.remove();
       mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [basemap]);
+  }, [basemap, crossSectionMode]);
 
+  // Clean markers if crossSectionMode turns off
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !mapReady) return;
-    const vis = showRangeRings ? 'visible' : 'none';
-    if (map.getLayer(RINGS_LAYER_ID)) map.setLayoutProperty(RINGS_LAYER_ID, 'visibility', vis);
-    if (map.getLayer(RINGS_LABEL_ID)) map.setLayoutProperty(RINGS_LABEL_ID, 'visibility', vis);
-  }, [showRangeRings, mapReady]);
+    if (!crossSectionMode) {
+      rhiMarkersRef.current.forEach((m) => m.remove());
+      rhiMarkersRef.current = [];
+      rhiPointsRef.current = [];
+      if (mapRef.current && mapRef.current.getLayer(RHI_LINE_LAYER_ID)) {
+        mapRef.current.removeLayer(RHI_LINE_LAYER_ID);
+        mapRef.current.removeSource(RHI_LINE_SOURCE_ID);
+      }
+    }
+  }, [crossSectionMode]);
 
   useEffect(() => {
     if (mapRef.current && mapReady) {
@@ -472,12 +424,11 @@ export function RadarMap({
     if (!map || !mapReady) return;
     if (radarSite !== 'US') {
       map.flyTo({ center: [site.lon, site.lat], zoom: 7.5, duration: 1100 });
-      updateRangeRings(map, site.lat, site.lon);
     }
-  }, [site.lon, site.lat, radarSite, mapReady, updateRangeRings]);
+  }, [site.lon, site.lat, radarSite, mapReady]);
 
   return (
-    <div style={{ position: 'absolute', inset: 0, width: '100vw', height: '100vh', overflow: 'hidden' }}>
+    <div style={{ position: 'absolute', inset: 0, width: '100vw', height: '100vh', overflow: 'hidden', cursor: crossSectionMode ? 'crosshair' : 'default' }}>
       <div ref={containerRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
 
       {tileError && (
