@@ -57,6 +57,18 @@ export type Props = {
   showTornadoAnalysis?: boolean;
   onToggleTornadoAnalysis?: () => void;
 
+  // Real-Time Intelligence & Sweep Controls
+  fastScan?: boolean;
+  onToggleFastScan?: () => void;
+  scanLatency?: string;
+  sweepAnimation?: boolean;
+  onToggleSweepAnimation?: () => void;
+  flashReflectivity?: boolean;
+  onToggleFlashReflectivity?: () => void;
+  flashRange?: [number, number];
+  onSelectFlashRange?: (range: [number, number], preset: string) => void;
+  flashPreset?: string;
+
   // Advanced Actions (All Optional)
   onOpenComparison?: () => void;
   onOpenCrossSection?: () => void;
@@ -119,6 +131,16 @@ export function WeatherWiseRadarCard({
   onTogglePlay,
   maxRefWindow = 10,
   onSelectMaxRefWindow,
+  fastScan = true,
+  onToggleFastScan,
+  scanLatency = '2.4s',
+  sweepAnimation = true,
+  onToggleSweepAnimation,
+  flashReflectivity = false,
+  onToggleFlashReflectivity,
+  flashRange = [60, 80],
+  onSelectFlashRange,
+  flashPreset = 'hail',
 }: Props) {
   const [expanded, setExpanded] = useState(true);
   const [tiltMenuOpen, setTiltMenuOpen] = useState(false);
@@ -211,6 +233,100 @@ export function WeatherWiseRadarCard({
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* ── FASTSCAN, RADAR SWEEP & FLASH REFLECTIVITY TOOLS ── */}
+          <div className="rounded-xl border border-slate-200/90 bg-slate-50/70 p-2.5 space-y-2 text-xs">
+            {/* FastScan Low Latency Row */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <span className={`inline-block h-2 w-2 rounded-full ${fastScan ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                <span className="font-extrabold text-[11px] text-slate-800">FastScan™ Low Latency</span>
+                {fastScan && (
+                  <span className="rounded bg-emerald-100 text-emerald-800 font-mono text-[9px] font-bold px-1 py-0.5">
+                    {scanLatency || '2.4s'}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={onToggleFastScan}
+                className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold transition cursor-pointer ${
+                  fastScan
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+                }`}
+              >
+                {fastScan ? 'ON' : 'OFF'}
+              </button>
+            </div>
+
+            {/* Sweep Animation Row */}
+            <div className="flex items-center justify-between border-t border-slate-200/80 pt-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[12px]">📡</span>
+                <span className="font-extrabold text-[11px] text-slate-800">Sweep Animation</span>
+                <span className="text-[9px] text-slate-400">Broadcast look</span>
+              </div>
+              <button
+                onClick={onToggleSweepAnimation}
+                className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold transition cursor-pointer ${
+                  sweepAnimation
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+                }`}
+              >
+                {sweepAnimation ? 'ON' : 'OFF'}
+              </button>
+            </div>
+
+            {/* Flash Reflectivity Value Range */}
+            <div className="border-t border-slate-200/80 pt-1.5 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px]">⚡</span>
+                  <span className="font-extrabold text-[11px] text-slate-800">Flash Reflectivity Band</span>
+                </div>
+                <button
+                  onClick={onToggleFlashReflectivity}
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold transition cursor-pointer ${
+                    flashReflectivity
+                      ? 'bg-purple-600 text-white shadow-sm animate-pulse'
+                      : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+                  }`}
+                >
+                  {flashReflectivity ? 'PULSING' : 'OFF'}
+                </button>
+              </div>
+
+              {/* Intensity Presets */}
+              <div className="grid grid-cols-3 gap-1 pt-0.5">
+                {[
+                  { key: 'hail', label: '🧊 60+ Hail', range: [60, 80] as [number, number] },
+                  { key: 'severe', label: '🌪 50-60 Sev', range: [50, 60] as [number, number] },
+                  { key: 'heavy', label: '🌧 40-50 Rain', range: [40, 50] as [number, number] },
+                ].map((p) => {
+                  const isSelected = flashPreset === p.key;
+                  return (
+                    <button
+                      key={p.key}
+                      onClick={() => {
+                        onSelectFlashRange?.(p.range, p.key);
+                        if (!flashReflectivity && onToggleFlashReflectivity) {
+                          onToggleFlashReflectivity();
+                        }
+                      }}
+                      className={`rounded-lg py-1 text-[10px] font-bold text-center transition cursor-pointer ${
+                        isSelected && flashReflectivity
+                          ? 'bg-purple-700 text-white shadow-sm ring-1 ring-purple-400'
+                          : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 

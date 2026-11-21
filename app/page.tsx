@@ -74,6 +74,15 @@ export default function MesoVortexWorkstation() {
   const [spotterData, setSpotterData] = useState<SpotterReport[]>([]);
   const [spotterCount, setSpotterCount] = useState(0);
 
+  // ── FastScan, Sweep Animation & Flash Reflectivity State ─────────────────
+  const [fastScan, setFastScan] = useState(true);
+  const [scanLatency, setScanLatency] = useState('2.4s');
+  const [sweepAnimation, setSweepAnimation] = useState(true);
+  const [flashReflectivity, setFlashReflectivity] = useState(false);
+  const [flashRange, setFlashRange] = useState<[number, number]>([60, 80]);
+  const [flashPreset, setFlashPreset] = useState('hail');
+  const [scanToast, setScanToast] = useState<string | null>(null);
+
   const handleSpottersUpdated = (data: SpotterReport[]) => {
     setSpotterData(data);
     setSpotterCount(data.length);
@@ -373,6 +382,15 @@ export default function MesoVortexWorkstation() {
           showRangeRings={showRangeRings}
           showRadarPills={showRadarSites}
           spotterData={showSpotters ? spotterData : []}
+          sweepAnimation={sweepAnimation}
+          fastScan={fastScan}
+          flashReflectivity={flashReflectivity}
+          flashRange={flashRange}
+          onNewScan={(info) => {
+            setScanLatency(`${info.latencySec}s`);
+            setScanToast(`⚡ FastScan: ${info.site} ${info.timestamp} (${info.latencySec}s latency)`);
+            setTimeout(() => setScanToast(null), 3800);
+          }}
           onSelectSite={(id) => setRadarSite(id)}
           onCrossSectionComplete={async (pA, pB) => {
             const cut = await computeVerticalCrossSection(
@@ -387,6 +405,14 @@ export default function MesoVortexWorkstation() {
           }}
         />
       </div>
+
+      {/* FastScan New Scan Arrived Toast */}
+      {scanToast && (
+        <div className="absolute top-20 right-5 z-40 flex items-center gap-2 rounded-xl border border-emerald-500/80 bg-slate-950/95 px-3.5 py-2 font-mono text-xs font-bold text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.4)] backdrop-blur-md animate-fade-in">
+          <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+          <span>{scanToast}</span>
+        </div>
+      )}
 
       {/* 4. BOTTOM-LEFT RADAR CARD */}
       <WeatherWiseRadarCard
@@ -420,6 +446,19 @@ export default function MesoVortexWorkstation() {
         onToggleCounties={() => setShowCounties((v) => !v)}
         showTornadoAnalysis={showTornadoAnalysis}
         onToggleTornadoAnalysis={() => setShowTornadoAnalysis((v) => !v)}
+        fastScan={fastScan}
+        onToggleFastScan={() => setFastScan((v) => !v)}
+        scanLatency={scanLatency}
+        sweepAnimation={sweepAnimation}
+        onToggleSweepAnimation={() => setSweepAnimation((v) => !v)}
+        flashReflectivity={flashReflectivity}
+        onToggleFlashReflectivity={() => setFlashReflectivity((v) => !v)}
+        flashRange={flashRange}
+        onSelectFlashRange={(range, preset) => {
+          setFlashRange(range);
+          setFlashPreset(preset);
+        }}
+        flashPreset={flashPreset}
         onOpenCrossSection={() => setCrossSectionMode(true)}
       />
 
