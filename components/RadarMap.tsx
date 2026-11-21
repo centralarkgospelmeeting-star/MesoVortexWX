@@ -143,29 +143,22 @@ export function RadarMap({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const [mapReady, setMapReady] = useState(false);
-<<<<<<< HEAD
   const [tileError, setTileError] = useState<string | null>(null);
-const [fastScanEnabled, setFastScanEnabled] = useState(true);
-const [sweepAngle, setSweepAngle] = useState(0);
+  const [fastScanEnabled, setFastScanEnabled] = useState(true);
+  const [sweepAngle, setSweepAngle] = useState(0);
+
+  // Sweep angle ticker for live radar scan animation
   useEffect(() => {
-  if (!fastScanEnabled) return;
+    if (!fastScanEnabled) return;
+    const timer = setInterval(() => {
+      setSweepAngle((prev) => (prev + 6) % 360);
+    }, 50);
+    return () => clearInterval(timer);
+  }, [fastScanEnabled]);
 
-  const timer = setInterval(() => {
-    setSweepAngle((prev) => (prev + 3) % 360);
-  }, 16);
-
-  return () => clearInterval(timer);
-}, [fastScanEnabled]);
-=======
-  const [tileError, setTileError] = useState<string | null>(null)
-;const [fastScanEnabled, setFastScanEnabled] = useState(true);
-const [sweepAngle, setSweepAngle] = useState(0);
->>>>>>> 1942bff (Add FastScan state)
-  // True once the radar tile source has reported a successful load. Used to
-  // suppress false-positive 503/404 banners (e.g. historical frames or
-  // unrelated map sources failing while the live product renders fine).
-  const radarSourceHealthyRef = useRef(false);
-  const tileErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // True once the radar tile source has reported a successful load.
+  // Suppresses false-positive 503/404 banners while live product renders fine.
+  const tileLoadedRef = useRef(false);
 
   const site =
     RADAR_SITES.find((s) => s.id === radarSite || s.radarId === radarSite) ||
@@ -271,10 +264,6 @@ const [sweepAngle, setSweepAngle] = useState(0);
   const updateRadar = useCallback(
     async (map: MapLibreMap) => {
       setTileError(null);
-      if (tileErrorTimerRef.current) {
-        clearTimeout(tileErrorTimerRef.current);
-        tileErrorTimerRef.current = null;
-      }
       let tileUrl = '';
 
       if (mode === 'Composite') {
@@ -339,15 +328,6 @@ const [sweepAngle, setSweepAngle] = useState(0);
       if (map.getLayer(RADAR_LAYER_ID)) map.removeLayer(RADAR_LAYER_ID);
       if (map.getSource(RADAR_SOURCE_ID)) map.removeSource(RADAR_SOURCE_ID);
 
-      // New source: clear any prior banner state and health flag so a genuinely
-      // unavailable product still reports its own failure.
-      radarSourceHealthyRef.current = false;
-      if (tileErrorTimerRef.current) {
-        clearTimeout(tileErrorTimerRef.current);
-        tileErrorTimerRef.current = null;
-      }
-      setTileError(null);
-
       map.addSource(RADAR_SOURCE_ID, {
         type: 'raster',
         tiles: [tileUrl],
@@ -369,6 +349,8 @@ const [sweepAngle, setSweepAngle] = useState(0);
         },
         beforeId
       );
+
+      tileLoadedRef.current = true;
     },
     [mode, product, tilt, maxRefWindow, site.radarId, radarOpacity]
   );
@@ -417,6 +399,9 @@ const [sweepAngle, setSweepAngle] = useState(0);
 
   const renderTowerPills = useCallback(
     (map: MapLibreMap) => {
+      siteMarkersRef.current.forEach((m) => m.remove());
+      siteMarkersRef.current = [];
+
       RADAR_SITES.forEach((s) => {
         const isActive = s.id === radarSite || s.radarId === radarSite;
         const pill = document.createElement('div');
@@ -454,38 +439,13 @@ const [sweepAngle, setSweepAngle] = useState(0);
 
     mapRef.current = map;
 
-    // Radar tile status: only the radar product layer may raise the banner,
-    // and only when the current live source has not rendered successfully.
-    // Historical-frame failures (e.g. archived scans that 503) and failures
-    // from unrelated sources (basemap, NWS warnings) are ignored.
     map.on('error', (e: any) => {
-      if (e?.sourceId && e.sourceId !== RADAR_SOURCE_ID) return;
-
       const status = e?.error?.status || e?.status;
-      if (status !== 404 && status !== 503) return;
-
-      // The live radar source already rendered -> ignore stray/history failures.
-      if (radarSourceHealthyRef.current) return;
-
-      if (tileErrorTimerRef.current) clearTimeout(tileErrorTimerRef.current);
-      tileErrorTimerRef.current = setTimeout(() => {
-        tileErrorTimerRef.current = null;
-        if (radarSourceHealthyRef.current) return;
-        setTileError(`Tile Error (${status}): Data unavailable for this region.`);
-      }, 1200);
-    });
-
-    // Clear the banner as soon as the radar source loads successfully.
-    map.on('sourcedata', (e: any) => {
-      if (e?.sourceId !== RADAR_SOURCE_ID) return;
-      if (!e?.isSourceLoaded) return;
-
-      radarSourceHealthyRef.current = true;
-      if (tileErrorTimerRef.current) {
-        clearTimeout(tileErrorTimerRef.current);
-        tileErrorTimerRef.current = null;
+      if (status === 404 || status === 503) {
+        if (!tileLoadedRef.current) {
+          setTileError(`Tile Error (${status}): Data unavailable for this region.`);
+        }
       }
-      setTileError(null);
     });
 
     setTimeout(() => map.resize(), 100);
@@ -501,11 +461,6 @@ const [sweepAngle, setSweepAngle] = useState(0);
     });
 
     return () => {
-      if (tileErrorTimerRef.current) {
-        clearTimeout(tileErrorTimerRef.current);
-        tileErrorTimerRef.current = null;
-      }
-      radarSourceHealthyRef.current = false;
       map.remove();
       mapRef.current = null;
     };
@@ -534,16 +489,6 @@ const [sweepAngle, setSweepAngle] = useState(0);
       updateRangeRings(map, site.lat, site.lon);
     }
   }, [site.lon, site.lat, radarSite, mapReady, updateRangeRings]);
-  
-useEffect(() => {
-  if (!fastScanEnabled) return;
-
-  const interval = setInterval(() => {
-    setSweepAngle((prev) => (prev + 3) % 360);
-  }, 16);
-
-  return () => clearInterval(interval);
-}, [fastScanEnabled]);
 
   return (
     <div style={{ position: 'absolute', inset: 0, width: '100vw', height: '100vh', overflow: 'hidden' }}>
