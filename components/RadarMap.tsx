@@ -142,23 +142,9 @@ export function RadarMap({
 }: RadarMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const siteMarkersRef = useRef<maplibregl.Marker[]>([]);
   const [mapReady, setMapReady] = useState(false);
   const [tileError, setTileError] = useState<string | null>(null);
-  const [fastScanEnabled, setFastScanEnabled] = useState(true);
-  const [sweepAngle, setSweepAngle] = useState(0);
-
-  // Sweep angle ticker for live radar scan animation
-  useEffect(() => {
-    if (!fastScanEnabled) return;
-    const timer = setInterval(() => {
-      setSweepAngle((prev) => (prev + 6) % 360);
-    }, 50);
-    return () => clearInterval(timer);
-  }, [fastScanEnabled]);
-
-  // True once the radar tile source has reported a successful load.
-  // Suppresses false-positive 503/404 banners while live product renders fine.
-  const tileLoadedRef = useRef(false);
 
   const site =
     RADAR_SITES.find((s) => s.id === radarSite || s.radarId === radarSite) ||
@@ -349,8 +335,6 @@ export function RadarMap({
         },
         beforeId
       );
-
-      tileLoadedRef.current = true;
     },
     [mode, product, tilt, maxRefWindow, site.radarId, radarOpacity]
   );
@@ -413,9 +397,11 @@ export function RadarMap({
           onSelectSite?.(s.id);
         };
 
-        new maplibregl.Marker({ element: pill })
+        const marker = new maplibregl.Marker({ element: pill })
           .setLngLat([s.lon, s.lat])
           .addTo(map);
+
+        siteMarkersRef.current.push(marker);
       });
     },
     [radarSite, onSelectSite]
@@ -442,9 +428,7 @@ export function RadarMap({
     map.on('error', (e: any) => {
       const status = e?.error?.status || e?.status;
       if (status === 404 || status === 503) {
-        if (!tileLoadedRef.current) {
-          setTileError(`Tile Error (${status}): Data unavailable for this region.`);
-        }
+        setTileError(`Tile Error (${status}): Data unavailable for this region.`);
       }
     });
 
@@ -461,6 +445,8 @@ export function RadarMap({
     });
 
     return () => {
+      siteMarkersRef.current.forEach((m) => m.remove());
+      siteMarkersRef.current = [];
       map.remove();
       mapRef.current = null;
     };
