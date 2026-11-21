@@ -10,6 +10,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "postinstall": "node scripts/copy-maplibre-worker.mjs",
     "prepare:desktop": "node scripts/prepare-desktop.mjs",
     "dist:windows": "next build && npm run prepare:desktop && electron-builder --win nsis --x64 --publish never"
   },

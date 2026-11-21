@@ -5,53 +5,6 @@ export const dynamic = 'force-dynamic';
 
 const IEM_TILE = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0';
 
-/** IEM RIDGE uses 3-letter ids (LZK), never ICAO (KLZK) */
-function toRidgeId(raw: string): string {
-  return (raw || 'LZK').toUpperCase().replace(/^K/, '') || 'LZK';
-}
-
-function productCodeFor(productKey: string, tilt: string): string | null {
-  const p = productKey.toLowerCase();
-  switch (p) {
-    case 'vel':
-    case 'norm_vel':
-      if (tilt === '0.9') return 'N1U';
-      if (tilt === '1.3') return 'N2U';
-      if (tilt === '1.8') return 'N3U';
-      return 'N0U';
-    case 'srvel':
-      return 'N0S';
-    case 'sw':
-      return 'N0W';
-    case 'cc':
-    case 'min_cc':
-      return 'N0C';
-    case 'zdr':
-      return 'N0X';
-    case 'kdp':
-      return 'N0K';
-    case 'tops':
-      // Net Echo Tops on IEM RIDGE
-      return 'NET';
-    case 'vil':
-      // Digital VIL when available; N0Z is a verified fallback path on some sites
-      return 'DVL';
-    case 'hhc':
-      return 'HHC';
-    case 'qpe':
-      return 'DPR';
-    case 'ref':
-    case 'max_ref':
-    case 'ref_x':
-      if (tilt === '0.9') return 'N1B';
-      if (tilt === '1.3') return 'N2B';
-      if (tilt === '1.8') return 'N3B';
-      return 'N0B';
-    default:
-      return null;
-  }
-}
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const siteId = (searchParams.get('site') ?? 'KLZK').toUpperCase();
@@ -63,35 +16,114 @@ export async function GET(request: Request) {
     RADAR_SITES.find((s) => s.radarId === siteId.replace(/^K/, '')) ||
     RADAR_SITES[0];
 
-  const productCode = productCodeFor(productKey, tilt);
-  if (!productCode) {
-    return NextResponse.json(
-      { error: `Product "${productKey}" is not available.`, available: false },
-      { status: 404 }
-    );
+  const isTdwr = site.network === 'TDWR';
+  // IEM ridge sectors: NEXRAD uses the 3-letter callsign (LZK), TDWR uses the
+  // T-prefixed sector id (TATL).
+  const sector = isTdwr ? `T${site.radarId}` : site.radarId;
+
+  let productCode = 'N0B';
+  // Products IEM actually archives (timestamped history tiles exist).
+  let archiveSupported = false;
+
+  if (isTdwr) {
+    // TDWR publishes only base reflectivity (TZL) and base velocity (TV0).
+    switch (productKey) {
+      case 'ref':
+      case 'max_ref':
+      case 'ref_x':
+        productCode = 'TZL';
+        break;
+      case 'vel':
+      case 'srvel':
+      case 'norm_vel':
+        productCode = 'TV0';
+        break;
+      default:
+        return NextResponse.json(
+          {
+            error: `Product "${productKey}" is not published for TDWR site ${site.id}.`,
+            available: false,
+            network: 'TDWR',
+            supportedProducts: ['ref', 'max_ref', 'ref_x', 'vel', 'srvel', 'norm_vel'],
+          },
+          { status: 404 }
+        );
+    }
+  } else {
+    switch (productKey) {
+      case 'vel':
+        productCode = tilt === '0.9' ? 'N1U' : tilt === '1.3' ? 'N2U' : tilt === '1.8' ? 'N3U' : 'N0U';
+        break;
+      case 'srvel':
+        productCode = 'N0S';
+        archiveSupported = true;
+        break;
+      case 'norm_vel':
+        productCode = 'N0U';
+        break;
+      case 'sw':
+        productCode = 'N0W';
+        break;
+      case 'cc':
+      case 'min_cc':
+        productCode = 'N0C';
+        break;
+      case 'zdr':
+        productCode = 'N0X';
+        break;
+      case 'kdp':
+        productCode = 'N0K';
+        break;
+      case 'tops':
+        productCode = 'NET'; // Verified IEM product code for Net Echo Tops
+        break;
+      case 'vil':
+        productCode = 'N0Z'; // Verified IEM product code for Vertically Integrated Liquid
+        break;
+      case 'hhc':
+        productCode = 'HHC';
+        break;
+      case 'qpe':
+        productCode = 'DPR';
+        break;
+      case 'ref':
+      case 'max_ref':
+      case 'ref_x':
+        productCode = tilt === '0.9' ? 'N1B' : tilt === '1.3' ? 'N2B' : tilt === '1.8' ? 'N3B' : 'N0B';
+        archiveSupported = productCode === 'N0B';
+        break;
+      default:
+        // Strictly refuse to return fake reflectivity fallback
+        return NextResponse.json(
+          { error: `Product "${productKey}" is not available.`, available: false },
+          { status: 404 }
+        );
+    }
   }
 
-  const ridgeId = toRidgeId(site.radarId || site.id);
-  const latestTileUrl = `${IEM_TILE}/ridge::${ridgeId}-${productCode}-0/{z}/{x}/{y}.png`;
+  const latestTileUrl = `${IEM_TILE}/ridge::${sector}-${productCode}-0/{z}/{x}/{y}.png`;
   const compositeTileUrl = `${IEM_TILE}/nexrad-n0q-900913/{z}/{x}/{y}.png`;
 
   const now = new Date();
   const frames: { time: string; label: string; tileUrl: string; ageMinutes: number }[] = [];
 
-  for (let i = 10; i >= 1; i--) {
-    const d = new Date(now.getTime() - i * 5 * 60 * 1000);
-    d.setUTCMinutes(Math.floor(d.getUTCMinutes() / 5) * 5, 0, 0);
-    const stamp = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(
-      d.getUTCDate()
-    ).padStart(2, '0')}${String(d.getUTCHours()).padStart(2, '0')}${String(d.getUTCMinutes()).padStart(2, '0')}`;
-    const ageMinutes = Math.round((now.getTime() - d.getTime()) / 60000);
+  // Only emit timestamped history frames for products IEM actually archives.
+  // For every other product the archived tiles return HTTP 503, which would
+  // surface as a false "Tile Error (503)" in the client.
+  if (archiveSupported) {
+    for (let i = 10; i >= 1; i--) {
+      const d = new Date(now.getTime() - i * 5 * 60 * 1000);
+      d.setUTCMinutes(Math.floor(d.getUTCMinutes() / 5) * 5, 0, 0);
+      const stamp = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}${String(d.getUTCHours()).padStart(2, '0')}${String(d.getUTCMinutes()).padStart(2, '0')}`;
+      const ageMinutes = Math.round((now.getTime() - d.getTime()) / 60000);
 
-    frames.push({
-      time: d.toISOString(),
-      label: `-${ageMinutes}m`,
-      tileUrl: `${IEM_TILE}/ridge::${ridgeId}-${productCode}-${stamp}/{z}/{x}/{y}.png`,
-      ageMinutes,
-    });
+      frames.push({
+        time: d.toISOString(),
+        label: `-${ageMinutes}m`,
+        tileUrl: `${IEM_TILE}/ridge::${sector}-${productCode}-${stamp}/{z}/{x}/{y}.png`,
+        ageMinutes,
+      });
+    }
   }
 
   frames.push({
@@ -101,22 +133,33 @@ export async function GET(request: Request) {
     ageMinutes: 0,
   });
 
+  const notes: string[] = [];
+  if (!archiveSupported) {
+    notes.push(
+      `Historical loop is not available for ${productKey} from this source (IEM ridge does not archive ${productCode}). Only the live scan is served.`
+    );
+  }
+
   return NextResponse.json(
     {
-      provider: 'NOAA NEXRAD Level III / IEM RIDGE',
-      station: ridgeId,
+      provider: isTdwr ? 'FAA TDWR / IEM RIDGE' : 'NOAA NEXRAD Level III / IEM RIDGE',
+      station: site.radarId,
+      sector,
+      network: site.network,
       siteId: site.id,
       product: productCode,
       productKey,
       tilt,
       available: true,
+      loopAvailable: archiveSupported,
+      notes: notes.length ? notes : undefined,
       frames,
       latestTileUrl,
       compositeTileUrl,
     },
     {
       headers: {
-        'Cache-Control': 'public, s-maxage=3, stale-while-revalidate=10',
+        'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=30',
         'Access-Control-Allow-Origin': '*',
       },
     }

@@ -56,18 +56,18 @@ export type Props = {
   onToggleCounties?: () => void;
   showTornadoAnalysis?: boolean;
   onToggleTornadoAnalysis?: () => void;
-
-  // Real-Time Intelligence & Sweep Controls
-  fastScan?: boolean;
-  onToggleFastScan?: () => void;
-  scanLatency?: string;
-  sweepAnimation?: boolean;
+  showWarnings?: boolean;
+  onToggleWarnings?: () => void;
+  showMCD?: boolean;
+  onToggleMCD?: () => void;
+  showSpotters?: boolean;
+  onToggleSpotters?: () => void;
+  showSweepAnimation?: boolean;
   onToggleSweepAnimation?: () => void;
-  flashReflectivity?: boolean;
+  showFastScan?: boolean;
+  onToggleFastScan?: () => void;
+  showFlashReflectivity?: boolean;
   onToggleFlashReflectivity?: () => void;
-  flashRange?: [number, number];
-  onSelectFlashRange?: (range: [number, number], preset: string) => void;
-  flashPreset?: string;
 
   // Advanced Actions (All Optional)
   onOpenComparison?: () => void;
@@ -131,16 +131,20 @@ export function WeatherWiseRadarCard({
   onTogglePlay,
   maxRefWindow = 10,
   onSelectMaxRefWindow,
-  fastScan = true,
-  onToggleFastScan,
-  scanLatency = '2.4s',
-  sweepAnimation = true,
+  showWarnings = true,
+  onToggleWarnings,
+  showMCD = true,
+  onToggleMCD,
+  showSpotters = false,
+  onToggleSpotters,
+  showSweepAnimation = true,
   onToggleSweepAnimation,
-  flashReflectivity = false,
+  showFastScan = false,
+  onToggleFastScan,
+  showFlashReflectivity = false,
   onToggleFlashReflectivity,
-  flashRange = [60, 80],
-  onSelectFlashRange,
-  flashPreset = 'hail',
+  showLightning = false,
+  onToggleLightning,
 }: Props) {
   const [expanded, setExpanded] = useState(true);
   const [tiltMenuOpen, setTiltMenuOpen] = useState(false);
@@ -236,100 +240,6 @@ export function WeatherWiseRadarCard({
             </div>
           </div>
 
-          {/* ── FASTSCAN, RADAR SWEEP & FLASH REFLECTIVITY TOOLS ── */}
-          <div className="rounded-xl border border-slate-200/90 bg-slate-50/70 p-2.5 space-y-2 text-xs">
-            {/* FastScan Low Latency Row */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <span className={`inline-block h-2 w-2 rounded-full ${fastScan ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                <span className="font-extrabold text-[11px] text-slate-800">FastScan™ Low Latency</span>
-                {fastScan && (
-                  <span className="rounded bg-emerald-100 text-emerald-800 font-mono text-[9px] font-bold px-1 py-0.5">
-                    {scanLatency || '2.4s'}
-                  </span>
-                )}
-              </div>
-              <button
-                onClick={onToggleFastScan}
-                className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold transition cursor-pointer ${
-                  fastScan
-                    ? 'bg-emerald-600 text-white shadow-sm'
-                    : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
-                }`}
-              >
-                {fastScan ? 'ON' : 'OFF'}
-              </button>
-            </div>
-
-            {/* Sweep Animation Row */}
-            <div className="flex items-center justify-between border-t border-slate-200/80 pt-1.5">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[12px]">📡</span>
-                <span className="font-extrabold text-[11px] text-slate-800">Sweep Animation</span>
-                <span className="text-[9px] text-slate-400">Broadcast look</span>
-              </div>
-              <button
-                onClick={onToggleSweepAnimation}
-                className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold transition cursor-pointer ${
-                  sweepAnimation
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
-                }`}
-              >
-                {sweepAnimation ? 'ON' : 'OFF'}
-              </button>
-            </div>
-
-            {/* Flash Reflectivity Value Range */}
-            <div className="border-t border-slate-200/80 pt-1.5 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px]">⚡</span>
-                  <span className="font-extrabold text-[11px] text-slate-800">Flash Reflectivity Band</span>
-                </div>
-                <button
-                  onClick={onToggleFlashReflectivity}
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold transition cursor-pointer ${
-                    flashReflectivity
-                      ? 'bg-purple-600 text-white shadow-sm animate-pulse'
-                      : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
-                  }`}
-                >
-                  {flashReflectivity ? 'PULSING' : 'OFF'}
-                </button>
-              </div>
-
-              {/* Intensity Presets */}
-              <div className="grid grid-cols-3 gap-1 pt-0.5">
-                {[
-                  { key: 'hail', label: '🧊 60+ Hail', range: [60, 80] as [number, number] },
-                  { key: 'severe', label: '🌪 50-60 Sev', range: [50, 60] as [number, number] },
-                  { key: 'heavy', label: '🌧 40-50 Rain', range: [40, 50] as [number, number] },
-                ].map((p) => {
-                  const isSelected = flashPreset === p.key;
-                  return (
-                    <button
-                      key={p.key}
-                      onClick={() => {
-                        onSelectFlashRange?.(p.range, p.key);
-                        if (!flashReflectivity && onToggleFlashReflectivity) {
-                          onToggleFlashReflectivity();
-                        }
-                      }}
-                      className={`rounded-lg py-1 text-[10px] font-bold text-center transition cursor-pointer ${
-                        isSelected && flashReflectivity
-                          ? 'bg-purple-700 text-white shadow-sm ring-1 ring-purple-400'
-                          : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-                      }`}
-                    >
-                      {p.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
           {/* Rolling Window Selector (Only active on Max Reflectivity) */}
           {isMaxRef && onSelectMaxRefWindow && (
             <div className="rounded-xl border border-purple-200 bg-purple-50/80 p-2.5 space-y-1.5 animate-fade-in">
@@ -388,6 +298,165 @@ export function WeatherWiseRadarCard({
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Real-data map overlays */}
+          <div className="space-y-1.5 border-t border-slate-200/80 pt-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] font-bold uppercase text-slate-400">Map Overlays</span>
+              <span className="text-[9px] text-slate-400">Real feeds only</span>
+            </div>
+
+            <button
+              onClick={onToggleWarnings}
+              className={`flex w-full items-center justify-between rounded-xl border px-2.5 py-1.5 transition cursor-pointer ${
+                showWarnings
+                  ? 'border-amber-500 bg-amber-50 text-amber-900'
+                  : 'border-slate-200 bg-slate-50/60 text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <span className="flex items-center gap-1.5 text-[11px] font-bold">
+                <span className="h-2 w-2 rounded-full bg-amber-500" />
+                Warning Polygons
+              </span>
+              <span
+                className={`rounded-md px-1.5 py-0.5 text-[9px] font-black ${
+                  showWarnings ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-600'
+                }`}
+              >
+                {showWarnings ? 'ON' : 'OFF'}
+              </span>
+            </button>
+
+            <button
+              onClick={onToggleMCD}
+              className={`flex w-full items-center justify-between rounded-xl border px-2.5 py-1.5 transition cursor-pointer ${
+                showMCD
+                  ? 'border-purple-600 bg-purple-50 text-purple-900'
+                  : 'border-slate-200 bg-slate-50/60 text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <span className="flex items-center gap-1.5 text-[11px] font-bold">
+                <span className="h-2 w-2 rounded-full bg-purple-500" />
+                SPC Mesoscale Discussions
+              </span>
+              <span
+                className={`rounded-md px-1.5 py-0.5 text-[9px] font-black ${
+                  showMCD ? 'bg-purple-600 text-white' : 'bg-slate-200 text-slate-600'
+                }`}
+              >
+                {showMCD ? 'ON' : 'OFF'}
+              </span>
+            </button>
+
+            <button
+              onClick={onToggleSpotters}
+              className={`flex w-full items-center justify-between rounded-xl border px-2.5 py-1.5 transition cursor-pointer ${
+                showSpotters
+                  ? 'border-cyan-600 bg-cyan-50 text-cyan-800'
+                  : 'border-slate-200 bg-slate-50/60 text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <span className="flex items-center gap-1.5 text-[11px] font-bold">
+                <span className="h-2 w-2 rounded-full bg-red-500" />
+                Spotter Network
+              </span>
+              <span
+                className={`rounded-md px-1.5 py-0.5 text-[9px] font-black ${
+                  showSpotters ? 'bg-cyan-600 text-white' : 'bg-slate-200 text-slate-600'
+                }`}
+              >
+                {showSpotters ? 'ON' : 'OFF'}
+              </span>
+            </button>
+
+            <button
+              onClick={onToggleSweepAnimation}
+              className={`flex w-full items-center justify-between rounded-xl border px-2.5 py-1.5 transition cursor-pointer ${
+                showSweepAnimation
+                  ? 'border-green-600 bg-green-50 text-green-900'
+                  : 'border-slate-200 bg-slate-50/60 text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <span className="flex items-center gap-1.5 text-[11px] font-bold">
+                <span className="h-2 w-2 rounded-full bg-green-500" />
+                Radar Sweep Animation
+              </span>
+              <span
+                className={`rounded-md px-1.5 py-0.5 text-[9px] font-black ${
+                  showSweepAnimation ? 'bg-green-600 text-white' : 'bg-slate-200 text-slate-600'
+                }`}
+              >
+                {showSweepAnimation ? 'ON' : 'OFF'}
+              </span>
+            </button>
+
+            <button
+              onClick={onToggleFastScan}
+              className={`flex w-full items-center justify-between rounded-xl border px-2.5 py-1.5 transition cursor-pointer ${
+                showFastScan
+                  ? 'border-amber-600 bg-amber-50 text-amber-900'
+                  : 'border-slate-200 bg-slate-50/60 text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <span className="flex items-center gap-1.5 text-[11px] font-bold">
+                <span className="h-2 w-2 rounded-full bg-amber-500" />
+                FastScan (Ultra-Low Latency)
+              </span>
+              <span
+                className={`rounded-md px-1.5 py-0.5 text-[9px] font-black ${
+                  showFastScan ? 'bg-amber-600 text-white' : 'bg-slate-200 text-slate-600'
+                }`}
+              >
+                {showFastScan ? 'ON' : 'OFF'}
+              </span>
+            </button>
+
+            <button
+              onClick={onToggleFlashReflectivity}
+              className={`flex w-full items-center justify-between rounded-xl border px-2.5 py-1.5 transition cursor-pointer ${
+                showFlashReflectivity
+                  ? 'border-pink-600 bg-pink-50 text-pink-900'
+                  : 'border-slate-200 bg-slate-50/60 text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <span className="flex items-center gap-1.5 text-[11px] font-bold">
+                <span className="h-2 w-2 rounded-full bg-pink-500" />
+                Flash Reflectivity Range
+              </span>
+              <span
+                className={`rounded-md px-1.5 py-0.5 text-[9px] font-black ${
+                  showFlashReflectivity ? 'bg-pink-600 text-white' : 'bg-slate-200 text-slate-600'
+                }`}
+              >
+                {showFlashReflectivity ? 'ON' : 'OFF'}
+              </span>
+            </button>
+
+            <button
+              onClick={onToggleLightning}
+              className={`flex w-full items-center justify-between rounded-xl border px-2.5 py-1.5 transition cursor-pointer ${
+                showLightning
+                  ? 'border-yellow-500 bg-yellow-50 text-yellow-900'
+                  : 'border-slate-200 bg-slate-50/60 text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <span className="flex items-center gap-1.5 text-[11px] font-bold">
+                <span className="h-2 w-2 rounded-full bg-yellow-400" />
+                Synchronized Lightning
+              </span>
+              <span
+                className={`rounded-md px-1.5 py-0.5 text-[9px] font-black ${
+                  showLightning ? 'bg-yellow-500 text-white' : 'bg-slate-200 text-slate-600'
+                }`}
+              >
+                {showLightning ? 'ON' : 'OFF'}
+              </span>
+            </button>
+
+            <p className="text-[9px] leading-snug text-slate-400">
+              Warnings/MCDs: real NWS/SPC feeds. Spotters: real Spotter Network feed. Sweep: visual animation. FastScan/Lightning show explicit unavailable state until verified real sources are configured.
+            </p>
           </div>
         </div>
       )}
