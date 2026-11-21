@@ -127,7 +127,6 @@ export function RadarMap({
     RADAR_SITES.find((s) => s.id === radarSite || s.radarId === radarSite) ||
     RADAR_SITES[0];
 
-  // Radar sweep animation rotation ticker
   useEffect(() => {
     if (!radarSweepAnim) return;
     const timer = setInterval(() => {
@@ -136,7 +135,6 @@ export function RadarMap({
     return () => clearInterval(timer);
   }, [radarSweepAnim]);
 
-  // 1. Live NWS Warning Polygons
   const updateWarnings = useCallback((map: MapLibreMap) => {
     fetch('https://api.weather.gov/alerts/active?status=actual&message_type=alert')
       .then((res) => res.json())
@@ -145,7 +143,10 @@ export function RadarMap({
           const event = f.properties?.event || '';
           return (
             f.geometry &&
-            (event.includes('Warning') || event.includes('Tornado') || event.includes('Thunderstorm') || event.includes('Flood'))
+            (event.includes('Warning') ||
+              event.includes('Tornado') ||
+              event.includes('Thunderstorm') ||
+              event.includes('Flood'))
           );
         });
 
@@ -165,16 +166,18 @@ export function RadarMap({
               'fill-color': [
                 'match',
                 ['get', 'event'],
-                'Tornado Warning', '#dc2626',
-                'Severe Thunderstorm Warning', '#f59e0b',
-                'Flash Flood Warning', '#10b981',
+                'Tornado Warning',
+                '#dc2626',
+                'Severe Thunderstorm Warning',
+                '#f59e0b',
+                'Flash Flood Warning',
+                '#10b981',
                 '#3b82f6',
               ],
               'fill-opacity': 0.18,
             },
           });
 
-          // Outer White Stroke
           map.addLayer({
             id: WARNINGS_LINE_OUTER_ID,
             type: 'line',
@@ -183,16 +186,18 @@ export function RadarMap({
               'line-color': [
                 'match',
                 ['get', 'event'],
-                'Tornado Warning', '#dc2626',
-                'Severe Thunderstorm Warning', '#ffffff',
-                'Flash Flood Warning', '#059669',
+                'Tornado Warning',
+                '#dc2626',
+                'Severe Thunderstorm Warning',
+                '#ffffff',
+                'Flash Flood Warning',
+                '#059669',
                 '#1d4ed8',
               ],
               'line-width': 3.5,
             },
           });
 
-          // Inner Color Stroke
           map.addLayer({
             id: WARNINGS_LINE_INNER_ID,
             type: 'line',
@@ -201,9 +206,12 @@ export function RadarMap({
               'line-color': [
                 'match',
                 ['get', 'event'],
-                'Tornado Warning', '#f87171',
-                'Severe Thunderstorm Warning', '#fbbf24',
-                'Flash Flood Warning', '#34d399',
+                'Tornado Warning',
+                '#f87171',
+                'Severe Thunderstorm Warning',
+                '#fbbf24',
+                'Flash Flood Warning',
+                '#34d399',
                 '#60a5fa',
               ],
               'line-width': 1.8,
@@ -234,7 +242,6 @@ export function RadarMap({
       .catch((err) => console.warn('[Warnings Notice]:', err));
   }, []);
 
-  // 2. Live SPC Mesoscale Discussions (MCD)
   const updateMCDLayer = useCallback((map: MapLibreMap) => {
     fetch('/api/spc/mcd')
       .then((res) => res.json())
@@ -270,25 +277,24 @@ export function RadarMap({
             const props = e.features?.[0]?.properties;
             if (!props) return;
 
-            const mcdNum = props.md_number || props.mcd_number || props.id || 'Active';
-            const concerning = props.concerning || props.area_desc || 'Severe Threat';
-            const prob = props.watch_prob || props.probability || 'Watch Likely';
+            const mcdNum = props.md_number || props.mcd_number || props.name || props.id || 'Active';
+            const concerning =
+              props.concerning || props.area_desc || props.popupinfo || 'Severe Threat';
+            const prob = props.watch_prob || props.probability || '';
 
             new maplibregl.Popup({ closeButton: true, offset: 12 })
               .setLngLat(e.lngLat)
               .setHTML(
                 `<div style="font-family:system-ui;padding:6px;max-width:280px;color:#0f172a;">
                   <span style="background:#ea580c;color:#fff;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:900;text-transform:uppercase;">
-                    SPC Mesoscale Discussion #${mcdNum}
+                    SPC Mesoscale Discussion ${mcdNum}
                   </span>
                   <div style="font-size:12px;font-weight:800;margin-top:6px;color:#1e293b;">
-                    Concerning: ${concerning}
+                    ${concerning}
                   </div>
-                  <div style="font-size:11px;font-weight:bold;color:#dc2626;margin-top:2px;">
-                    Watch Probability: ${prob}
-                  </div>
+                  ${prob ? `<div style="font-size:11px;font-weight:bold;color:#dc2626;margin-top:2px;">Watch Probability: ${prob}</div>` : ''}
                   <div style="font-size:10px;color:#64748b;margin-top:4px;max-height:140px;overflow-y:auto;line-height:1.3;">
-                    ${props.discussion || props.summary || props.text || 'Forecasters are monitoring storm evolution.'}
+                    ${props.discussion || props.summary || props.text || props.popupinfo || 'Forecasters are monitoring storm evolution.'}
                   </div>
                 </div>`
               )
@@ -299,7 +305,6 @@ export function RadarMap({
       .catch((err) => console.warn('[MCD Layer Notice]:', err));
   }, []);
 
-  // 3. Live Spotter Network Integration (Red Dots with Detailed Popups)
   const updateSpotterNetwork = useCallback((map: MapLibreMap) => {
     fetch('/api/spotter-network')
       .then((res) => res.json())
@@ -310,7 +315,6 @@ export function RadarMap({
         } else {
           map.addSource(SPOTTERS_SOURCE_ID, { type: 'geojson', data: geojson });
 
-          // Pulsing Red Halo
           map.addLayer({
             id: SPOTTERS_GLOW_LAYER_ID,
             type: 'circle',
@@ -322,7 +326,6 @@ export function RadarMap({
             },
           });
 
-          // Core Solid Red Dot
           map.addLayer({
             id: SPOTTERS_CORE_LAYER_ID,
             type: 'circle',
@@ -335,73 +338,79 @@ export function RadarMap({
             },
           });
 
-          // Click Spotter Red Dot to view exact information
           map.on('click', SPOTTERS_CORE_LAYER_ID, (e) => {
             const props = e.features?.[0]?.properties;
             if (!props) return;
 
+            const name = props.name || props.callsign || 'Spotter';
+            const status = props.status || props.heading || 'STATIONARY';
+            const notes = props.notes || props.extraDetails || status;
+            const time = props.time || props.timestamp || 'Live';
+
             new maplibregl.Popup({ closeButton: true, offset: 10 })
               .setLngLat(e.lngLat)
               .setHTML(
-                `<div style="font-family:system-ui;padding:6px;max-width:240px;color:#0f172a;">
+                `<div style="font-family:system-ui;padding:10px;max-width:280px;color:#0f172a;">
                   <div style="display:flex;align-items:center;gap:6px;">
                     <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#dc2626;"></span>
-                    <b style="font-size:12px;color:#dc2626;">Spotter Network Member</b>
+                    <b style="font-size:11px;color:#dc2626;text-transform:uppercase;letter-spacing:0.04em;">Spotter Network</b>
                   </div>
-                  <div style="font-size:12px;font-weight:900;color:#0f172a;margin-top:4px;">
-                    ${props.callsign || 'Trained Spotter'}
+                  <div style="font-size:14px;font-weight:900;color:#0f172a;margin-top:6px;">${name}</div>
+                  <div style="font-size:11px;color:#334155;margin-top:4px;">
+                    Status: <b>${status}</b>
                   </div>
-                  <div style="font-size:11px;color:#334155;margin-top:2px;">
-                    Name: <b>${props.name || 'Verified Spotter'}</b>
-                  </div>
-                  <div style="font-size:10px;color:#64748b;margin-top:2px;">
-                    Motion: <b>${props.speed || 'Stationary'} · ${props.heading || ''}</b>
-                  </div>
-                  <div style="font-size:10px;background:#f1f5f9;padding:4px 6px;border-radius:6px;margin-top:6px;color:#334155;">
-                    "${props.notes || 'Monitoring active severe convection in field.'}"
-                  </div>
-                  <div style="font-size:9px;color:#94a3b8;margin-top:4px;text-align:right;">
-                    Updated: ${props.time || 'Just now'}
-                  </div>
+                  <div style="font-size:10px;background:#f1f5f9;padding:6px 8px;border-radius:6px;margin-top:6px;color:#334155;white-space:pre-wrap;">${notes}</div>
+                  <div style="font-size:9px;color:#94a3b8;margin-top:6px;text-align:right;">${time}</div>
                 </div>`
               )
               .addTo(map);
+          });
+
+          map.on('mouseenter', SPOTTERS_CORE_LAYER_ID, () => {
+            map.getCanvas().style.cursor = 'pointer';
+          });
+          map.on('mouseleave', SPOTTERS_CORE_LAYER_ID, () => {
+            map.getCanvas().style.cursor = '';
           });
         }
       })
       .catch((err) => console.warn('[Spotter Ingest Notice]:', err));
   }, []);
 
-  // 4. Synchronized Lightning Layer (US / Canada / Colombia)
-  const updateLightning = useCallback((map: MapLibreMap) => {
-    if (!map.getSource(LIGHTNING_SOURCE_ID)) {
-      map.addSource(LIGHTNING_SOURCE_ID, {
-        type: 'raster',
-        tiles: ['https://realearth.ssec.wisc.edu/tiles/GOESEastGLMFEDRadC/{z}/{x}/{y}.png'],
-        tileSize: 256,
-        attribution: 'NOAA GOES GLM Lightning',
-      });
+  const updateLightning = useCallback(
+    (map: MapLibreMap) => {
+      if (!map.getSource(LIGHTNING_SOURCE_ID)) {
+        map.addSource(LIGHTNING_SOURCE_ID, {
+          type: 'raster',
+          tiles: ['https://realearth.ssec.wisc.edu/tiles/GOESEastGLMFEDRadC/{z}/{x}/{y}.png'],
+          tileSize: 256,
+          attribution: 'NOAA GOES GLM Lightning',
+        });
 
-      map.addLayer({
-        id: LIGHTNING_LAYER_ID,
-        type: 'raster',
-        source: LIGHTNING_SOURCE_ID,
-        paint: { 'raster-opacity': 0.85, 'raster-fade-duration': 0 },
-        layout: { visibility: showLightning ? 'visible' : 'none' },
-      });
-    }
-  }, [showLightning]);
+        map.addLayer({
+          id: LIGHTNING_LAYER_ID,
+          type: 'raster',
+          source: LIGHTNING_SOURCE_ID,
+          paint: { 'raster-opacity': 0.85, 'raster-fade-duration': 0 },
+          layout: { visibility: showLightning ? 'visible' : 'none' },
+        });
+      }
+    },
+    [showLightning]
+  );
 
-  // 5. Radar Layer (Supports FastScan & Flash Reflectivity Range)
   const updateRadar = useCallback(
     async (map: MapLibreMap) => {
       let tileUrl = frameUrl || '';
+      const ridgeId = (site.radarId || site.id || 'LZK').toUpperCase().replace(/^K/, '');
 
       if (!tileUrl) {
         if (mode === 'Composite') {
-          tileUrl = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png';
+          tileUrl =
+            'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png';
         } else if (mode === 'Satellite') {
-          tileUrl = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/goes-east-vis-1km-900913/{z}/{x}/{y}.png';
+          tileUrl =
+            'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/goes-east-vis-1km-900913/{z}/{x}/{y}.png';
         } else if (product === 'max_ref') {
           try {
             const res = await fetch(
@@ -413,7 +422,7 @@ export function RadarMap({
             const sliceCount = Math.min(frames.length, maxRefWindow);
             tileUrl = await computeMaxReflectivityCanvas(frames.slice(-sliceCount));
           } catch {
-            tileUrl = `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::${site.radarId}-N0B-0/{z}/{x}/{y}.png`;
+            tileUrl = `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::${ridgeId}-N0B-0/{z}/{x}/{y}.png`;
           }
         } else {
           try {
@@ -424,7 +433,7 @@ export function RadarMap({
             const data = await res.json();
             tileUrl = data.latestTileUrl;
           } catch {
-            tileUrl = `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::${site.radarId}-N0B-0/{z}/{x}/{y}.png`;
+            tileUrl = `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::${ridgeId}-N0B-0/{z}/{x}/{y}.png`;
           }
         }
       }
@@ -450,7 +459,6 @@ export function RadarMap({
           source: RADAR_SOURCE_ID,
           paint: {
             'raster-opacity': radarOpacity,
-            // Flash Reflectivity range creates high-contrast core enhancement
             'raster-contrast': flashCoreRange ? 0.45 : 0.25,
             'raster-saturation': flashCoreRange ? 0.65 : 0.45,
             'raster-fade-duration': 0,
@@ -459,7 +467,7 @@ export function RadarMap({
         beforeId
       );
     },
-    [mode, product, tilt, maxRefWindow, site.radarId, radarOpacity, frameUrl, flashCoreRange]
+    [mode, product, tilt, maxRefWindow, site.radarId, site.id, radarOpacity, frameUrl, flashCoreRange]
   );
 
   const renderTowerPills = useCallback(
@@ -478,9 +486,8 @@ export function RadarMap({
           onSelectSite?.(s.id);
         };
 
-        new maplibregl.Marker({ element: pill })
-          .setLngLat([s.lon, s.lat])
-          .addTo(map);
+        const marker = new maplibregl.Marker({ element: pill }).setLngLat([s.lon, s.lat]).addTo(map);
+        siteMarkersRef.current.push(marker);
       });
     },
     [radarSite, onSelectSite]
@@ -525,16 +532,34 @@ export function RadarMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [basemap]);
 
-  // FastScan Polling Cycle (8s ultra-low latency updates)
+  // FastScan: poll radar tiles every 8s when enabled
   useEffect(() => {
     if (!mapReady || !fastScan) return;
     const interval = setInterval(() => {
-      if (mapRef.current) {
-        updateRadar(mapRef.current);
-      }
+      if (mapRef.current) updateRadar(mapRef.current);
     }, 8000);
     return () => clearInterval(interval);
   }, [fastScan, mapReady, updateRadar]);
+
+  // Spotter Network refresh ~45s
+  useEffect(() => {
+    if (!mapReady || !showSpotters) return;
+    const interval = setInterval(() => {
+      if (mapRef.current) updateSpotterNetwork(mapRef.current);
+    }, 45_000);
+    return () => clearInterval(interval);
+  }, [mapReady, showSpotters, updateSpotterNetwork]);
+
+  // Warnings + MCD refresh
+  useEffect(() => {
+    if (!mapReady) return;
+    const interval = setInterval(() => {
+      if (!mapRef.current) return;
+      updateWarnings(mapRef.current);
+      if (showMcd) updateMCDLayer(mapRef.current);
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, [mapReady, showMcd, updateWarnings, updateMCDLayer]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -542,7 +567,8 @@ export function RadarMap({
     if (map.getLayer(SPOTTERS_CORE_LAYER_ID)) {
       const vis = showSpotters ? 'visible' : 'none';
       map.setLayoutProperty(SPOTTERS_CORE_LAYER_ID, 'visibility', vis);
-      if (map.getLayer(SPOTTERS_GLOW_LAYER_ID)) map.setLayoutProperty(SPOTTERS_GLOW_LAYER_ID, 'visibility', vis);
+      if (map.getLayer(SPOTTERS_GLOW_LAYER_ID))
+        map.setLayoutProperty(SPOTTERS_GLOW_LAYER_ID, 'visibility', vis);
     }
   }, [showSpotters, mapReady]);
 
@@ -582,14 +608,14 @@ export function RadarMap({
     <div style={{ position: 'absolute', inset: 0, width: '100vw', height: '100vh', overflow: 'hidden' }}>
       <div ref={containerRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
 
-      {/* Live Broadcast-Style Rotating Radar Sweep Beam */}
       {radarSweepAnim && mode === 'Radar' && radarSite !== 'US' && (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center overflow-hidden">
           <div
             className="h-[600px] w-[600px] rounded-full transition-transform"
             style={{
               transform: `rotate(${sweepAngle}deg)`,
-              background: 'conic-gradient(from 0deg, rgba(6, 182, 212, 0.25) 0deg, rgba(6, 182, 212, 0.08) 35deg, transparent 65deg)',
+              background:
+                'conic-gradient(from 0deg, rgba(6, 182, 212, 0.25) 0deg, rgba(6, 182, 212, 0.08) 35deg, transparent 65deg)',
             }}
           />
         </div>
