@@ -8,7 +8,7 @@ import { RADAR_SITES } from '../lib/radar-config';
 import { computeMaxReflectivityCanvas, interpolateReflectivityFrames } from '../lib/max-reflectivity';
 import { registerSyncedMap } from '../lib/map-sync';
 import { ALERT_CATEGORY_META, formatAlertTime, type WeatherAlert } from '../lib/alerts/model';
-import { DEFAULT_SATELLITE_PRODUCT, getSatelliteProductDef, type SatelliteProduct } from '../lib/satellite';
+import { DEFAULT_SATELLITE_SELECTION, getSatelliteTileUrl, normalizeSatelliteSelection, type SatelliteSelection } from '../lib/satellite';
 
 // Next/webpack bundles maplibre-gl, so the library's relative worker URL
 // (./maplibre-gl-worker.mjs) resolves to a chunk that does not exist. Serve the
@@ -75,8 +75,8 @@ export interface RadarMapProps {
   playbackIndex?: number;
   /** True when global playback is active; used to show LIVE ONLY on non-archived sources. */
   playbackActive?: boolean;
-  /** GOES-East satellite product when mode is Satellite. */
-  satelliteProduct?: SatelliteProduct;
+  /** GOES satellite selection when mode is Satellite. */
+  satelliteSelection?: SatelliteSelection;
   onNewScan?: (info: { latencySec: number; timestamp: string; site: string }) => void;
   onSelectSite?: (siteId: string) => void;
   onSelectWarningFromMap?: (w: any) => void;
@@ -285,7 +285,7 @@ export function RadarMap({
   syncGroup = null,
   playbackIndex = 0,
   playbackActive = false,
-  satelliteProduct = DEFAULT_SATELLITE_PRODUCT,
+  satelliteSelection = DEFAULT_SATELLITE_SELECTION,
   onNewScan,
   onSelectSite,
   onSelectWarningFromMap,
@@ -725,9 +725,17 @@ export function RadarMap({
         tileUrl = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png';
         archiveAvailable = false;
       } else if (mode === 'Satellite') {
-        const satDef = getSatelliteProductDef(satelliteProduct);
-        tileUrl = satDef.tileUrl;
+        const satSel = normalizeSatelliteSelection(satelliteSelection);
+        const sat = getSatelliteTileUrl(satSel);
+        tileUrl = sat.url || '';
         archiveAvailable = false;
+        if (!tileUrl) {
+          if (map.getLayer(RADAR_LAYER_ID)) map.removeLayer(RADAR_LAYER_ID);
+          if (map.getSource(RADAR_SOURCE_ID)) map.removeSource(RADAR_SOURCE_ID);
+          setTileError(sat.unavailableReason ? `DATA UNAVAILABLE` : 'DATA UNAVAILABLE');
+          setLiveOnly(false);
+          return;
+        }
         try {
           const probe = await fetch(tileUrl.replace('{z}/{x}/{y}', '0/0/0'), { cache: 'no-store' });
           if (!probe.ok) {
@@ -882,7 +890,7 @@ export function RadarMap({
         );
       }
     },
-    [mode, product, tilt, maxRefWindow, site.radarId, radarOpacity, fastScanEnabled, onNewScan, playbackIndex, playbackActive, satelliteProduct]
+    [mode, product, tilt, maxRefWindow, site.radarId, radarOpacity, fastScanEnabled, onNewScan, playbackIndex, playbackActive, satelliteSelection?.bird, satelliteSelection?.sector, satelliteSelection?.productId]
   );
 
   const updateRangeRings = useCallback((map: MapLibreMap, lat: number, lon: number) => {

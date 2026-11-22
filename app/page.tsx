@@ -12,7 +12,15 @@ import {
   alertsToFeatureCollection,
   type AlertCategory,
 } from '../lib/alerts/model';
-import { DEFAULT_SATELLITE_PRODUCT, SATELLITE_PRODUCTS, type SatelliteProduct } from '../lib/satellite';
+import {
+  DEFAULT_SATELLITE_SELECTION,
+  SATELLITE_BIRDS,
+  SATELLITE_PRODUCTS,
+  getSectorsForBird,
+  getSatelliteProductDef,
+  normalizeSatelliteSelection,
+  type SatelliteSelection,
+} from '../lib/satellite';
 
 type RadarProduct =
   | 'ref'
@@ -50,12 +58,12 @@ export default function MesoVortexWorkstation() {
   const [quadMode, setQuadMode] = useState(false);
   const [leftPane, setLeftPane] = useState<PaneMode>('Radar');
   const [rightPane, setRightPane] = useState<PaneMode>('Satellite');
-  const [satelliteProduct, setSatelliteProduct] = useState<SatelliteProduct>(DEFAULT_SATELLITE_PRODUCT);
-  const [quadPanes, setQuadPanes] = useState<Array<{ mode: PaneMode; product: RadarProduct; satelliteProduct: SatelliteProduct }>>([
-    { mode: 'Radar', product: 'ref', satelliteProduct: DEFAULT_SATELLITE_PRODUCT },
-    { mode: 'Radar', product: 'vel', satelliteProduct: DEFAULT_SATELLITE_PRODUCT },
-    { mode: 'Radar', product: 'cc', satelliteProduct: DEFAULT_SATELLITE_PRODUCT },
-    { mode: 'Satellite', product: 'ref', satelliteProduct: DEFAULT_SATELLITE_PRODUCT },
+  const [satelliteSelection, setSatelliteSelection] = useState<SatelliteSelection>(DEFAULT_SATELLITE_SELECTION);
+  const [quadPanes, setQuadPanes] = useState<Array<{ mode: PaneMode; product: RadarProduct; satelliteSelection: SatelliteSelection }>>([
+    { mode: 'Radar', product: 'ref', satelliteSelection: DEFAULT_SATELLITE_SELECTION },
+    { mode: 'Radar', product: 'vel', satelliteSelection: DEFAULT_SATELLITE_SELECTION },
+    { mode: 'Radar', product: 'cc', satelliteSelection: DEFAULT_SATELLITE_SELECTION },
+    { mode: 'Satellite', product: 'ref', satelliteSelection: DEFAULT_SATELLITE_SELECTION },
   ]);
   const [playbackFrames, setPlaybackFrames] = useState<Array<{ time: string; tileUrl: string; label: string }>>([]);
   const [playbackIndex, setPlaybackIndex] = useState(0);
@@ -239,12 +247,12 @@ export default function MesoVortexWorkstation() {
   const renderPane = (
     paneMode: PaneMode,
     paneProduct: RadarProduct,
-    paneSatelliteProduct: SatelliteProduct,
+    paneSatelliteSelection: SatelliteSelection,
     paneId: string,
     syncGroup: string | null,
     onModeChange?: (mode: PaneMode) => void,
     onProductChange?: (product: RadarProduct) => void,
-    onSatelliteProductChange?: (product: SatelliteProduct) => void,
+    onSatelliteSelectionChange?: (selection: SatelliteSelection) => void,
     compact = false
   ) => (
     <div className="relative h-full w-full min-h-0 min-w-0 overflow-hidden">
@@ -259,7 +267,7 @@ export default function MesoVortexWorkstation() {
         )}
         {paneMode === 'Satellite' && (
           <div className="rounded-lg border border-slate-700 bg-slate-950/90 px-2.5 py-1 text-[10px] font-bold text-slate-200 shadow-xl backdrop-blur">
-            {SATELLITE_PRODUCTS.find((p) => p.id === paneSatelliteProduct)?.shortLabel || 'Visible'}
+            {getSatelliteProductDef(paneSatelliteSelection.productId).shortLabel}
           </div>
         )}
         {isPlaying && playbackFrames.length > 1 && (
@@ -303,15 +311,15 @@ export default function MesoVortexWorkstation() {
               <option value="tops">TOPS</option>
             </select>
           )}
-          {onSatelliteProductChange && paneMode === 'Satellite' && (
+          {onSatelliteSelectionChange && paneMode === 'Satellite' && (
             <select
-              value={paneSatelliteProduct}
-              onChange={(e) => onSatelliteProductChange(e.target.value as SatelliteProduct)}
-              className="ml-1 rounded-md border border-slate-700 bg-slate-900 px-1.5 py-1 text-[10px] font-bold text-slate-200 outline-none"
+              value={paneSatelliteSelection.productId}
+              onChange={(e) => onSatelliteSelectionChange({ ...paneSatelliteSelection, productId: e.target.value as any })}
+              className="ml-1 max-w-[140px] rounded-md border border-slate-700 bg-slate-900 px-1.5 py-1 text-[10px] font-bold text-slate-200 outline-none"
               aria-label={`Pane ${paneId} satellite product`}
             >
               {SATELLITE_PRODUCTS.map((p) => (
-                <option key={p.id} value={p.id}>{p.shortLabel}</option>
+                <option key={p.id} value={p.id}>{p.available ? '' : '⛔ '}{p.shortLabel}</option>
               ))}
             </select>
           )}
@@ -322,7 +330,7 @@ export default function MesoVortexWorkstation() {
         {...paneProps}
         mode={paneMode}
         product={paneProduct}
-        satelliteProduct={paneSatelliteProduct}
+        satelliteSelection={paneSatelliteSelection}
         syncGroup={syncGroup}
         playbackIndex={playbackIndex}
         playbackActive={isPlaying && playbackFrames.length > 1}
@@ -342,7 +350,8 @@ export default function MesoVortexWorkstation() {
       ? leftPane === 'Satellite' || rightPane === 'Satellite'
       : tab === 'Satellite';
 
-  const activeSatDef = SATELLITE_PRODUCTS.find((p) => p.id === satelliteProduct) || SATELLITE_PRODUCTS[0];
+  const activeSatSel = normalizeSatelliteSelection(satelliteSelection);
+  const activeSatDef = getSatelliteProductDef(activeSatSel.productId);
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-[#070c14] select-none font-sans text-slate-100">
@@ -488,11 +497,12 @@ export default function MesoVortexWorkstation() {
             </div>
           ) : tab === 'Satellite' ? (
             <div className="mt-1.5 flex items-center gap-2 rounded-full bg-slate-950/90 px-3 py-1 shadow-xl border border-slate-700 text-[11px] font-bold text-slate-200 backdrop-blur">
-              <span className="text-cyan-300">GOES-East</span>
+              <span className="text-cyan-300">{SATELLITE_BIRDS.find(b=>b.id===activeSatSel.bird)?.label}</span>
+              <span className="text-slate-500">•</span>
+              <span>{getSectorsForBird(activeSatSel.bird).find(s=>s.id===activeSatSel.sector)?.label}</span>
               <span className="text-slate-500">•</span>
               <span>{activeSatDef.shortLabel}</span>
-              <span className="text-slate-500">•</span>
-              <span className="text-slate-400">{activeSatDef.description}</span>
+              {!activeSatDef.available && <span className="text-amber-300">• DATA UNAVAILABLE</span>}
             </div>
           ) : tab === 'Outlooks' ? (
             <div className="mt-1.5 flex items-center gap-2 rounded-full bg-white px-3 py-1 shadow-xl border border-slate-200 text-xs font-bold text-slate-700">
@@ -532,12 +542,12 @@ export default function MesoVortexWorkstation() {
                   {renderPane(
                     pane.mode,
                     pane.product,
-                    pane.satelliteProduct,
+                    pane.satelliteSelection,
                     String(idx),
                     'quad-main',
                     (mode) => setQuadPanes((prev) => prev.map((p, i) => (i === idx ? { ...p, mode } : p))),
                     (nextProduct) => setQuadPanes((prev) => prev.map((p, i) => (i === idx ? { ...p, product: nextProduct } : p))),
-                    (nextSat) => setQuadPanes((prev) => prev.map((p, i) => (i === idx ? { ...p, satelliteProduct: nextSat } : p))),
+                    (nextSat) => setQuadPanes((prev) => prev.map((p, i) => (i === idx ? { ...p, satelliteSelection: nextSat } : p))),
                     true
                   )}
                 </div>
@@ -560,16 +570,16 @@ export default function MesoVortexWorkstation() {
           </>
         ) : expertMode ? (
           <div className="flex h-full w-full">
-            {renderPane(leftPane, product, satelliteProduct, 'left', 'expert-main', (mode) => setLeftPane(mode), undefined, (nextSat) => setSatelliteProduct(nextSat))}
+            {renderPane(leftPane, product, satelliteSelection, 'left', 'expert-main', (mode) => setLeftPane(mode), undefined, (nextSat) => setSatelliteSelection(nextSat))}
             <div className="w-px bg-slate-700/80 shadow-[0_0_0_1px_rgba(15,23,42,0.8)]" />
-            {renderPane(rightPane, product, satelliteProduct, 'right', 'expert-main', (mode) => setRightPane(mode), undefined, (nextSat) => setSatelliteProduct(nextSat))}
+            {renderPane(rightPane, product, satelliteSelection, 'right', 'expert-main', (mode) => setRightPane(mode), undefined, (nextSat) => setSatelliteSelection(nextSat))}
           </div>
         ) : (
           <RadarMap
             {...paneProps}
             mode={tab}
             product={product}
-            satelliteProduct={satelliteProduct}
+            satelliteSelection={satelliteSelection}
             syncGroup={null}
             playbackIndex={playbackIndex}
             playbackActive={isPlaying && playbackFrames.length > 1}
@@ -628,37 +638,84 @@ export default function MesoVortexWorkstation() {
       />
 
       {hasSatellitePane && (
-        <div className="absolute right-4 bottom-24 z-30 w-64 rounded-2xl border border-slate-700 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-md">
-          <div className="flex items-center justify-between">
+        <div className="absolute right-4 bottom-24 z-30 w-80 rounded-2xl border border-slate-700 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-md">
+          <div className="flex items-center justify-between gap-2">
             <div className="text-[11px] font-black uppercase tracking-wider text-cyan-300">Satellite</div>
             <div className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-bold text-cyan-200">
-              {activeSatDef.label}
+              {activeSatDef.shortLabel}
             </div>
           </div>
-          <div className="mt-2 grid grid-cols-3 gap-1">
-            {SATELLITE_PRODUCTS.map((p) => {
-              const active = p.id === satelliteProduct;
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => {
-                    setSatelliteProduct(p.id);
-                    if (quadMode) {
-                      setQuadPanes((prev) => prev.map((pane) => pane.mode === 'Satellite' ? { ...pane, satelliteProduct: p.id } : pane));
-                    }
-                  }}
-                  className={`rounded-lg px-2 py-1.5 text-[10px] font-bold transition ${
-                    active ? 'bg-cyan-500 text-slate-950' : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
-                  }`}
-                >
-                  {p.shortLabel}
-                </button>
-              );
-            })}
+
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <label className="text-[10px] text-slate-400">
+              <div className="mb-1 font-bold uppercase tracking-wider">Satellite</div>
+              <select
+                value={activeSatSel.bird}
+                onChange={(e) => {
+                  const bird = e.target.value as SatelliteSelection['bird'];
+                  const sectors = getSectorsForBird(bird);
+                  const next = normalizeSatelliteSelection({ ...activeSatSel, bird, sector: sectors.some(s => s.id === activeSatSel.sector) ? activeSatSel.sector : sectors[0]?.id });
+                  setSatelliteSelection(next);
+                  if (quadMode) setQuadPanes((prev) => prev.map((p) => p.mode === 'Satellite' ? { ...p, satelliteSelection: next } : p));
+                }}
+                className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none"
+              >
+                {SATELLITE_BIRDS.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
+              </select>
+            </label>
+            <label className="text-[10px] text-slate-400">
+              <div className="mb-1 font-bold uppercase tracking-wider">Sector</div>
+              <select
+                value={activeSatSel.sector}
+                onChange={(e) => {
+                  const next = normalizeSatelliteSelection({ ...activeSatSel, sector: e.target.value as SatelliteSelection['sector'] });
+                  setSatelliteSelection(next);
+                  if (quadMode) setQuadPanes((prev) => prev.map((p) => p.mode === 'Satellite' ? { ...p, satelliteSelection: next } : p));
+                }}
+                className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none"
+              >
+                {getSectorsForBird(activeSatSel.bird).map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+              </select>
+            </label>
           </div>
+
+          <label className="mt-2 block text-[10px] text-slate-400">
+            <div className="mb-1 font-bold uppercase tracking-wider">Product</div>
+            <select
+              value={activeSatSel.productId}
+              onChange={(e) => {
+                const next = normalizeSatelliteSelection({ ...activeSatSel, productId: e.target.value as SatelliteSelection['productId'] });
+                setSatelliteSelection(next);
+                if (quadMode) setQuadPanes((prev) => prev.map((p) => p.mode === 'Satellite' ? { ...p, satelliteSelection: next } : p));
+              }}
+              className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none"
+            >
+              {['Featured', 'Visible/IR', 'Water Vapor', 'RGB', 'Channels'].map((group) => {
+                const items = SATELLITE_PRODUCTS.filter((p) => p.group === group);
+                if (!items.length) return null;
+                return (
+                  <optgroup key={group} label={group}>
+                    {items.map((p) => (
+                      <option key={p.id} value={p.id}>{p.available ? '' : '⛔ '}{p.label}</option>
+                    ))}
+                  </optgroup>
+                );
+              })}
+            </select>
+          </label>
+
           <div className="mt-2 text-[10px] leading-snug text-slate-400">{activeSatDef.description}</div>
-          <div className="mt-1 text-[10px] text-slate-500">GOES-East • real data only</div>
+          {!activeSatDef.available && (
+            <div className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-300">
+              DATA UNAVAILABLE — {activeSatDef.unavailableReason || 'No verified real tile source'}
+            </div>
+          )}
+          <div className="mt-2 space-y-1 text-[10px] text-slate-500">
+            <div>Real IEM GOES XYZ tiles only. No fake/placeholder imagery.</div>
+            <div>⛔ 24-hour loop archive: no verified real XYZ archive source integrated.</div>
+            <div>⛔ Rapid-scan meso 1-min loop: current meso sector only; no verified archive/1-min loop source.</div>
+            <div>⛔ GeoColor/RGB tiles (AirMass, Sandwich, Fire, Cloud Phase, Dust, etc.): no verified real public XYZ tile source.</div>
+          </div>
         </div>
       )}
 
