@@ -1,0 +1,30 @@
+name: Verification Guards
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    name: Capability and data-honesty checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Capability matrix regression / metadata completeness
+        run: node scripts/test-capability-matrix.mjs
+
+      - name: Fake-data guard tests
+        run: node scripts/test-fake-data-guards.mjs
+
+      - name: Archive integrity tests
+        run: node scripts/test-archive-integrity.mjs

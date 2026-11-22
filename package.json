@@ -12,7 +12,11 @@
     "typecheck": "tsc --noEmit",
     "postinstall": "node scripts/copy-maplibre-worker.mjs",
     "prepare:desktop": "node scripts/prepare-desktop.mjs",
-    "dist:windows": "next build && npm run prepare:desktop && electron-builder --win nsis --x64 --publish never"
+    "dist:windows": "next build && npm run prepare:desktop && electron-builder --win nsis --x64 --publish never",
+    "test:capability": "node scripts/test-capability-matrix.mjs",
+    "test:fake-data": "node scripts/test-fake-data-guards.mjs",
+    "test:archive": "node scripts/test-archive-integrity.mjs",
+    "test:verify": "node scripts/test-capability-matrix.mjs && node scripts/test-fake-data-guards.mjs && node scripts/test-archive-integrity.mjs"
   },
   "dependencies": {
     "next": "14.2.15",
@@ -40,11 +44,19 @@
     "appId": "org.mesovortexwx.desktop",
     "productName": "MesoVortexWX",
     "asar": false,
-    "directories": { "output": "dist" },
-    "files": ["desktop/**/*", "package.json", ".next/standalone/**/*"],
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "desktop/**/*",
+      "package.json",
+      ".next/standalone/**/*"
+    ],
     "win": {
       "icon": "icon.ico",
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "artifactName": "MesoVortexWX-Setup.exe"
     },
     "nsis": {

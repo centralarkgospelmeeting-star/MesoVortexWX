@@ -1198,6 +1198,8 @@ export function RadarMap({
       const rasterPaint: any = {
         'raster-opacity': radarOpacity,
         'raster-fade-duration': 0,
+        // Nearest-neighbor keeps radar gates crisp at overzoom; linear is better for satellite imagery.
+        'raster-resampling': isSatelliteMode ? 'linear' : 'nearest',
         'raster-saturation': isSatelliteMode ? 0.18 : 0,
         'raster-contrast': isSatelliteMode ? 0.18 : 0,
         'raster-brightness-min': isSatelliteMode ? 0.02 : 0,
@@ -1219,6 +1221,7 @@ export function RadarMap({
           );
         } else {
           map.setPaintProperty(RADAR_LAYER_ID, 'raster-opacity', rasterPaint['raster-opacity']);
+          map.setPaintProperty(RADAR_LAYER_ID, 'raster-resampling', rasterPaint['raster-resampling']);
           map.setPaintProperty(RADAR_LAYER_ID, 'raster-saturation', rasterPaint['raster-saturation']);
           map.setPaintProperty(RADAR_LAYER_ID, 'raster-contrast', rasterPaint['raster-contrast']);
           map.setPaintProperty(RADAR_LAYER_ID, 'raster-brightness-min', rasterPaint['raster-brightness-min']);
