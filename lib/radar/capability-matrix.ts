@@ -11,6 +11,7 @@ export type RadarSourceType = 'IEM_RIDGE' | 'IEM_MRMS_TMS' | 'NOAA_AWS_MRMS' | '
 export type ArchiveSupport = 'FULL' | 'PARTIAL' | 'NONE' | 'UNKNOWN';
 export type SuperResolutionSupport = 'YES' | 'NO' | 'N/A' | 'UNKNOWN';
 export type PlaybackSupport = 'REAL_ARCHIVE' | 'LIVE_ONLY' | 'NONE' | 'UNKNOWN';
+export type VerificationLevel = 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'UNVERIFIED' | 'TESTED_LIVE' | 'TESTED_ARCHIVE';
 
 export interface RadarProductCapability {
   id: string;
@@ -36,6 +37,7 @@ export interface RadarProductCapability {
     reason?: string;
   };
   verification: {
+    level: VerificationLevel;
     lastCheckedAt: string;
     evidence: string[];
   };
@@ -64,8 +66,9 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
     tiltSupport: ['0.5', '0.9', '1.3', '1.8'],
     dataHonesty: { realData: true, substitute: false, synthetic: false },
     verification: {
+      level: 'PARTIALLY_VERIFIED',
       lastCheckedAt: CHECKED_AT,
-      evidence: ['app/api/nexrad/frames/route.ts', 'IEM sampled N0B 200 KLZK', 'IEM sampled N0Q 200 KLZK/FWS', 'N1Q-N3Q sampled 503 KLZK'],
+      evidence: ['app/api/nexrad/frames/route.ts', 'Sprint 2 sampled 19 NEXRAD sites: N0B/N0Q mostly 200 PNG; N1Q/N2Q/N3Q 503; KPSR/KSGX 503 for N0B/N0Q in sample', 'N0B archive spotty OK/503; N0Q archive 503 in sampled timestamps', 'TDWR TZL verified 44/44 200 PNG'],
     },
   },
   {
@@ -77,16 +80,20 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
       provider: 'IEM / NOAA NEXRAD',
       endpointTemplate: 'ridge::{{SECTOR}}-{{CODE}}-{{STAMP}}',
       productCode: 'N0U/N1U/N2U/N3U (NEXRAD), TV0 (TDWR)',
-      notes: 'Base velocity. TDWR uses TV0.',
+      notes: 'Base velocity. TDWR uses TV0. N0U live sampled 200; archive sampled 503 on representative timestamps.',
     },
     availability: 'PARTIAL',
-    archiveSupport: 'PARTIAL',
+    archiveSupport: 'UNKNOWN',
     superResolutionSupport: 'N/A',
-    playbackSupport: 'REAL_ARCHIVE',
+    playbackSupport: 'LIVE_ONLY',
     networks: ['NEXRAD', 'TDWR'],
     tiltSupport: ['0.5', '0.9', '1.3', '1.8'],
     dataHonesty: { realData: true, substitute: false, synthetic: false },
-    verification: { lastCheckedAt: CHECKED_AT, evidence: ['nexrad/frames mapping', 'IEM sampled N0U 200 KLZK'] },
+    verification: {
+      level: 'PARTIALLY_VERIFIED',
+      lastCheckedAt: CHECKED_AT,
+      evidence: ['nexrad/frames mapping', 'Sprint 2: N0U live 200 on sampled sites', 'Sprint 2: N0U archive -15/-30/-60m sampled 503 on LZK/LWX/TLX', 'TDWR TV0 verified 44/44 200 PNG'],
+    },
   },
   {
     id: 'srvel',
@@ -106,7 +113,11 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
     networks: ['NEXRAD'],
     tiltSupport: ['0.5'],
     dataHonesty: { realData: true, substitute: false, synthetic: false },
-    verification: { lastCheckedAt: CHECKED_AT, evidence: ['nexrad/frames mapping', 'IEM sampled N0S 200 KLZK'] },
+    verification: {
+      level: 'PARTIALLY_VERIFIED',
+      lastCheckedAt: CHECKED_AT,
+      evidence: ['nexrad/frames mapping', 'Sprint 2: N0S live 200 on sampled sites', 'Sprint 2: N0S archive spotty OK/503 on LZK/LWX/TLX (-60m some OK)'],
+    },
   },
   {
     id: 'cc',
@@ -121,7 +132,7 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
     tiltSupport: [],
     dataHonesty: { realData: false, substitute: false, synthetic: false, reason: 'No verified source; substitutes disabled.' },
     unavailableReason: 'DATA UNAVAILABLE - No verified CC source in current pipeline. Silent substitution disabled.',
-    verification: { lastCheckedAt: CHECKED_AT, evidence: ['nexrad/frames returns 404', 'IEM sampled N0C 503 KLZK'] },
+    verification: { level: 'UNVERIFIED', lastCheckedAt: CHECKED_AT, evidence: ['nexrad/frames returns 404', 'Sprint 2: IEM ridge N0C 503 on LZK/LWX/TLX/MHX', 'Sprint 2: MRMS RhoHV tile 200 exists but not verified as CC semantics'] },
   },
   {
     id: 'min_cc',
@@ -136,7 +147,7 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
     tiltSupport: [],
     dataHonesty: { realData: false, substitute: false, synthetic: false, reason: 'No verified source.' },
     unavailableReason: 'DATA UNAVAILABLE - No verified Min CC source in current pipeline.',
-    verification: { lastCheckedAt: CHECKED_AT, evidence: ['nexrad/frames explicit unavailable list'] },
+    verification: { level: 'UNVERIFIED', lastCheckedAt: CHECKED_AT, evidence: ['nexrad/frames explicit unavailable list', 'Sprint 2: no verified end-to-end source identified'] },
   },
   {
     id: 'zdr',
@@ -151,7 +162,7 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
     tiltSupport: [],
     dataHonesty: { realData: false, substitute: false, synthetic: false, reason: 'No verified source; substitutes disabled.' },
     unavailableReason: 'DATA UNAVAILABLE - No verified ZDR source in current pipeline. Silent substitution disabled.',
-    verification: { lastCheckedAt: CHECKED_AT, evidence: ['nexrad/frames returns 404', 'IEM sampled N0X 503 KLZK'] },
+    verification: { level: 'UNVERIFIED', lastCheckedAt: CHECKED_AT, evidence: ['nexrad/frames returns 404', 'Sprint 2: IEM ridge N0X 503 on LZK/LWX/TLX/MHX'] },
   },
   {
     id: 'kdp',
@@ -166,7 +177,7 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
     tiltSupport: [],
     dataHonesty: { realData: false, substitute: false, synthetic: false, reason: 'No verified source; substitutes disabled.' },
     unavailableReason: 'DATA UNAVAILABLE - No verified KDP source in current pipeline. Silent substitution disabled.',
-    verification: { lastCheckedAt: CHECKED_AT, evidence: ['nexrad/frames returns 404', 'IEM sampled N0K 503 KLZK'] },
+    verification: { level: 'UNVERIFIED', lastCheckedAt: CHECKED_AT, evidence: ['nexrad/frames returns 404', 'Sprint 2: IEM ridge N0K 503 on LZK/LWX/TLX/MHX'] },
   },
   {
     id: 'sw',
@@ -181,7 +192,7 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
     tiltSupport: [],
     dataHonesty: { realData: false, substitute: false, synthetic: false, reason: 'No verified source.' },
     unavailableReason: 'DATA UNAVAILABLE - No verified Spectrum Width source in current pipeline.',
-    verification: { lastCheckedAt: CHECKED_AT, evidence: ['nexrad/frames returns 404', 'IEM sampled N0W 503 KLZK'] },
+    verification: { level: 'UNVERIFIED', lastCheckedAt: CHECKED_AT, evidence: ['nexrad/frames returns 404', 'Sprint 2: IEM ridge N0W 503 on LZK/LWX/TLX/MHX'] },
   },
   {
     id: 'hhc',
@@ -196,7 +207,7 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
     tiltSupport: [],
     dataHonesty: { realData: false, substitute: false, synthetic: false, reason: 'No verified source.' },
     unavailableReason: 'DATA UNAVAILABLE - No verified HHC source in current pipeline.',
-    verification: { lastCheckedAt: CHECKED_AT, evidence: ['nexrad/frames returns 404', 'IEM sampled DHC 503 KLZK'] },
+    verification: { level: 'UNVERIFIED', lastCheckedAt: CHECKED_AT, evidence: ['nexrad/frames returns 404', 'Sprint 2: IEM ridge DHC/HHC/N0H 503 on LZK/LWX/TLX/MHX'] },
   },
   {
     id: 'qpe',
@@ -211,7 +222,7 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
     tiltSupport: [],
     dataHonesty: { realData: false, substitute: false, synthetic: false, reason: 'No verified source.' },
     unavailableReason: 'DATA UNAVAILABLE - No verified QPE source in current pipeline.',
-    verification: { lastCheckedAt: CHECKED_AT, evidence: ['nexrad/frames rejects DPR/N0H/DAA/DTA/N1P/OHA'] },
+    verification: { level: 'UNVERIFIED', lastCheckedAt: CHECKED_AT, evidence: ['nexrad/frames rejects DPR/N0H/DAA/DTA/N1P/OHA', 'Sprint 2: IEM ridge DPR/ONE/OHA 503 on LZK/LWX/TLX/MHX'] },
   },
   {
     id: 'nrot',
@@ -226,7 +237,7 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
     tiltSupport: [],
     dataHonesty: { realData: false, substitute: false, synthetic: false, reason: 'No verified distinct source; prior mapping was unsafe.' },
     unavailableReason: 'DATA UNAVAILABLE - No verified NROT source. Prior velocity-duplicate mapping disabled.',
-    verification: { lastCheckedAt: CHECKED_AT, evidence: ['prior audit: norm_vel mapped to N0U', 'nexrad/frames returns 404'] },
+    verification: { level: 'UNVERIFIED', lastCheckedAt: CHECKED_AT, evidence: ['prior audit: norm_vel mapped to N0U', 'nexrad/frames returns 404', 'Sprint 2: no verified distinct NROT source found'] },
   },
   {
     id: 'azshear',
@@ -241,37 +252,37 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
     tiltSupport: [],
     dataHonesty: { realData: false, substitute: false, synthetic: false, reason: 'No verified source; SRV fallback disabled.' },
     unavailableReason: 'DATA UNAVAILABLE - AzShear not verified end-to-end. N0S/SRV fallback disabled.',
-    verification: { lastCheckedAt: CHECKED_AT, evidence: ['radar/tile had MRMS::AzShear_0-2km then N0S fallback', 'no verified frames mapping'] },
+    verification: { level: 'UNVERIFIED', lastCheckedAt: CHECKED_AT, evidence: ['radar/tile had MRMS::AzShear_0-2km then N0S fallback', 'Sprint 2: IEM MRMS AzShear_0-2km 503; AzShear_0-2km_30min 503'] },
   },
   {
     id: 'mesh',
     name: 'MESH',
     shortLabel: 'MESH',
-    source: { type: 'NONE', provider: 'Unverified', notes: 'MRMS MESH candidate exists but not verified end-to-end in current pipeline.' },
+    source: { type: 'IEM_MRMS_TMS', provider: 'IEM MRMS TMS (candidate)', notes: 'MRMS MESH/MESH_Max60min tiles return 200 PNG on IEM TMS probe, but end-to-end semantics, legend, archive, and pipeline integration are NOT verified. Kept UNAVAILABLE until verified.' },
     availability: 'UNAVAILABLE',
     archiveSupport: 'UNKNOWN',
     superResolutionSupport: 'N/A',
     playbackSupport: 'NONE',
     networks: ['NEXRAD'],
     tiltSupport: [],
-    dataHonesty: { realData: false, substitute: false, synthetic: false, reason: 'No verified source.' },
-    unavailableReason: 'DATA UNAVAILABLE - MESH not verified end-to-end in current pipeline.',
-    verification: { lastCheckedAt: CHECKED_AT, evidence: ['alternate paths map MRMS::MESH_Max60min; main frames no support'] },
+    dataHonesty: { realData: false, substitute: false, synthetic: false, reason: 'Source candidate exists but not verified end-to-end; integration missing.' },
+    unavailableReason: 'DATA UNAVAILABLE - MESH source candidate exists but end-to-end verification/integration is incomplete.',
+    verification: { level: 'TESTED_LIVE', lastCheckedAt: CHECKED_AT, evidence: ['Sprint 2: IEM MRMS MESH 200 PNG; MESH_Max60min 200 PNG', 'Not end-to-end verified: semantics/legend/archive/pipeline integration missing'] },
   },
   {
     id: 'tops',
     name: 'Echo Tops',
     shortLabel: 'ET',
-    source: { type: 'NONE', provider: 'Unverified', notes: 'IEM NET/EET semantics and availability inconsistent across code paths. Sampled NET 200, EET 503 (KLZK tile).' },
+    source: { type: 'IEM_RIDGE', provider: 'IEM RIDGE (candidate)', notes: 'NET returns 200 PNG on sampled IEM ridge tiles; EET returns 503. Semantics/units/legend/archive not verified end-to-end. Kept UNAVAILABLE until verified.' },
     availability: 'UNAVAILABLE',
     archiveSupport: 'UNKNOWN',
     superResolutionSupport: 'N/A',
     playbackSupport: 'NONE',
     networks: ['NEXRAD'],
     tiltSupport: [],
-    dataHonesty: { realData: false, substitute: false, synthetic: false, reason: 'Product code semantics not verified/canonicalized.' },
-    unavailableReason: 'DATA UNAVAILABLE - Echo Tops product code/semantics not verified across sources.',
-    verification: { lastCheckedAt: CHECKED_AT, evidence: ['NET 200 sampled KLZK', 'EET 503 sampled KLZK', 'conflicting mappings in codebase'] },
+    dataHonesty: { realData: false, substitute: false, synthetic: false, reason: 'Source candidate exists but not verified end-to-end; integration missing.' },
+    unavailableReason: 'DATA UNAVAILABLE - Echo Tops candidate exists (NET) but semantics/archive/integration not verified.',
+    verification: { level: 'TESTED_LIVE', lastCheckedAt: CHECKED_AT, evidence: ['Sprint 2: IEM ridge NET 200 on LZK/LWX/TLX/MHX; EET 503', 'Not end-to-end verified: semantics/legend/archive/pipeline integration missing'] },
   },
   {
     id: 'vil',
@@ -286,7 +297,7 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
     tiltSupport: [],
     dataHonesty: { realData: false, substitute: false, synthetic: false, reason: 'Product code semantics not verified/canonicalized.' },
     unavailableReason: 'DATA UNAVAILABLE - VIL product code/semantics not verified across sources.',
-    verification: { lastCheckedAt: CHECKED_AT, evidence: ['DVL 503 sampled KLZK', 'conflicting mappings in codebase'] },
+    verification: { level: 'UNVERIFIED', lastCheckedAt: CHECKED_AT, evidence: ['Sprint 2: IEM ridge DVL 503; NVL 503 on LZK/LWX/TLX/MHX', 'conflicting mappings in codebase'] },
   },
 ] as const;
 
