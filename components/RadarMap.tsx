@@ -1474,7 +1474,7 @@ export function RadarMap({
   }, [flashEnabled]);
 
   return (
-    <div style={{ position: 'absolute', inset: 0, width: '100vw', height: '100vh', overflow: 'hidden', cursor: crossSectionMode ? 'crosshair' : 'default' }}>
+    <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'hidden', cursor: crossSectionMode ? 'crosshair' : 'default' }}>
       <div ref={containerRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
       <canvas ref={sweepCanvasRef} className="radar-sweep-canvas" />
 

@@ -243,7 +243,7 @@ export default function MesoVortexWorkstation() {
     onProductChange?: (product: RadarProduct) => void,
     compact = false
   ) => (
-    <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+    <div className="relative h-full w-full min-h-0 min-w-0 overflow-hidden">
       <div className="pointer-events-none absolute left-3 top-3 z-30 flex items-center gap-2">
         <div className="rounded-lg border border-slate-700 bg-slate-950/90 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-cyan-300 shadow-xl backdrop-blur">
           {paneMode}
