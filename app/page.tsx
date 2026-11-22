@@ -12,6 +12,7 @@ import {
   alertsToFeatureCollection,
   type AlertCategory,
 } from '../lib/alerts/model';
+import { DEFAULT_SATELLITE_PRODUCT, SATELLITE_PRODUCTS, type SatelliteProduct } from '../lib/satellite';
 
 type RadarProduct =
   | 'ref'
@@ -49,11 +50,12 @@ export default function MesoVortexWorkstation() {
   const [quadMode, setQuadMode] = useState(false);
   const [leftPane, setLeftPane] = useState<PaneMode>('Radar');
   const [rightPane, setRightPane] = useState<PaneMode>('Satellite');
-  const [quadPanes, setQuadPanes] = useState<Array<{ mode: PaneMode; product: RadarProduct }>>([
-    { mode: 'Radar', product: 'ref' },
-    { mode: 'Radar', product: 'vel' },
-    { mode: 'Radar', product: 'cc' },
-    { mode: 'Satellite', product: 'ref' },
+  const [satelliteProduct, setSatelliteProduct] = useState<SatelliteProduct>(DEFAULT_SATELLITE_PRODUCT);
+  const [quadPanes, setQuadPanes] = useState<Array<{ mode: PaneMode; product: RadarProduct; satelliteProduct: SatelliteProduct }>>([
+    { mode: 'Radar', product: 'ref', satelliteProduct: DEFAULT_SATELLITE_PRODUCT },
+    { mode: 'Radar', product: 'vel', satelliteProduct: DEFAULT_SATELLITE_PRODUCT },
+    { mode: 'Radar', product: 'cc', satelliteProduct: DEFAULT_SATELLITE_PRODUCT },
+    { mode: 'Satellite', product: 'ref', satelliteProduct: DEFAULT_SATELLITE_PRODUCT },
   ]);
   const [playbackFrames, setPlaybackFrames] = useState<Array<{ time: string; tileUrl: string; label: string }>>([]);
   const [playbackIndex, setPlaybackIndex] = useState(0);
@@ -237,10 +239,12 @@ export default function MesoVortexWorkstation() {
   const renderPane = (
     paneMode: PaneMode,
     paneProduct: RadarProduct,
+    paneSatelliteProduct: SatelliteProduct,
     paneId: string,
     syncGroup: string | null,
     onModeChange?: (mode: PaneMode) => void,
     onProductChange?: (product: RadarProduct) => void,
+    onSatelliteProductChange?: (product: SatelliteProduct) => void,
     compact = false
   ) => (
     <div className="relative h-full w-full min-h-0 min-w-0 overflow-hidden">
@@ -251,6 +255,11 @@ export default function MesoVortexWorkstation() {
         {paneMode === 'Radar' && (
           <div className="rounded-lg border border-slate-700 bg-slate-950/90 px-2.5 py-1 text-[10px] font-bold text-slate-200 shadow-xl backdrop-blur">
             {paneProduct.toUpperCase()} · {tilt}°
+          </div>
+        )}
+        {paneMode === 'Satellite' && (
+          <div className="rounded-lg border border-slate-700 bg-slate-950/90 px-2.5 py-1 text-[10px] font-bold text-slate-200 shadow-xl backdrop-blur">
+            {SATELLITE_PRODUCTS.find((p) => p.id === paneSatelliteProduct)?.shortLabel || 'Visible'}
           </div>
         )}
         {isPlaying && playbackFrames.length > 1 && (
@@ -294,6 +303,18 @@ export default function MesoVortexWorkstation() {
               <option value="tops">TOPS</option>
             </select>
           )}
+          {onSatelliteProductChange && paneMode === 'Satellite' && (
+            <select
+              value={paneSatelliteProduct}
+              onChange={(e) => onSatelliteProductChange(e.target.value as SatelliteProduct)}
+              className="ml-1 rounded-md border border-slate-700 bg-slate-900 px-1.5 py-1 text-[10px] font-bold text-slate-200 outline-none"
+              aria-label={`Pane ${paneId} satellite product`}
+            >
+              {SATELLITE_PRODUCTS.map((p) => (
+                <option key={p.id} value={p.id}>{p.shortLabel}</option>
+              ))}
+            </select>
+          )}
         </div>
       )}
 
@@ -301,6 +322,7 @@ export default function MesoVortexWorkstation() {
         {...paneProps}
         mode={paneMode}
         product={paneProduct}
+        satelliteProduct={paneSatelliteProduct}
         syncGroup={syncGroup}
         playbackIndex={playbackIndex}
         playbackActive={isPlaying && playbackFrames.length > 1}
@@ -313,6 +335,14 @@ export default function MesoVortexWorkstation() {
     : expertMode
       ? `${leftPane} + ${rightPane}`
       : tab;
+
+  const hasSatellitePane = quadMode
+    ? quadPanes.some((p) => p.mode === 'Satellite')
+    : expertMode
+      ? leftPane === 'Satellite' || rightPane === 'Satellite'
+      : tab === 'Satellite';
+
+  const activeSatDef = SATELLITE_PRODUCTS.find((p) => p.id === satelliteProduct) || SATELLITE_PRODUCTS[0];
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-[#070c14] select-none font-sans text-slate-100">
@@ -456,6 +486,14 @@ export default function MesoVortexWorkstation() {
               <span className="text-slate-500">•</span>
               <span className="text-slate-400">{isPlaying ? 'playback synced' : 'synced pan/zoom'}</span>
             </div>
+          ) : tab === 'Satellite' ? (
+            <div className="mt-1.5 flex items-center gap-2 rounded-full bg-slate-950/90 px-3 py-1 shadow-xl border border-slate-700 text-[11px] font-bold text-slate-200 backdrop-blur">
+              <span className="text-cyan-300">GOES-East</span>
+              <span className="text-slate-500">•</span>
+              <span>{activeSatDef.shortLabel}</span>
+              <span className="text-slate-500">•</span>
+              <span className="text-slate-400">{activeSatDef.description}</span>
+            </div>
           ) : tab === 'Outlooks' ? (
             <div className="mt-1.5 flex items-center gap-2 rounded-full bg-white px-3 py-1 shadow-xl border border-slate-200 text-xs font-bold text-slate-700">
               <span className="px-1">Categorical</span>
@@ -494,10 +532,12 @@ export default function MesoVortexWorkstation() {
                   {renderPane(
                     pane.mode,
                     pane.product,
+                    pane.satelliteProduct,
                     String(idx),
                     'quad-main',
                     (mode) => setQuadPanes((prev) => prev.map((p, i) => (i === idx ? { ...p, mode } : p))),
                     (nextProduct) => setQuadPanes((prev) => prev.map((p, i) => (i === idx ? { ...p, product: nextProduct } : p))),
+                    (nextSat) => setQuadPanes((prev) => prev.map((p, i) => (i === idx ? { ...p, satelliteProduct: nextSat } : p))),
                     true
                   )}
                 </div>
@@ -520,15 +560,16 @@ export default function MesoVortexWorkstation() {
           </>
         ) : expertMode ? (
           <div className="flex h-full w-full">
-            {renderPane(leftPane, product, 'left', 'expert-main', (mode) => setLeftPane(mode))}
+            {renderPane(leftPane, product, satelliteProduct, 'left', 'expert-main', (mode) => setLeftPane(mode), undefined, (nextSat) => setSatelliteProduct(nextSat))}
             <div className="w-px bg-slate-700/80 shadow-[0_0_0_1px_rgba(15,23,42,0.8)]" />
-            {renderPane(rightPane, product, 'right', 'expert-main', (mode) => setRightPane(mode))}
+            {renderPane(rightPane, product, satelliteProduct, 'right', 'expert-main', (mode) => setRightPane(mode), undefined, (nextSat) => setSatelliteProduct(nextSat))}
           </div>
         ) : (
           <RadarMap
             {...paneProps}
             mode={tab}
             product={product}
+            satelliteProduct={satelliteProduct}
             syncGroup={null}
             playbackIndex={playbackIndex}
             playbackActive={isPlaying && playbackFrames.length > 1}
@@ -585,6 +626,41 @@ export default function MesoVortexWorkstation() {
         showSweepAnimation={showSweepAnimation}
         onToggleSweepAnimation={() => setShowSweepAnimation((v) => !v)}
       />
+
+      {hasSatellitePane && (
+        <div className="absolute right-4 bottom-24 z-30 w-64 rounded-2xl border border-slate-700 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-md">
+          <div className="flex items-center justify-between">
+            <div className="text-[11px] font-black uppercase tracking-wider text-cyan-300">Satellite</div>
+            <div className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-bold text-cyan-200">
+              {activeSatDef.label}
+            </div>
+          </div>
+          <div className="mt-2 grid grid-cols-3 gap-1">
+            {SATELLITE_PRODUCTS.map((p) => {
+              const active = p.id === satelliteProduct;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => {
+                    setSatelliteProduct(p.id);
+                    if (quadMode) {
+                      setQuadPanes((prev) => prev.map((pane) => pane.mode === 'Satellite' ? { ...pane, satelliteProduct: p.id } : pane));
+                    }
+                  }}
+                  className={`rounded-lg px-2 py-1.5 text-[10px] font-bold transition ${
+                    active ? 'bg-cyan-500 text-slate-950' : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
+                  }`}
+                >
+                  {p.shortLabel}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-2 text-[10px] leading-snug text-slate-400">{activeSatDef.description}</div>
+          <div className="mt-1 text-[10px] text-slate-500">GOES-East • real data only</div>
+        </div>
+      )}
 
       {banner && (
         <div

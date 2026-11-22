@@ -8,6 +8,7 @@ import { RADAR_SITES } from '../lib/radar-config';
 import { computeMaxReflectivityCanvas, interpolateReflectivityFrames } from '../lib/max-reflectivity';
 import { registerSyncedMap } from '../lib/map-sync';
 import { ALERT_CATEGORY_META, formatAlertTime, type WeatherAlert } from '../lib/alerts/model';
+import { DEFAULT_SATELLITE_PRODUCT, getSatelliteProductDef, type SatelliteProduct } from '../lib/satellite';
 
 // Next/webpack bundles maplibre-gl, so the library's relative worker URL
 // (./maplibre-gl-worker.mjs) resolves to a chunk that does not exist. Serve the
@@ -74,6 +75,8 @@ export interface RadarMapProps {
   playbackIndex?: number;
   /** True when global playback is active; used to show LIVE ONLY on non-archived sources. */
   playbackActive?: boolean;
+  /** GOES-East satellite product when mode is Satellite. */
+  satelliteProduct?: SatelliteProduct;
   onNewScan?: (info: { latencySec: number; timestamp: string; site: string }) => void;
   onSelectSite?: (siteId: string) => void;
   onSelectWarningFromMap?: (w: any) => void;
@@ -282,6 +285,7 @@ export function RadarMap({
   syncGroup = null,
   playbackIndex = 0,
   playbackActive = false,
+  satelliteProduct = DEFAULT_SATELLITE_PRODUCT,
   onNewScan,
   onSelectSite,
   onSelectWarningFromMap,
@@ -721,8 +725,25 @@ export function RadarMap({
         tileUrl = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png';
         archiveAvailable = false;
       } else if (mode === 'Satellite') {
-        tileUrl = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/goes-east-vis-1km-900913/{z}/{x}/{y}.png';
+        const satDef = getSatelliteProductDef(satelliteProduct);
+        tileUrl = satDef.tileUrl;
         archiveAvailable = false;
+        try {
+          const probe = await fetch(tileUrl.replace('{z}/{x}/{y}', '0/0/0'), { cache: 'no-store' });
+          if (!probe.ok) {
+            if (map.getLayer(RADAR_LAYER_ID)) map.removeLayer(RADAR_LAYER_ID);
+            if (map.getSource(RADAR_SOURCE_ID)) map.removeSource(RADAR_SOURCE_ID);
+            setTileError('DATA UNAVAILABLE');
+            setLiveOnly(false);
+            return;
+          }
+        } catch {
+          if (map.getLayer(RADAR_LAYER_ID)) map.removeLayer(RADAR_LAYER_ID);
+          if (map.getSource(RADAR_SOURCE_ID)) map.removeSource(RADAR_SOURCE_ID);
+          setTileError('DATA UNAVAILABLE');
+          setLiveOnly(false);
+          return;
+        }
       } else if (product === 'max_ref') {
         try {
           const res = await fetch(
@@ -805,11 +826,8 @@ export function RadarMap({
         prevTileUrlRef.current = tileUrl;
       }
 
-      if (map.getLayer(RADAR_LAYER_ID)) map.removeLayer(RADAR_LAYER_ID);
-      if (map.getSource(RADAR_SOURCE_ID)) map.removeSource(RADAR_SOURCE_ID);
-
-      // New source: clear any prior banner state and health flag so a genuinely
-      // unavailable product still reports its own failure.
+      // New/changed source: clear prior banner state and health flag so a
+      // genuinely unavailable product still reports its own failure.
       radarSourceHealthyRef.current = false;
       if (tileErrorTimerRef.current) {
         clearTimeout(tileErrorTimerRef.current);
@@ -817,29 +835,54 @@ export function RadarMap({
       }
       setTileError(null);
 
-      map.addSource(RADAR_SOURCE_ID, {
-        type: 'raster',
-        tiles: [tileUrl],
-        tileSize: 256,
-        scheme: 'xyz',
-      });
-
+      const existingSource = map.getSource(RADAR_SOURCE_ID) as any;
       const beforeId = map.getLayer(WARNINGS_FILL_ID) ? WARNINGS_FILL_ID : undefined;
 
-      map.addLayer(
-        {
-          id: RADAR_LAYER_ID,
+      if (existingSource && typeof existingSource.setTiles === 'function') {
+        // Switch raster tiles without rebuilding the map or tearing down layers.
+        existingSource.setTiles([tileUrl]);
+        if (!map.getLayer(RADAR_LAYER_ID)) {
+          map.addLayer(
+            {
+              id: RADAR_LAYER_ID,
+              type: 'raster',
+              source: RADAR_SOURCE_ID,
+              paint: {
+                'raster-opacity': radarOpacity,
+                'raster-fade-duration': 0,
+              },
+            },
+            beforeId
+          );
+        } else {
+          map.setPaintProperty(RADAR_LAYER_ID, 'raster-opacity', radarOpacity);
+        }
+      } else {
+        if (map.getLayer(RADAR_LAYER_ID)) map.removeLayer(RADAR_LAYER_ID);
+        if (map.getSource(RADAR_SOURCE_ID)) map.removeSource(RADAR_SOURCE_ID);
+
+        map.addSource(RADAR_SOURCE_ID, {
           type: 'raster',
-          source: RADAR_SOURCE_ID,
-          paint: {
-            'raster-opacity': radarOpacity,
-            'raster-fade-duration': 0,
+          tiles: [tileUrl],
+          tileSize: 256,
+          scheme: 'xyz',
+        });
+
+        map.addLayer(
+          {
+            id: RADAR_LAYER_ID,
+            type: 'raster',
+            source: RADAR_SOURCE_ID,
+            paint: {
+              'raster-opacity': radarOpacity,
+              'raster-fade-duration': 0,
+            },
           },
-        },
-        beforeId
-      );
+          beforeId
+        );
+      }
     },
-    [mode, product, tilt, maxRefWindow, site.radarId, radarOpacity, fastScanEnabled, onNewScan, playbackIndex, playbackActive]
+    [mode, product, tilt, maxRefWindow, site.radarId, radarOpacity, fastScanEnabled, onNewScan, playbackIndex, playbackActive, satelliteProduct]
   );
 
   const updateRangeRings = useCallback((map: MapLibreMap, lat: number, lon: number) => {
