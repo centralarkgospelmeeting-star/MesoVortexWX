@@ -343,6 +343,8 @@ export default function MesoVortexWorkstation() {
         onToggleMCD={() => setShowMCD((v) => !v)}
         showSpotters={showSpotters}
         onToggleSpotters={() => setShowSpotters((v) => !v)}
+        showSpotterReports={showSpotterReports}
+        onToggleSpotterReports={() => setShowSpotterReports((v) => !v)}
         showSweepAnimation={showSweepAnimation}
         onToggleSweepAnimation={() => setShowSweepAnimation((v) => !v)}
       />

@@ -62,6 +62,8 @@ export type Props = {
   onToggleMCD?: () => void;
   showSpotters?: boolean;
   onToggleSpotters?: () => void;
+  showSpotterReports?: boolean;
+  onToggleSpotterReports?: () => void;
   showSweepAnimation?: boolean;
   onToggleSweepAnimation?: () => void;
   showFastScan?: boolean;
@@ -137,6 +139,8 @@ export function WeatherWiseRadarCard({
   onToggleMCD,
   showSpotters = false,
   onToggleSpotters,
+  showSpotterReports = false,
+  onToggleSpotterReports,
   showSweepAnimation = true,
   onToggleSweepAnimation,
   showFastScan = false,
@@ -359,7 +363,7 @@ export function WeatherWiseRadarCard({
             >
               <span className="flex items-center gap-1.5 text-[11px] font-bold">
                 <span className="h-2 w-2 rounded-full bg-red-500" />
-                Spotter Network
+                Spotters
               </span>
               <span
                 className={`rounded-md px-1.5 py-0.5 text-[9px] font-black ${
@@ -367,6 +371,27 @@ export function WeatherWiseRadarCard({
                 }`}
               >
                 {showSpotters ? 'ON' : 'OFF'}
+              </span>
+            </button>
+
+            <button
+              onClick={onToggleSpotterReports}
+              className={`flex w-full items-center justify-between rounded-xl border px-2.5 py-1.5 transition cursor-pointer ${
+                showSpotterReports
+                  ? 'border-orange-600 bg-orange-50 text-orange-900'
+                  : 'border-slate-200 bg-slate-50/60 text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <span className="flex items-center gap-1.5 text-[11px] font-bold">
+                <span className="h-2 w-2 rounded-full bg-orange-500" />
+                Spotter Reports
+              </span>
+              <span
+                className={`rounded-md px-1.5 py-0.5 text-[9px] font-black ${
+                  showSpotterReports ? 'bg-orange-600 text-white' : 'bg-slate-200 text-slate-600'
+                }`}
+              >
+                {showSpotterReports ? 'ON' : 'OFF'}
               </span>
             </button>
 

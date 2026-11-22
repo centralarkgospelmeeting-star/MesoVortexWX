@@ -24,6 +24,7 @@ export const dynamic = 'force-dynamic';
 
 const POSITIONS_URL = 'https://www.spotternetwork.org/feeds/rss-positions.xml';
 const REPORTS_URL = 'https://www.spotternetwork.org/feeds/rss-reports.xml';
+const LSR_24H_URL = 'https://mesonet.agron.iastate.edu/data/gis/shape/4326/us/lsr_24hour.geojson';
 
 type Mode = 'positions' | 'reports' | 'all';
 
@@ -165,6 +166,28 @@ function splitHeadline(title: string): { reportType: string; location?: string }
   return { reportType: reportType || 'Report' };
 }
 
+function lsrHazard(typeText: string, typeCode: string): string {
+  const t = `${typeText || ''} ${typeCode || ''}`.toLowerCase();
+  if (t.includes('tornado')) return 'Tornado';
+  if (t.includes('funnel')) return 'Funnel Cloud';
+  if (t.includes('wall cloud')) return 'Wall Cloud';
+  if (t.includes('hail')) return 'Hail';
+  if (t.includes('flood') || t.includes('flash')) return 'Flooding';
+  if (t.includes('wind') || t.includes('gust') || t.includes('tstm wnd') || typeCode === 'D' || typeCode === 'G') return 'Wind';
+  return 'Other';
+}
+
+function lsrReportType(typeText: string, mag: unknown): string {
+  const base = (typeText || 'Report').trim();
+  if (mag === null || mag === undefined || mag === '') return base;
+  const n = Number(mag);
+  if (Number.isFinite(n) && n > 0) {
+    // Keep magnitude as reported; units vary by LSR type in IEM feed.
+    return `${base} (${n})`;
+  }
+  return base;
+}
+
 function extractItems(xml: string): string[] {
   return allMatches(xml, /<item>([\s\S]*?)<\/item>/gi).map((m) => m[1]);
 }
@@ -214,7 +237,7 @@ export async function GET(req: NextRequest) {
   const wantRadius = lat !== null && lon !== null && Number.isFinite(Number(lat)) && Number.isFinite(Number(lon)) && radiusKm > 0;
 
   const features: any[] = [];
-  const upstream: { positions?: UpstreamState; reports?: UpstreamState } = {};
+  const upstream: { positions?: UpstreamState; reports?: UpstreamState; lsr?: UpstreamState } = {};
   const notes: string[] = [];
 
   const jobs: Promise<void>[] = [];
@@ -322,6 +345,89 @@ export async function GET(req: NextRequest) {
         }
       })()
     );
+
+    jobs.push(
+      (async () => {
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 12_000);
+          let json: any;
+          try {
+            const res = await fetch(LSR_24H_URL, {
+              cache: 'no-store',
+              signal: controller.signal,
+              headers: { Accept: 'application/geo+json, application/json;q=0.9, */*;q=0.8', 'User-Agent': 'MesoVortexWX/1.0 (+https://mesovortex-wx.vercel.app)' },
+            });
+            if (!res.ok) throw Object.assign(new Error(`Upstream returned HTTP ${res.status}`), { status: res.status });
+            json = await res.json();
+          } finally {
+            clearTimeout(timeout);
+          }
+
+          const lsrFeatures = Array.isArray(json?.features) ? json.features : [];
+          let count = 0;
+          for (const f of lsrFeatures) {
+            const p = f?.properties || {};
+            const coords = f?.geometry?.coordinates;
+            const lonNum = Array.isArray(coords) ? Number(coords[0]) : Number(p.LON);
+            const latNum = Array.isArray(coords) ? Number(coords[1]) : Number(p.LAT);
+            if (!isValidCoord(latNum, lonNum)) continue;
+
+            const typeText = String(p.TYPETEXT || p.type || 'Report').trim();
+            const typeCode = String(p.TYPECODE || '').trim();
+            const validRaw = String(p.VALID || '').trim();
+            // IEM VALID is usually YYYYMMDDHHmm (UTC)
+            let timeIso: string | undefined;
+            const m = validRaw.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})/);
+            if (m) {
+              timeIso = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:00Z`;
+              const t = Date.parse(timeIso);
+              if (!Number.isFinite(t)) timeIso = undefined;
+            }
+
+            const city = String(p.CITY || '').trim();
+            const county = String(p.COUNTY || '').trim();
+            const state = String(p.STATE || '').trim();
+            const place = [city, [county, state].filter(Boolean).join(', ')].filter(Boolean).join(', ');
+            const remark = String(p.REMARK || '').trim();
+            const wfo = String(p.WFO || '').trim();
+            const src = String(p.SOURCE || '').trim();
+            const mag = p.MAG;
+            const reportType = lsrReportType(typeText, mag);
+
+            features.push({
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: [lonNum, latNum] },
+              properties: {
+                id: `lsr-${wfo}-${validRaw}-${latNum.toFixed(4)}-${lonNum.toFixed(4)}-${typeCode}`,
+                kind: 'report',
+                name: src || 'NWS Local Storm Report',
+                reportType,
+                hazard: lsrHazard(typeText, typeCode),
+                location: place || undefined,
+                notes: remark || undefined,
+                timeIso,
+                ageMinutes: timeIso ? Math.max(0, Math.round((Date.now() - Date.parse(timeIso)) / 60000)) : null,
+                source: 'NWS LSR',
+                network: 'NWS Local Storm Report',
+                wfo: wfo || undefined,
+                url: 'https://mesonet.agron.iastate.edu/lsr/',
+              },
+            });
+            count++;
+          }
+
+          upstream.lsr = { ok: true, status: 200, count };
+        } catch (err: any) {
+          upstream.lsr = {
+            ok: false,
+            status: err?.status ?? null,
+            count: 0,
+            error: String(err?.message || err),
+          };
+        }
+      })()
+    );
   }
 
   await Promise.all(jobs);
@@ -351,32 +457,38 @@ export async function GET(req: NextRequest) {
   const positionCount = output.filter((f) => f.properties.kind === 'position').length;
   const reportCount = output.filter((f) => f.properties.kind === 'report').length;
 
-  const anyOk = Boolean(upstream.positions?.ok || upstream.reports?.ok);
-  if (!anyOk) {
-    notes.push('Spotter Network feeds are unreachable right now.');
+  const anyOk = Boolean(upstream.positions?.ok || upstream.reports?.ok || upstream.lsr?.ok);
+  if (!upstream.positions?.ok && !upstream.reports?.ok && !upstream.lsr?.ok) {
+    notes.push('Spotter/report feeds are unreachable right now.');
   }
-  if (upstream.reports?.ok && reportCount === 0) {
+  if (upstream.reports?.ok && (upstream.reports.count ?? 0) === 0) {
     notes.push('No Spotter Network reports in the last 3 hours.');
   }
-  if (upstream.positions && !upstream.positions.ok && upstream.reports?.ok) {
+  if (upstream.lsr?.ok && (upstream.lsr.count ?? 0) === 0) {
+    notes.push('No NWS Local Storm Reports in the last 24 hours.');
+  }
+  if (upstream.positions && !upstream.positions.ok && (upstream.reports?.ok || upstream.lsr?.ok)) {
     notes.push('Spotter position feed unavailable; showing reports only.');
   }
   if (upstream.reports && !upstream.reports.ok && upstream.positions?.ok) {
-    notes.push('Spotter report feed unavailable; showing positions only.');
+    notes.push('Spotter Network report feed unavailable.');
+  }
+  if (upstream.lsr && !upstream.lsr.ok) {
+    notes.push('NWS/LSR report feed unavailable.');
   }
 
   const body = {
     type: 'FeatureCollection' as const,
     features: output,
     meta: {
-      source: 'Spotter Network',
-      attribution: 'SpotterNetwork.org — non-commercial feed',
+      source: 'Spotter Network + IEM/NWS Local Storm Reports',
+      attribution: 'SpotterNetwork.org (non-commercial) + Iowa Environmental Mesonet/NWS LSR',
       mode,
       available: anyOk,
       counts: { positions: positionCount, reports: reportCount, total: output.length },
       fetchedAt: new Date().toISOString(),
       upstream,
-      privacy: 'Member contact details (phone, e-mail, social handles) are stripped server-side.',
+      privacy: 'Spotter Network member contact details (phone, e-mail, social handles) are stripped server-side.',
       notes: notes.length ? notes : undefined,
     },
   };
