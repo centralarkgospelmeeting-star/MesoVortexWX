@@ -56,24 +56,32 @@ type Props = {
 };
 
 const RADAR_PRODUCT_KEYS = [
-  { key: 'ref', label: 'Base Reflectivity (0.5°)', capId: 'ref' },
-  { key: 'super_res', label: 'Super-Res Reflectivity', capId: '__super_res__' },
-  { key: 'max_ref', label: 'Composite Max Reflectivity Swath', capId: 'ref' },
-  { key: 'ref_x', label: 'Reflectivity X (Lerp Smoothed)', capId: 'ref' },
-  { key: 'vel', label: 'Base Velocity', capId: 'vel' },
+  { key: 'ref', label: 'Super-Resolution Reflectivity', capId: 'ref' },
+  { key: 'vel', label: 'Super-Resolution Velocity', capId: 'vel' },
   { key: 'srvel', label: 'Storm-Relative Velocity (SRV)', capId: 'srvel' },
-  { key: 'norm_vel', label: 'Normalized Velocity', capId: 'nrot' },
   { key: 'cc', label: 'Correlation Coefficient (CC)', capId: 'cc' },
-  { key: 'min_cc', label: 'Minimum CC Track', capId: 'min_cc' },
   { key: 'zdr', label: 'Differential Reflectivity (ZDR)', capId: 'zdr' },
-  { key: 'kdp', label: 'Specific Diff Phase (KDP)', capId: 'kdp' },
+  { key: 'kdp', label: 'Specific Differential Phase (KDP)', capId: 'kdp' },
+  { key: 'hhc', label: 'Hydrometeor Classification (HCA)', capId: 'hhc' },
   { key: 'sw', label: 'Spectrum Width', capId: 'sw' },
-  { key: 'tops', label: 'Echo Tops (kft)', capId: 'tops' },
+  { key: 'norm_vel', label: 'Normalized Rotation (NROT)', capId: 'nrot' },
+  { key: 'azshear', label: 'Azimuthal Shear', capId: 'azshear' },
+  { key: 'rotation_tracks', label: 'Rotation Tracks', capId: 'rotation_tracks' },
+  { key: 'cross_section', label: 'Reflectivity Cross Sections', capId: 'cross_section' },
+  { key: 'max_ref', label: 'Maximum Reflectivity', capId: 'max_ref' },
+  { key: 'min_cc', label: 'Minimum Correlation Coefficient', capId: 'min_cc' },
+  { key: 'tops', label: 'Echo Tops', capId: 'tops' },
   { key: 'vil', label: 'Vertically Integrated Liquid (VIL)', capId: 'vil' },
-  { key: 'hhc', label: 'Hydrometeor Classification', capId: 'hhc' },
-  { key: 'qpe', label: 'Digital Precip Rate (QPE)', capId: 'qpe' },
-  { key: 'mesh', label: 'MESH Hail Swath', capId: 'mesh' },
-  { key: 'azshear', label: 'AzShear Rotation Track', capId: 'azshear' },
+  { key: 'vil_density', label: 'VIL Density', capId: 'vil_density' },
+  { key: 'hail_detection', label: 'Hail Detection and Hail Swaths', capId: 'hail_detection' },
+  { key: 'mesh', label: 'MESH', capId: 'mesh' },
+  { key: 'gate_filter', label: 'Reflectivity Gate Filtering', capId: 'gate_filter' },
+  { key: 'qpe', label: 'Precipitation Rate / QPE', capId: 'qpe' },
+  { key: 'precip_rate', label: 'Precipitation Rate', capId: 'precip_rate' },
+  { key: 'rain_mix_snow', label: 'Rain/Mix/Snow Intensity', capId: 'rain_mix_snow' },
+  { key: 'storm_analysis', label: 'Radar-Derived Storm Analysis', capId: 'storm_analysis' },
+  { key: 'volume_scan', label: 'Radar Volume Scans / Elevation-Angle Selection', capId: 'volume_scan' },
+  { key: 'tilt_selection', label: 'Individual Radar Tilt Selection', capId: 'tilt_selection' },
 ];
 
 function radarProductsWithAvailability() {
@@ -615,14 +623,21 @@ export function FloatingProductPanel({
                   🔲 Quad Compare
                 </button>
               )}
-              {onOpenCrossSection && (
-                <button
-                  onClick={onOpenCrossSection}
-                  className="rounded-xl border border-slate-700 bg-slate-900/80 p-2 text-center font-bold text-slate-200 hover:bg-slate-800 hover:text-white transition cursor-pointer"
-                >
-                  📐 Cross Section
-                </button>
-              )}
+              {onOpenCrossSection && (() => {
+                const cap = getRadarCapability('cross_section');
+                const available = cap?.availability === 'WORKING' || cap?.availability === 'PARTIAL';
+                const reason = !available ? (cap?.unavailableReason || 'DATA UNAVAILABLE - Cross sections not verified.') : undefined;
+                return (
+                  <button
+                    onClick={available ? onOpenCrossSection : undefined}
+                    disabled={!available}
+                    title={reason}
+                    className={`rounded-xl border p-2 text-center font-bold transition ${available ? 'border-slate-700 bg-slate-900/80 text-slate-200 hover:bg-slate-800 hover:text-white cursor-pointer' : 'border-slate-800/80 bg-slate-950/40 text-slate-500 cursor-not-allowed'}`}
+                  >
+                    📐 Cross Section{!available ? ' (Unavailable)' : ''}
+                  </button>
+                );
+              })()}
               {onOpenSkewT && (
                 <button
                   onClick={onOpenSkewT}
