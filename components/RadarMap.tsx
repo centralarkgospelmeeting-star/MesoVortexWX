@@ -46,6 +46,15 @@ export interface RadarMapProps {
   showWarnings?: boolean;
   showMCD?: boolean;
   showSpotters?: boolean;
+  spotterFilters?: {
+    tornado?: boolean;
+    funnel?: boolean;
+    wallCloud?: boolean;
+    hail?: boolean;
+    wind?: boolean;
+    flooding?: boolean;
+    position?: boolean;
+  };
   showSweepAnimation?: boolean;
   sweepAnimation?: boolean;
   showFastScan?: boolean;
@@ -93,6 +102,8 @@ const SWEEP_SOURCE_ID = 'mv-sweep-source';
 const SWEEP_LINE_ID = 'mv-sweep-line';
 const SWEEP_FILL_ID = 'mv-sweep-fill';
 const SPOTTER_SOURCE_ID = 'mv-spotters-source';
+const SPOTTER_CLUSTER_LAYER_ID = 'mv-spotters-clusters';
+const SPOTTER_CLUSTER_COUNT_ID = 'mv-spotters-cluster-count';
 const SPOTTER_HALO_LAYER_ID = 'mv-spotters-halo';
 const SPOTTER_POSITION_LAYER_ID = 'mv-spotters-position';
 const SPOTTER_REPORT_LAYER_ID = 'mv-spotters-report';
@@ -212,6 +223,15 @@ export function RadarMap({
   showWarnings = true,
   showMCD = true,
   showSpotters = false,
+  spotterFilters = {
+    tornado: true,
+    funnel: true,
+    wallCloud: true,
+    hail: true,
+    wind: true,
+    flooding: true,
+    position: true,
+  },
   showSweepAnimation = true,
   sweepAnimation: sweepAnimationProp,
   showFastScan = false,
@@ -720,55 +740,99 @@ export function RadarMap({
         return;
       }
 
-      const geojson = {
-        type: 'FeatureCollection' as const,
-        features: Array.isArray(data?.features) ? data.features : [],
-      };
+      const allFeatures = Array.isArray(data?.features) ? data.features : [];
+      const filtered = allFeatures.filter((f: any) => {
+        const p = f?.properties || {};
+        if (p.kind === 'position') return spotterFilters.position !== false;
+        const hazard = String(p.hazard || '').toLowerCase();
+        if (hazard.includes('tornado')) return spotterFilters.tornado !== false;
+        if (hazard.includes('funnel')) return spotterFilters.funnel !== false;
+        if (hazard.includes('wall')) return spotterFilters.wallCloud !== false;
+        if (hazard.includes('hail')) return spotterFilters.hail !== false;
+        if (hazard.includes('wind')) return spotterFilters.wind !== false;
+        if (hazard.includes('flood')) return spotterFilters.flooding !== false;
+        return true;
+      });
 
+      const geojson = { type: 'FeatureCollection' as const, features: filtered };
       const existing = map.getSource(SPOTTER_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
 
       if (existing) {
         existing.setData(geojson as any);
       } else {
-        map.addSource(SPOTTER_SOURCE_ID, { type: 'geojson', data: geojson as any });
+        map.addSource(SPOTTER_SOURCE_ID, {
+          type: 'geojson',
+          data: geojson as any,
+          cluster: true,
+          clusterMaxZoom: 11,
+          clusterRadius: 48,
+        });
+
+        const beforeId = map.getLayer(WARNINGS_FILL_ID) ? WARNINGS_FILL_ID : undefined;
+
+        map.addLayer({
+          id: SPOTTER_CLUSTER_LAYER_ID,
+          type: 'circle',
+          source: SPOTTER_SOURCE_ID,
+          filter: ['has', 'point_count'],
+          paint: {
+            'circle-color': ['step', ['get', 'point_count'], '#7f1d1d', 10, '#991b1b', 25, '#dc2626'],
+            'circle-radius': ['step', ['get', 'point_count'], 14, 10, 18, 25, 24],
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#fecaca',
+            'circle-opacity': 0.92,
+          },
+        }, beforeId);
+
+        map.addLayer({
+          id: SPOTTER_CLUSTER_COUNT_ID,
+          type: 'symbol',
+          source: SPOTTER_SOURCE_ID,
+          filter: ['has', 'point_count'],
+          layout: {
+            'text-field': '{point_count_abbreviated}',
+            'text-size': 11,
+            'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          },
+          paint: { 'text-color': '#ffffff' },
+        }, beforeId);
 
         map.addLayer({
           id: SPOTTER_HALO_LAYER_ID,
           type: 'circle',
           source: SPOTTER_SOURCE_ID,
-          filter: ['==', ['get', 'kind'], 'report'],
+          filter: ['all', ['!', ['has', 'point_count']], ['==', ['get', 'kind'], 'report']],
           paint: {
             'circle-radius': 12,
             'circle-color': '#ef4444',
             'circle-opacity': 0.16,
             'circle-blur': 0.5,
           },
-        });
+        }, beforeId);
 
         map.addLayer({
           id: SPOTTER_POSITION_LAYER_ID,
           type: 'circle',
           source: SPOTTER_SOURCE_ID,
-          filter: ['==', ['get', 'kind'], 'position'],
+          filter: ['all', ['!', ['has', 'point_count']], ['==', ['get', 'kind'], 'position']],
           paint: {
-            'circle-radius': 4,
+            'circle-radius': 4.5,
             'circle-color': '#ef4444',
-            'circle-opacity': 0.92,
-            'circle-stroke-width': 1.2,
+            'circle-opacity': 0.95,
+            'circle-stroke-width': 1.4,
             'circle-stroke-color': '#ffffff',
           },
-        });
+        }, beforeId);
 
         map.addLayer({
           id: SPOTTER_REPORT_LAYER_ID,
           type: 'circle',
           source: SPOTTER_SOURCE_ID,
-          filter: ['==', ['get', 'kind'], 'report'],
+          filter: ['all', ['!', ['has', 'point_count']], ['==', ['get', 'kind'], 'report']],
           paint: {
-            'circle-radius': 5.5,
+            'circle-radius': 6,
             'circle-color': [
-              'match',
-              ['get', 'hazard'],
+              'match', ['get', 'hazard'],
               'Tornado', '#ef4444',
               'Funnel Cloud', '#f97316',
               'Wall Cloud', '#f59e0b',
@@ -778,41 +842,27 @@ export function RadarMap({
               'Precipitation', '#06b6d4',
               '#a855f7',
             ],
-            'circle-stroke-width': 1.6,
+            'circle-stroke-width': 1.8,
             'circle-stroke-color': '#ffffff',
           },
-        });
+        }, beforeId);
       }
 
-      // Bind popups once per map instance (layers may be removed/re-added when
-      // the overlay is toggled off and on).
       if (!spotterHandlersBoundRef.current) {
         spotterHandlersBoundRef.current = true;
 
         const openSpotterPopup = (e: any) => {
           const props = e.features?.[0]?.properties;
           if (!props) return;
-
           const isReport = props.kind === 'report';
-          const when = props.timeIso
-            ? new Date(props.timeIso).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
-            : 'Unavailable';
-          const age =
-            typeof props.ageMinutes === 'number' && props.ageMinutes >= 0
-              ? `${props.ageMinutes} min`
-              : 'Unavailable';
-          const safeUrl =
-            typeof props.url === 'string' && /^https:\/\/(www\.)?spotternetwork\.org\//i.test(props.url)
-              ? props.url
-              : null;
-
+          const when = props.timeIso ? new Date(props.timeIso).toISOString().replace('T', ' ').slice(0, 19) + ' UTC' : 'Unavailable';
+          const age = typeof props.ageMinutes === 'number' && props.ageMinutes >= 0 ? `${props.ageMinutes} min` : 'Unavailable';
+          const safeUrl = typeof props.url === 'string' && /^https:\/\/(www\.)?spotternetwork\.org\//i.test(props.url) ? props.url : null;
           const coords = e.features?.[0]?.geometry?.coordinates;
           const lon = Array.isArray(coords) ? Number(coords[0]) : NaN;
           const lat = Array.isArray(coords) ? Number(coords[1]) : NaN;
           const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
           const posText = hasCoords ? `${Math.abs(lat).toFixed(4)}°${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon).toFixed(4)}°${lon >= 0 ? 'E' : 'W'}` : 'Unavailable';
-
-          // Distance from selected radar site (derived, real).
           let distanceText = 'Unavailable';
           if (hasCoords && Number.isFinite(site?.lat) && Number.isFinite(site?.lon)) {
             const toRad = (d: number) => (d * Math.PI) / 180;
@@ -822,77 +872,73 @@ export function RadarMap({
             const km = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             distanceText = `${(km * 0.621371).toFixed(1)} mi`;
           }
-
           const name = escapeHtml(props.name || 'Spotter');
-          const spotterId = escapeHtml(props.id || 'Unavailable');
-          const callsign = escapeHtml(props.callsign || 'Unavailable');
-          const movement = escapeHtml(props.movement || 'Unavailable');
-          const experience = escapeHtml(props.experienceLevel || 'Unavailable');
-          const county = escapeHtml(props.county || 'Unavailable');
-          const lastReport = isReport ? escapeHtml(props.reportType || 'Report') : 'Position update';
-          const locationText = props.location ? escapeHtml(props.location) : 'Unavailable';
-          const notes = props.notes ? escapeHtml(props.notes) : '';
+          const reportType = escapeHtml(isReport ? (props.reportType || props.hazard || 'Report') : 'Chaser Position');
+          const remarks = props.notes ? escapeHtml(props.notes) : 'No remarks provided.';
+          const locationText = props.location ? escapeHtml(props.location) : '';
+          const source = 'Spotter Network';
+          const row = (label: string, value: string) => `<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid rgba(255,255,255,0.08);font-size:11px;"><span style="color:#94a3b8;font-weight:600;">${label}</span><span style="color:#e2e8f0;font-weight:600;text-align:right;word-break:break-word;">${value}</span></div>`;
+          const link = safeUrl ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:10px;font-size:11px;font-weight:700;color:#38bdf8;">View on Spotter Network ↗</a>` : '';
 
-          const row = (label: string, value: string) => `
-            <div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid rgba(255,255,255,0.08);font-size:11px;">
-              <span style="color:#94a3b8;font-weight:600;">${label}</span>
-              <span style="color:#e2e8f0;font-weight:600;text-align:right;word-break:break-word;">${value}</span>
-            </div>`;
-
-          const link = safeUrl
-            ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:10px;font-size:11px;font-weight:700;color:#38bdf8;">View on Spotter Network ↗</a>`
-            : '';
-
-          new maplibregl.Popup({ closeButton: true, offset: 12, maxWidth: '340px', className: 'mv-spotter-popup' })
+          new maplibregl.Popup({ closeButton: true, offset: 12, maxWidth: '360px', className: 'mv-spotter-popup' })
             .setLngLat(e.lngLat)
-            .setHTML(
-              `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#080e18;color:#f8fafc;padding:14px;border-radius:12px;min-width:280px;max-width:330px;box-shadow:0 20px 35px -5px rgba(0,0,0,0.85);border:1px solid rgba(255,255,255,0.12);">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.08);">
-                  <div style="display:flex;align-items:center;gap:6px;">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 8px #ef4444;"></span>
-                    <span style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;color:#f87171;">SPOTTER NETWORK</span>
+            .setHTML(`
+              <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:rgba(8,14,24,0.96);color:#f8fafc;padding:0;border-radius:14px;min-width:300px;max-width:350px;box-shadow:0 20px 35px -5px rgba(0,0,0,0.85);border:1px solid rgba(239,68,68,0.35);overflow:hidden;backdrop-filter:blur(10px);">
+                <div style="background:linear-gradient(90deg,#7f1d1d,#b91c1c);padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.08);">
+                  <div style="font-size:10px;font-weight:900;letter-spacing:0.08em;color:#fecaca;text-transform:uppercase;">Spotter / Chaser Report</div>
+                  <div style="font-size:16px;font-weight:800;color:#fff;margin-top:2px;">${name}</div>
+                </div>
+                <div style="padding:12px 14px;max-height:320px;overflow-y:auto;">
+                  <div style="background:#0f172a;border-radius:10px;padding:10px;margin-bottom:10px;border:1px solid rgba(255,255,255,0.08);">
+                    ${row('Position', escapeHtml(posText))}
+                    ${row('Reported', escapeHtml(when))}
+                    ${row('Age', escapeHtml(age))}
                   </div>
-                  <span style="font-size:9px;font-weight:800;background:#1e293b;color:#cbd5e1;padding:2px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;">${movement !== 'Unavailable' ? movement : 'Unknown'}</span>
+                  <div style="margin-bottom:10px;">
+                    <div style="font-size:10px;font-weight:800;color:#f87171;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Report</div>
+                    ${row('Report Type', reportType)}
+                    ${locationText ? row('Location', locationText) : ''}
+                    ${row('Source', escapeHtml(source))}
+                  </div>
+                  <div style="margin-bottom:10px;">
+                    <div style="font-size:10px;font-weight:800;color:#f87171;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Remarks</div>
+                    <div style="font-size:11px;color:#cbd5e1;line-height:1.5;background:#111827;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:8px;">${remarks}</div>
+                  </div>
+                  <div>
+                    <div style="font-size:10px;font-weight:800;color:#f87171;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Storm Context</div>
+                    ${row('Nearest Radar', escapeHtml(site?.radarId || 'Unavailable'))}
+                    ${row('Distance From Radar', escapeHtml(distanceText))}
+                    ${row('Reflectivity', 'Unavailable')}
+                    ${row('VIL', 'Unavailable')}
+                    ${row('Echo Tops', 'Unavailable')}
+                  </div>
+                  ${link}
+                  <div style="margin-top:8px;font-size:10px;color:#64748b;line-height:1.4;">Storm context values shown as Unavailable when not sampled from real product data.</div>
                 </div>
-
-                <div style="font-size:16px;font-weight:800;color:#ffffff;line-height:1.2;margin-bottom:2px;">${name}</div>
-                <div style="font-size:11px;color:#94a3b8;margin-bottom:8px;">${isReport ? 'Ground report' : 'Live spotter position'}</div>
-
-                <div style="background:#0f172a;border-radius:8px;padding:10px;margin:8px 0;border:1px solid rgba(255,255,255,0.08);">
-                  <div style="font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Location</div>
-                  <div style="display:flex;justify-content:space-between;gap:12px;font-size:11px;margin-bottom:4px;"><span style="color:#94a3b8;">Position</span><span style="color:#f1f5f9;font-weight:700;text-align:right;">${escapeHtml(posText)}</span></div>
-                  <div style="display:flex;justify-content:space-between;gap:12px;font-size:11px;"><span style="color:#94a3b8;">Reported</span><span style="color:#e2e8f0;text-align:right;">${escapeHtml(when)}</span></div>
-                </div>
-
-                <div style="margin-top:4px;">
-                  ${row('Spotter ID', spotterId)}
-                  ${row('Network', 'Spotter Network')}
-                  ${row('Callsign', callsign)}
-                  ${row('Experience Level', experience)}
-                  ${row('Last Report', escapeHtml(lastReport))}
-                  ${row('Age', escapeHtml(age))}
-                  ${row('Movement', movement)}
-                  ${row('Distance From Radar', escapeHtml(distanceText))}
-                  ${row('County', county)}
-                  ${props.location ? row('Location', locationText) : ''}
-                </div>
-
-                ${notes ? `<div style="margin-top:8px;padding:8px 9px;border-radius:8px;background:#111827;border:1px solid rgba(255,255,255,0.08);font-size:11px;color:#cbd5e1;line-height:1.45;"><span style="color:#94a3b8;font-weight:700;">Notes: </span>${notes}</div>` : ''}
-                ${link}
-                <div style="margin-top:8px;font-size:10px;color:#64748b;line-height:1.4;">Contact details (phone/email/web) are not shown because public feeds do not expose them.</div>
-              </div>`
-            )
+              </div>`)
             .addTo(map);
         };
 
+        map.on('click', SPOTTER_CLUSTER_LAYER_ID, (e: any) => {
+          const features = map.queryRenderedFeatures(e.point, { layers: [SPOTTER_CLUSTER_LAYER_ID] });
+          const clusterId = features[0]?.properties?.cluster_id;
+          const source = map.getSource(SPOTTER_SOURCE_ID) as any;
+          if (!source || clusterId == null) return;
+          source.getClusterExpansionZoom(clusterId, (err: any, zoom: number) => {
+            if (err) return;
+            const coords = (features[0].geometry as any).coordinates;
+            map.easeTo({ center: coords, zoom });
+          });
+        });
+
         [SPOTTER_REPORT_LAYER_ID, SPOTTER_POSITION_LAYER_ID].forEach((layerId) => {
           map.on('click', layerId, openSpotterPopup);
-          map.on('mouseenter', layerId, () => {
-            map.getCanvas().style.cursor = 'pointer';
-          });
-          map.on('mouseleave', layerId, () => {
-            map.getCanvas().style.cursor = '';
-          });
+          map.on('mouseenter', layerId, () => { map.getCanvas().style.cursor = 'pointer'; });
+          map.on('mouseleave', layerId, () => { map.getCanvas().style.cursor = ''; });
+        });
+        [SPOTTER_CLUSTER_LAYER_ID].forEach((layerId) => {
+          map.on('mouseenter', layerId, () => { map.getCanvas().style.cursor = 'pointer'; });
+          map.on('mouseleave', layerId, () => { map.getCanvas().style.cursor = ''; });
         });
       }
 
@@ -910,7 +956,7 @@ export function RadarMap({
         message: String(err?.message || err),
       });
     }
-  }, []);
+  }, [site.lat, site.lon, site.radarId, spotterFilters]);
 
   const renderTowerPills = useCallback(
     (map: MapLibreMap) => {
@@ -1073,10 +1119,11 @@ export function RadarMap({
       return () => clearInterval(timer);
     }
 
-    [SPOTTER_REPORT_LAYER_ID, SPOTTER_POSITION_LAYER_ID, SPOTTER_HALO_LAYER_ID].forEach((layerId) => {
+    [SPOTTER_CLUSTER_COUNT_ID, SPOTTER_CLUSTER_LAYER_ID, SPOTTER_REPORT_LAYER_ID, SPOTTER_POSITION_LAYER_ID, SPOTTER_HALO_LAYER_ID].forEach((layerId) => {
       if (map.getLayer(layerId)) map.removeLayer(layerId);
     });
     if (map.getSource(SPOTTER_SOURCE_ID)) map.removeSource(SPOTTER_SOURCE_ID);
+    document.querySelectorAll('.maplibregl-popup').forEach((p) => p.remove());
     setSpotterStatus({ state: 'idle', positions: 0, reports: 0 });
   }, [showSpotters, mapReady, updateSpotters]);
 
