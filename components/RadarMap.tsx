@@ -139,6 +139,9 @@ const HURRICANE_CURRENT_SOURCE_ID = 'mv-hurricane-current-source';
 const HURRICANE_CURRENT_HALO_ID = 'mv-hurricane-current-halo';
 const HURRICANE_CURRENT_CIRCLE_ID = 'mv-hurricane-current-circle';
 const HURRICANE_CURRENT_LABEL_ID = 'mv-hurricane-current-label';
+const GLM_SOURCE_ID = 'mv-glm-source';
+const GLM_LAYER_ID = 'mv-glm-layer';
+const GLM_GLOW_ID = 'mv-glm-glow';
 const SPOTTER_PULSE_LAYER_ID = 'mv-spotters-pulse';
 const SPOTTER_POSITION_LAYER_ID = 'mv-spotters-position';
 const SPOTTER_REPORT_LAYER_ID = 'mv-spotters-report';
@@ -331,6 +334,7 @@ export function RadarMap({
   const [liveOnly, setLiveOnly] = useState(false);
   const [hurricaneStatus, setHurricaneStatus] = useState<{ state: 'idle' | 'loading' | 'ready' | 'unavailable'; count: number; message?: string }>({ state: 'idle', count: 0 });
   const hurricaneHandlersBoundRef = useRef(false);
+  const [glmStatus, setGlmStatus] = useState<{ state: 'idle'|'loading'|'ready'|'unavailable'; count: number; message?: string }>({ state: 'idle', count: 0 });
 
   useEffect(() => {
     const map = mapRef.current;
@@ -920,6 +924,47 @@ export function RadarMap({
     }, 300000);
     return () => clearInterval(timer);
   }, [mapReady, showHurricanes, updateHurricanes, removeHurricaneLayers]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const removeGlm = () => {
+      [GLM_GLOW_ID, GLM_LAYER_ID].forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
+      if (map.getSource(GLM_SOURCE_ID)) map.removeSource(GLM_SOURCE_ID);
+    };
+    if (!showLightning) {
+      removeGlm();
+      setGlmStatus({ state: 'idle', count: 0 });
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      setGlmStatus(s => ({ ...s, state: 'loading' }));
+      try {
+        const res = await fetch('/api/lightning/glm?minutes=5', { cache: 'no-store' });
+        const data = await res.json();
+        if (cancelled) return;
+        if (!data?.available) {
+          removeGlm();
+          setGlmStatus({ state: 'unavailable', count: 0, message: data?.reason || 'DATA UNAVAILABLE' });
+          return;
+        }
+        const fc = data.features?.type === 'FeatureCollection' ? data.features : { type: 'FeatureCollection', features: [] };
+        const src = map.getSource(GLM_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+        if (src) src.setData(fc as any);
+        else map.addSource(GLM_SOURCE_ID, { type: 'geojson', data: fc as any });
+        const beforeId = map.getLayer(MCD_FILL_ID) ? MCD_FILL_ID : map.getLayer(WARNINGS_FILL_ID) ? WARNINGS_FILL_ID : undefined;
+        if (!map.getLayer(GLM_GLOW_ID)) map.addLayer({ id: GLM_GLOW_ID, type: 'circle', source: GLM_SOURCE_ID, paint: { 'circle-radius': 5, 'circle-color': '#fde047', 'circle-opacity': 0.18, 'circle-blur': 0.6 } }, beforeId);
+        if (!map.getLayer(GLM_LAYER_ID)) map.addLayer({ id: GLM_LAYER_ID, type: 'circle', source: GLM_SOURCE_ID, paint: { 'circle-radius': 2.2, 'circle-color': '#facc15', 'circle-stroke-color': '#713f12', 'circle-stroke-width': 0.4, 'circle-opacity': 0.9 } }, beforeId);
+        setGlmStatus({ state: 'ready', count: Number(data.count || fc.features?.length || 0) });
+      } catch (e: any) {
+        if (!cancelled) { removeGlm(); setGlmStatus({ state: 'unavailable', count: 0, message: String(e?.message || e) }); }
+      }
+    };
+    load();
+    const timer = setInterval(load, 120000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [mapReady, showLightning]);
 
   const updateRadar = useCallback(
     async (map: MapLibreMap) => {
@@ -1850,10 +1895,14 @@ export function RadarMap({
           <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-yellow-300">
             <span>☇</span> GLM Lightning
           </div>
-          <div className="mt-1 leading-snug text-amber-300">
-            DATA UNAVAILABLE — official NOAA GOES-R GLM feed not yet integrated. No synthetic lightning displayed.
-          </div>
-          <div className="mt-1 text-[9px] text-slate-500">Target source: NOAA AWS Open Data GLM-L2-LCFA.</div>
+          {glmStatus.state === 'loading' ? (
+            <div className="mt-1 text-slate-400">Loading official NOAA GLM…</div>
+          ) : glmStatus.state === 'ready' ? (
+            <div className="mt-1 text-slate-200">{glmStatus.count} flashes (5 min, GOES-East GLM)</div>
+          ) : (
+            <div className="mt-1 leading-snug text-amber-300">DATA UNAVAILABLE{glmStatus.message ? ` — ${glmStatus.message}` : ''}</div>
+          )}
+          <div className="mt-1 text-[9px] text-slate-500">Source: NOAA GOES-R GLM-L2-LCFA (AWS Open Data). No synthetic lightning.</div>
         </div>
       )}
 

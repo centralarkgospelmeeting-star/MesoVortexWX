@@ -1,14 +1,39 @@
 import { NextResponse } from 'next/server';
+import { spawn } from 'child_process';
+import path from 'path';
+import fs from 'fs';
+
 export const dynamic = 'force-dynamic';
 
-// DATA HONESTY: No fake GLM strikes. This endpoint should only return real GOES GLM data.
-// TODO: wire NOAA AWS Open Data GLM-L2-LCFA (NetCDF) parser or verified official GeoJSON feed.
-export async function GET() {
-  return NextResponse.json({
-    available: false,
-    source: 'NOAA GOES-R Geostationary Lightning Mapper (GLM) - not yet integrated',
-    generatedAt: new Date().toISOString(),
-    features: { type: 'FeatureCollection', features: [] },
-    reason: 'DATA UNAVAILABLE - verified real GLM feed not integrated in this build. No synthetic lightning.',
-  }, { status: 200, headers: { 'Cache-Control': 'no-store' } });
+const PY = '/tmp/opencode/glm-venv/bin/python';
+const SCRIPT = path.join(process.cwd(), 'scripts', 'glm_fetch.py');
+
+function run(minutes: number): Promise<any> {
+  return new Promise((resolve) => {
+    if (!fs.existsSync(PY) || !fs.existsSync(SCRIPT)) {
+      resolve({ available: false, source: 'NOAA GOES-R GLM', reason: 'DATA UNAVAILABLE - GLM parser/runtime not available', features: { type: 'FeatureCollection', features: [] } });
+      return;
+    }
+    const child = spawn(PY, [SCRIPT, String(minutes)], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = ''; let err = '';
+    const timer = setTimeout(() => { try { child.kill('SIGKILL'); } catch {} }, 45000);
+    child.stdout.on('data', (d) => { out += d.toString(); if (out.length > 5_000_000) { try { child.kill('SIGKILL'); } catch {} } });
+    child.stderr.on('data', (d) => { err += d.toString(); });
+    child.on('close', () => {
+      clearTimeout(timer);
+      try {
+        const parsed = JSON.parse(out);
+        resolve(parsed);
+      } catch {
+        resolve({ available: false, source: 'NOAA GOES-R GLM', reason: `DATA UNAVAILABLE - GLM parse failed${err ? ': ' + err.slice(0,200) : ''}`, features: { type: 'FeatureCollection', features: [] } });
+      }
+    });
+  });
+}
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const minutes = Math.max(1, Math.min(15, Number(searchParams.get('minutes') || 5)));
+  const data = await run(minutes);
+  return NextResponse.json(data, { status: 200, headers: { 'Cache-Control': 'no-store' } });
 }
