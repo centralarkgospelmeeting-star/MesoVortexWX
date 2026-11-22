@@ -102,9 +102,10 @@ const SWEEP_SOURCE_ID = 'mv-sweep-source';
 const SWEEP_LINE_ID = 'mv-sweep-line';
 const SWEEP_FILL_ID = 'mv-sweep-fill';
 const SPOTTER_SOURCE_ID = 'mv-spotters-source';
-const SPOTTER_CLUSTER_LAYER_ID = 'mv-spotters-clusters';
-const SPOTTER_CLUSTER_COUNT_ID = 'mv-spotters-cluster-count';
+const SPOTTER_TRAIL_SOURCE_ID = 'mv-spotters-trail-source';
+const SPOTTER_TRAIL_LAYER_ID = 'mv-spotters-trail';
 const SPOTTER_HALO_LAYER_ID = 'mv-spotters-halo';
+const SPOTTER_PULSE_LAYER_ID = 'mv-spotters-pulse';
 const SPOTTER_POSITION_LAYER_ID = 'mv-spotters-position';
 const SPOTTER_REPORT_LAYER_ID = 'mv-spotters-report';
 
@@ -216,6 +217,25 @@ function makeSweepGeoJSON(lat: number, lon: number, angleDeg: number) {
   };
 }
 
+type SpotterObservation = {
+  lon: number;
+  lat: number;
+  timeMs: number;
+};
+
+const SPOTTER_HISTORY_WINDOW_MS = 30 * 60 * 1000;
+
+/** Great-circle distance in statute miles. */
+function distanceMiles(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 0.621371;
+}
+
 export function RadarMap({
   product = 'ref',
   radarSite = 'KLZK',
@@ -285,6 +305,7 @@ export function RadarMap({
   const reportHandlersBoundRef = useRef(false);
   const showSpottersRef = useRef(showSpotters);
   const showSpotterReportsRef = useRef(showSpotterReports);
+  const spotterHistoryRef = useRef<Map<string, SpotterObservation[]>>(new Map());
   const [spotterStatus, setSpotterStatus] = useState<{
     state: 'idle' | 'loading' | 'ready' | 'unavailable';
     positions: number;
@@ -838,7 +859,8 @@ export function RadarMap({
   );
 
   const removeSpotterLayers = useCallback((map: MapLibreMap) => {
-    [SPOTTER_CLUSTER_COUNT_ID, SPOTTER_CLUSTER_LAYER_ID, SPOTTER_POSITION_LAYER_ID, SPOTTER_HALO_LAYER_ID, SPOTTER_REPORT_LAYER_ID].forEach((id) => { if (map.getLayer(id)) map.removeLayer(id); });
+    [SPOTTER_REPORT_LAYER_ID, SPOTTER_POSITION_LAYER_ID, SPOTTER_PULSE_LAYER_ID, SPOTTER_HALO_LAYER_ID, SPOTTER_TRAIL_LAYER_ID].forEach((id) => { if (map.getLayer(id)) map.removeLayer(id); });
+    if (map.getSource(SPOTTER_TRAIL_SOURCE_ID)) map.removeSource(SPOTTER_TRAIL_SOURCE_ID);
     if (map.getSource(SPOTTER_SOURCE_ID)) map.removeSource(SPOTTER_SOURCE_ID);
   }, []);
 
@@ -860,7 +882,7 @@ export function RadarMap({
       }
 
       const all = Array.isArray(data?.features) ? data.features : [];
-      const positions = all.filter((f: any) => f?.properties?.kind === 'position');
+      const rawPositions = all.filter((f: any) => f?.properties?.kind === 'position');
       const reports = all.filter((f: any) => {
         const p = f?.properties || {};
         if (p.kind !== 'report') return false;
@@ -874,7 +896,88 @@ export function RadarMap({
         return true;
       });
 
-      const posGeo = { type: 'FeatureCollection' as const, features: positions };
+      // The public Spotter Network position feed does not publish a speed or
+      // movement field. Derive the state from consecutive real position fixes
+      // held in memory. Movement history also feeds the optional trail layer.
+      const nowMs = Date.now();
+      const history = spotterHistoryRef.current;
+
+      const enrichedPositions = rawPositions.map((feature: any) => {
+        const props = feature?.properties || {};
+        const coords = feature?.geometry?.coordinates;
+        if (!Array.isArray(coords) || coords.length < 2) return feature;
+
+        const lon = Number(coords[0]);
+        const lat = Number(coords[1]);
+        if (!Number.isFinite(lon) || !Number.isFinite(lat)) return feature;
+
+        const id = String(props.id || `${lat.toFixed(5)},${lon.toFixed(5)}`);
+        const feedTime = typeof props.timeIso === 'string' ? Date.parse(props.timeIso) : NaN;
+        const timeMs = Number.isFinite(feedTime) ? feedTime : nowMs;
+
+        let track = history.get(id) || [];
+        const previousObservation = track[track.length - 1];
+        if (previousObservation && previousObservation.timeMs === timeMs) {
+          previousObservation.lon = lon;
+          previousObservation.lat = lat;
+        } else {
+          track.push({ lon, lat, timeMs });
+        }
+        track = track.filter((obs) => nowMs - obs.timeMs <= SPOTTER_HISTORY_WINDOW_MS);
+        if (!track.length) track = [{ lon, lat, timeMs }];
+        history.set(id, track);
+
+        let speedMph: number | null = null;
+        let movementKnown = false;
+        if (track.length >= 2) {
+          const previous = track[track.length - 2];
+          const latest = track[track.length - 1];
+          const minutes = (latest.timeMs - previous.timeMs) / 60000;
+          if (minutes >= 0.25) {
+            speedMph =
+              Math.round(
+                (distanceMiles(previous.lat, previous.lon, latest.lat, latest.lon) / (minutes / 60)) * 10
+              ) / 10;
+            movementKnown = true;
+          }
+        }
+
+        // Small threshold filters GPS jitter while still catching real movement.
+        const mobile = movementKnown && speedMph !== null && speedMph > 0.5;
+        let movement = 'MOVEMENT UNKNOWN';
+        if (movementKnown && speedMph !== null) {
+          movement = mobile ? `MOBILE · ${speedMph.toFixed(1)} mph` : 'STATIONARY';
+        }
+
+        return {
+          ...feature,
+          properties: { ...props, id, mobile, movementKnown, speedMph, movement },
+        };
+      });
+
+      history.forEach((track, id) => {
+        const fresh = track.filter((obs) => nowMs - obs.timeMs <= SPOTTER_HISTORY_WINDOW_MS);
+        if (fresh.length) history.set(id, fresh);
+        else history.delete(id);
+      });
+
+      const mobileIds = new Set(
+        enrichedPositions
+          .filter((f: any) => f?.properties?.mobile === true)
+          .map((f: any) => String(f.properties.id))
+      );
+      const trailFeatures: any[] = [];
+      history.forEach((track, id) => {
+        if (!mobileIds.has(id) || track.length < 2) return;
+        trailFeatures.push({
+          type: 'Feature',
+          geometry: { type: 'LineString', coordinates: track.map((obs) => [obs.lon, obs.lat]) },
+          properties: { id },
+        });
+      });
+
+      const posGeo = { type: 'FeatureCollection' as const, features: enrichedPositions };
+      const trailGeo = { type: 'FeatureCollection' as const, features: trailFeatures };
       const repGeo = { type: 'FeatureCollection' as const, features: reports };
 
       const warningsBefore = map.getLayer(WARNINGS_FILL_ID) ? WARNINGS_FILL_ID : undefined;
@@ -899,16 +1002,82 @@ export function RadarMap({
         removeReportLayers(map);
       }
 
-      // Spotters layer (people) - below reports, above radar
+      // Spotters layer (people) - below reports, above radar. No clustering:
+      // every spotter stays an individual marker at every zoom level.
       if (showSpottersRef.current) {
         const reportLayerBefore = map.getLayer(REPORT_CLUSTER_LAYER_ID) ? REPORT_CLUSTER_LAYER_ID : warningsBefore;
         const posSrc = map.getSource(SPOTTER_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
-        if (posSrc) posSrc.setData(posGeo as any);
-        else {
-          map.addSource(SPOTTER_SOURCE_ID, { type: 'geojson', data: posGeo as any, cluster: true, clusterMaxZoom: 11, clusterRadius: 44 });
-          map.addLayer({ id: SPOTTER_CLUSTER_LAYER_ID, type: 'circle', source: SPOTTER_SOURCE_ID, filter: ['has', 'point_count'], paint: { 'circle-color': ['step', ['get', 'point_count'], '#991b1b', 10, '#b91c1c', 25, '#ef4444'], 'circle-radius': ['step', ['get', 'point_count'], 13, 10, 17, 25, 22], 'circle-stroke-width': 2, 'circle-stroke-color': '#fee2e2', 'circle-opacity': 0.9 } }, reportLayerBefore);
-          map.addLayer({ id: SPOTTER_CLUSTER_COUNT_ID, type: 'symbol', source: SPOTTER_SOURCE_ID, filter: ['has', 'point_count'], layout: { 'text-field': '{point_count_abbreviated}', 'text-size': 11, 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'] }, paint: { 'text-color': '#ffffff' } }, reportLayerBefore);
-          map.addLayer({ id: SPOTTER_POSITION_LAYER_ID, type: 'circle', source: SPOTTER_SOURCE_ID, filter: ['!', ['has', 'point_count']], paint: { 'circle-radius': 5, 'circle-color': '#ef4444', 'circle-opacity': 0.95, 'circle-stroke-width': 1.5, 'circle-stroke-color': '#ffffff' } }, reportLayerBefore);
+        if (posSrc) {
+          posSrc.setData(posGeo as any);
+          const trailSrc = map.getSource(SPOTTER_TRAIL_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+          if (trailSrc) trailSrc.setData(trailGeo as any);
+        } else {
+          // Faint 30-minute movement trail for mobile spotters only. The
+          // public feed has no track endpoint, so this is accumulated from
+          // successive real position fixes while the app is open.
+          map.addSource(SPOTTER_TRAIL_SOURCE_ID, { type: 'geojson', data: trailGeo as any });
+          map.addLayer(
+            {
+              id: SPOTTER_TRAIL_LAYER_ID,
+              type: 'line',
+              source: SPOTTER_TRAIL_SOURCE_ID,
+              layout: { 'line-cap': 'round', 'line-join': 'round' },
+              paint: {
+                'line-color': '#ef4444',
+                'line-width': 1.4,
+                'line-opacity': 0.22,
+                'line-dasharray': [2, 2],
+              },
+            },
+            reportLayerBefore
+          );
+
+          map.addSource(SPOTTER_SOURCE_ID, { type: 'geojson', data: posGeo as any });
+          map.addLayer(
+            {
+              id: SPOTTER_HALO_LAYER_ID,
+              type: 'circle',
+              source: SPOTTER_SOURCE_ID,
+              paint: {
+                'circle-radius': ['case', ['==', ['get', 'mobile'], true], 11, 7],
+                'circle-color': '#ef4444',
+                'circle-opacity': ['case', ['==', ['get', 'mobile'], true], 0.3, 0.16],
+                'circle-blur': 0.8,
+              },
+            },
+            reportLayerBefore
+          );
+          map.addLayer(
+            {
+              id: SPOTTER_PULSE_LAYER_ID,
+              type: 'circle',
+              source: SPOTTER_SOURCE_ID,
+              filter: ['==', ['get', 'mobile'], true],
+              paint: {
+                'circle-radius': 6,
+                'circle-color': 'rgba(255, 45, 45, 0)',
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#ff3b3b',
+                'circle-stroke-opacity': 0.7,
+              },
+            },
+            reportLayerBefore
+          );
+          map.addLayer(
+            {
+              id: SPOTTER_POSITION_LAYER_ID,
+              type: 'circle',
+              source: SPOTTER_SOURCE_ID,
+              paint: {
+                'circle-radius': ['case', ['==', ['get', 'mobile'], true], 5, 3.5],
+                'circle-color': ['case', ['==', ['get', 'mobile'], true], '#ff1f1f', '#dc2626'],
+                'circle-opacity': 0.96,
+                'circle-stroke-width': 1.25,
+                'circle-stroke-color': '#ffffff',
+              },
+            },
+            reportLayerBefore
+          );
         }
       } else {
         removeSpotterLayers(map);
@@ -1015,14 +1184,24 @@ export function RadarMap({
           }
           const name = escapeHtml(props.name || 'Spotter');
           const spotterId = escapeHtml(props.id || 'Unavailable');
-          const movement = escapeHtml(props.movement || 'Unknown');
+          const movementKnown = props.movementKnown === true;
+          const isMobile = props.mobile === true;
+          const rawSpeed = typeof props.speedMph === 'number' ? props.speedMph : Number(props.speedMph);
+          const speedText = movementKnown && Number.isFinite(rawSpeed) ? `${rawSpeed.toFixed(1)} mph` : 'Unavailable';
+          const movementStatus = movementKnown ? (isMobile ? 'MOBILE' : 'STATIONARY') : 'MOVEMENT UNKNOWN';
+          const movementBadge = movementKnown ? `[${movementStatus}]` : '[MOVEMENT UNKNOWN]';
+          const movementBg = !movementKnown ? '#334155' : isMobile ? '#b91c1c' : '#1e293b';
+          const movementColor = isMobile ? '#fecaca' : '#cbd5e1';
+          const movementDetail = movementKnown
+            ? `${movementStatus} · ${speedText}`
+            : 'Movement unknown — waiting for a second position fix';
           const row = (label: string, value: string) => `<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid rgba(255,255,255,0.08);font-size:11px;"><span style="color:#94a3b8;font-weight:600;">${label}</span><span style="color:#e2e8f0;font-weight:600;text-align:right;word-break:break-word;">${value}</span></div>`;
           new maplibregl.Popup({ closeButton: true, offset: 12, maxWidth: '340px', className: 'mv-spotter-popup' })
             .setLngLat(e.lngLat)
             .setHTML(`<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:rgba(8,14,24,0.96);color:#f8fafc;padding:14px;border-radius:12px;min-width:280px;max-width:330px;box-shadow:0 20px 35px -5px rgba(0,0,0,0.85);border:1px solid rgba(239,68,68,0.35);backdrop-filter:blur(10px);">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.08);">
                 <div style="display:flex;align-items:center;gap:6px;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 8px #ef4444;"></span><span style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;color:#f87171;">SPOTTER NETWORK</span></div>
-                <span style="font-size:9px;font-weight:800;background:#1e293b;color:#cbd5e1;padding:2px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;">${movement}</span>
+                <span style="font-size:9px;font-weight:800;background:${movementBg};color:${movementColor};padding:2px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;border:1px solid rgba(255,255,255,0.12);">${movementBadge}</span>
               </div>
               <div style="font-size:16px;font-weight:800;color:#ffffff;line-height:1.2;margin-bottom:2px;">${name}</div>
               <div style="font-size:11px;color:#94a3b8;margin-bottom:8px;">Live spotter position</div>
@@ -1035,28 +1214,19 @@ export function RadarMap({
               <div style="margin-top:4px;">
                 ${row('Spotter ID', spotterId)}
                 ${row('Network', 'Spotter Network')}
-                ${row('Movement', movement)}
+                ${row('Movement', escapeHtml(movementDetail))}
                 ${row('Distance From Radar', escapeHtml(distanceText))}
               </div>
-              <div style="margin-top:8px;font-size:10px;color:#64748b;line-height:1.4;">Contact details (phone/email/web) are not shown because public feeds do not expose them.</div>
+              <div style="margin-top:8px;font-size:10px;color:#64748b;line-height:1.4;">Movement status is derived from consecutive public position fixes. Contact details (phone/email/web) are not shown because public feeds do not expose them.</div>
             </div>`)
             .addTo(map);
         };
-        map.on('click', SPOTTER_CLUSTER_LAYER_ID, (e: any) => {
-          const features = map.queryRenderedFeatures(e.point, { layers: [SPOTTER_CLUSTER_LAYER_ID] });
-          const clusterId = features[0]?.properties?.cluster_id;
-          const source = map.getSource(SPOTTER_SOURCE_ID) as any;
-          if (!source || clusterId == null) return;
-          source.getClusterExpansionZoom(clusterId, (err: any, zoom: number) => { if (err) return; map.easeTo({ center: (features[0].geometry as any).coordinates, zoom }); });
-        });
         map.on('click', SPOTTER_POSITION_LAYER_ID, openSpotterPopup);
-        [SPOTTER_CLUSTER_LAYER_ID, SPOTTER_POSITION_LAYER_ID].forEach((id) => {
-          map.on('mouseenter', id, () => { map.getCanvas().style.cursor = 'pointer'; });
-          map.on('mouseleave', id, () => { map.getCanvas().style.cursor = ''; });
-        });
+        map.on('mouseenter', SPOTTER_POSITION_LAYER_ID, () => { map.getCanvas().style.cursor = 'pointer'; });
+        map.on('mouseleave', SPOTTER_POSITION_LAYER_ID, () => { map.getCanvas().style.cursor = ''; });
       }
 
-      setSpotterStatus({ state: 'ready', positions: positions.length, reports: reports.length, message: meta?.notes?.[0] });
+      setSpotterStatus({ state: 'ready', positions: enrichedPositions.length, reports: reports.length, message: meta?.notes?.[0] });
     } catch (err: any) {
       setSpotterStatus({ state: 'unavailable', positions: 0, reports: 0, message: String(err?.message || err) });
     }
@@ -1070,6 +1240,33 @@ export function RadarMap({
     showSpotterReportsRef.current = showSpotterReports;
     if (!showSpotterReports) document.querySelectorAll('.maplibregl-popup').forEach((p) => p.remove());
   }, [showSpotterReports]);
+
+  // Mobile spotter pulse. Imperative MapLibre paint updates only: no React
+  // state changes per frame, so the rest of the workstation is not re-rendered.
+  useEffect(() => {
+    if (!mapReady || !showSpotters) return;
+
+    let frame = 0;
+    let lastPaint = 0;
+    const startedAt = performance.now();
+
+    const animate = (now: number) => {
+      frame = requestAnimationFrame(animate);
+      if (now - lastPaint < 40) return;
+      lastPaint = now;
+
+      const map = mapRef.current;
+      if (!map || !map.getLayer(SPOTTER_PULSE_LAYER_ID)) return;
+
+      const phase = ((now - startedAt) % 2200) / 2200;
+      const eased = 1 - Math.pow(1 - phase, 2);
+      map.setPaintProperty(SPOTTER_PULSE_LAYER_ID, 'circle-radius', 4 + eased * 18);
+      map.setPaintProperty(SPOTTER_PULSE_LAYER_ID, 'circle-stroke-opacity', 0.7 * (1 - phase));
+    };
+
+    frame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frame);
+  }, [mapReady, showSpotters]);
 
   useEffect(() => {
     const map = mapRef.current;
