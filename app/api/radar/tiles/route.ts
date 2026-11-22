@@ -19,6 +19,12 @@ export async function GET() {
     if (!res.ok) {
       return NextResponse.json(
         {
+          data: [],
+          available: false,
+          reason: `DATA UNAVAILABLE - RainViewer HTTP ${res.status}`,
+          playbackSupport: 'UNKNOWN',
+          archiveSupport: 'UNKNOWN',
+          verificationLevel: 'UNVERIFIED',
           tiles: [],
           attribution: 'RainViewer',
           error: `RainViewer HTTP ${res.status}`,
@@ -42,6 +48,12 @@ export async function GET() {
 
     return NextResponse.json(
       {
+        data: tiles,
+        available: tiles.length > 0,
+        reason: tiles.length > 0 ? null : 'DATA UNAVAILABLE - No RainViewer composite frames returned.',
+        playbackSupport: tiles.length > 0 ? 'REAL_ARCHIVE' : 'NONE',
+        archiveSupport: tiles.length > 0 ? 'PARTIAL' : 'UNKNOWN',
+        verificationLevel: 'UNVERIFIED',
         tiles,
         attribution: 'RainViewer',
         host,
@@ -63,6 +75,12 @@ export async function GET() {
   } catch (err: any) {
     return NextResponse.json(
       {
+        data: [],
+        available: false,
+        reason: `DATA UNAVAILABLE - ${err?.message || 'Failed to fetch RainViewer'}`,
+        playbackSupport: 'UNKNOWN',
+        archiveSupport: 'UNKNOWN',
+        verificationLevel: 'UNVERIFIED',
         tiles: [],
         attribution: 'RainViewer',
         error: err?.message || 'Failed to fetch RainViewer',

@@ -26,11 +26,25 @@ function normalizeProduct(productKey: string): string | null {
   return null;
 }
 
-function unavailableResponse(reason: string) {
-  return new Response(JSON.stringify({ error: reason }), {
-    status: 404,
-    headers: { 'Cache-Control': 'no-store', 'Content-Type': 'application/json', 'X-MesoVortex-Data': 'unavailable' },
-  });
+function unavailableResponse(
+  reason: string,
+  cap?: { playbackSupport?: string; archiveSupport?: string; verification?: { level?: string } } | null
+) {
+  return new Response(
+    JSON.stringify({
+      data: null,
+      available: false,
+      reason,
+      error: reason,
+      playbackSupport: cap?.playbackSupport ?? 'NONE',
+      archiveSupport: cap?.archiveSupport ?? 'UNKNOWN',
+      verificationLevel: cap?.verification?.level ?? 'UNVERIFIED',
+    }),
+    {
+      status: 404,
+      headers: { 'Cache-Control': 'no-store', 'Content-Type': 'application/json', 'X-MesoVortex-Data': 'unavailable' },
+    }
+  );
 }
 
 export async function GET(request: Request) {
@@ -50,7 +64,7 @@ export async function GET(request: Request) {
   const cap = getRadarCapability(normalized);
   if (!cap) return unavailableResponse(`DATA UNAVAILABLE - Unknown radar product "${product}".`);
   if (cap.availability === 'UNAVAILABLE' || cap.availability === 'RESTRICTED') {
-    return unavailableResponse(cap.unavailableReason || `DATA UNAVAILABLE - ${cap.name} is not available.`);
+    return unavailableResponse(cap.unavailableReason || `DATA UNAVAILABLE - ${cap.name} is not available.`, cap);
   }
 
   // Only verified, honest mappings. No substitutes, no unrelated fallbacks.
@@ -70,7 +84,7 @@ export async function GET(request: Request) {
   } else if (normalized === 'srvel') {
     candidates.push(`${IEM}/ridge::${site}-N0S-0/${z}/${x}/${y}.png`);
   } else {
-    return unavailableResponse(cap.unavailableReason || `DATA UNAVAILABLE - ${cap.name} is not available.`);
+    return unavailableResponse(cap.unavailableReason || `DATA UNAVAILABLE - ${cap.name} is not available.`, cap);
   }
 
   for (const url of candidates) {
@@ -95,8 +109,5 @@ export async function GET(request: Request) {
     }
   }
 
-  return new Response(null, {
-    status: 404,
-    headers: { 'Cache-Control': 'no-store', 'X-MesoVortex-Data': 'unavailable' },
-  });
+  return unavailableResponse(`DATA UNAVAILABLE - No verified tile source responded for ${cap.name}.`, cap);
 }

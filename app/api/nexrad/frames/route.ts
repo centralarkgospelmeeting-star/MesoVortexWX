@@ -32,8 +32,19 @@ function normalizeProduct(productKey: string): ProductAlias | null {
 }
 
 function unavailable(reason: string, extra: Record<string, unknown> = {}) {
+  const capId = typeof extra.capabilityId === 'string' ? extra.capabilityId : undefined;
+  const cap = capId ? getRadarCapability(capId) : undefined;
   return NextResponse.json(
-    { available: false, error: reason, reason, ...extra },
+    {
+      data: null,
+      available: false,
+      error: reason,
+      reason,
+      playbackSupport: cap?.playbackSupport ?? 'NONE',
+      archiveSupport: cap?.archiveSupport ?? 'UNKNOWN',
+      verificationLevel: cap?.verification.level ?? 'UNVERIFIED',
+      ...extra,
+    },
     { status: 404, headers: { 'Cache-Control': 'no-store' } }
   );
 }
@@ -128,14 +139,14 @@ export async function GET(request: Request) {
   }
 
   // Capability matrix playback rule: if archive not supported, LIVE_ONLY single frame.
-  const playbackSupport = archiveSupported ? 'REAL_ARCHIVE' : 'LIVE_ONLY';
+  const playbackSupport = archiveSupported ? (cap.archiveSupport === 'PARTIAL' || cap.archiveSupport === 'PARTIAL_ARCHIVE' ? 'PARTIAL_ARCHIVE' : 'REAL_ARCHIVE') : 'LIVE_ONLY';
   const latestTileUrl = `${IEM_TILE}/ridge::${sector}-${productCode}-0/{z}/{x}/{y}.png`;
   const compositeTileUrl = `${IEM_TILE}/nexrad-n0q-900913/{z}/{x}/{y}.png`;
 
   const now = new Date();
   const frames: { time: string; label: string; tileUrl: string; ageMinutes: number }[] = [];
 
-  if (playbackSupport === 'REAL_ARCHIVE') {
+  if (playbackSupport === 'REAL_ARCHIVE' || playbackSupport === 'PARTIAL_ARCHIVE') {
     for (let i = 10; i >= 1; i--) {
       const d = new Date(now.getTime() - i * 5 * 60 * 1000);
       d.setUTCMinutes(Math.floor(d.getUTCMinutes() / 5) * 5, 0, 0);
@@ -155,6 +166,8 @@ export async function GET(request: Request) {
   const notes: string[] = [];
   if (playbackSupport === 'LIVE_ONLY') {
     notes.push(`LIVE ONLY - Historical loop not verified for ${cap.name} (${productCode}) from this source. No fake historical frames generated.`);
+  } else if (playbackSupport === 'PARTIAL_ARCHIVE') {
+    notes.push(`PARTIAL ARCHIVE - Historical frames are real when available, but archive coverage is sparse/unverified across sites/times. No fake frames generated.`);
   }
   if (cap.availability === 'PARTIAL') {
     notes.push(`PARTIAL - ${cap.name} is available with limited verification.`);
@@ -162,6 +175,12 @@ export async function GET(request: Request) {
 
   return NextResponse.json(
     {
+      data: frames,
+      available: true,
+      reason: notes.length ? notes.join(' ') : null,
+      playbackSupport,
+      archiveSupport: cap.archiveSupport,
+      verificationLevel: cap.verification.level,
       provider: isTdwr ? 'FAA TDWR / IEM RIDGE' : 'NOAA NEXRAD Level III / IEM RIDGE',
       station: site.radarId,
       sector,
@@ -171,9 +190,7 @@ export async function GET(request: Request) {
       productKey,
       capabilityId: cap.id,
       tilt,
-      available: true,
-      loopAvailable: playbackSupport === 'REAL_ARCHIVE',
-      playbackSupport,
+      loopAvailable: playbackSupport === 'REAL_ARCHIVE' || playbackSupport === 'PARTIAL_ARCHIVE',
       notes: notes.length ? notes : undefined,
       frames,
       latestTileUrl,

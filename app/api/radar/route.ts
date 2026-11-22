@@ -29,8 +29,19 @@ function normalizeProduct(productKey: string): ProductAlias | null {
 }
 
 function unavailable(reason: string, extra: Record<string, unknown> = {}) {
+  const capId = typeof extra.capabilityId === 'string' ? extra.capabilityId : undefined;
+  const cap = capId ? getRadarCapability(capId) : undefined;
   return NextResponse.json(
-    { available: false, error: reason, reason, ...extra },
+    {
+      data: null,
+      available: false,
+      error: reason,
+      reason,
+      playbackSupport: cap?.playbackSupport ?? 'NONE',
+      archiveSupport: cap?.archiveSupport ?? 'UNKNOWN',
+      verificationLevel: cap?.verification.level ?? 'UNVERIFIED',
+      ...extra,
+    },
     { status: 404, headers: { 'Cache-Control': 'no-store' } }
   );
 }
@@ -94,12 +105,13 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  const playbackSupport = archiveSupported ? (cap.archiveSupport === 'PARTIAL' || cap.archiveSupport === 'PARTIAL_ARCHIVE' ? 'PARTIAL_ARCHIVE' : 'REAL_ARCHIVE') : 'LIVE_ONLY';
   const latestTileUrl = `${IEM_TILE}/ridge::${sector}-${productCode}-0/{z}/{x}/{y}.png`;
   const compositeTileUrl = `${IEM_TILE}/nexrad-n0q-900913/{z}/{x}/{y}.png`;
   const now = new Date();
   const frames: { time: string; label: string; tileUrl: string; ageMinutes: number; source: string }[] = [];
 
-  if (archiveSupported) {
+  if (playbackSupport === 'REAL_ARCHIVE' || playbackSupport === 'PARTIAL_ARCHIVE') {
     for (let i = 10; i >= 1; i--) {
       const d = new Date(now.getTime() - i * 5 * 60 * 1000);
       d.setUTCMinutes(Math.floor(d.getUTCMinutes() / 5) * 5, 0, 0);
@@ -111,13 +123,18 @@ export async function GET(request: NextRequest) {
   frames.push({ time: now.toISOString(), label: 'LIVE', tileUrl: latestTileUrl, ageMinutes: 0, source: 'IEM RIDGE' });
 
   const notes: string[] = [];
-  if (!archiveSupported) notes.push(`LIVE ONLY - Historical loop not verified for ${cap.name} (${productCode}). No fake historical frames generated.`);
+  if (playbackSupport === 'LIVE_ONLY') notes.push(`LIVE ONLY - Historical loop not verified for ${cap.name} (${productCode}). No fake historical frames generated.`);
+  else if (playbackSupport === 'PARTIAL_ARCHIVE') notes.push(`PARTIAL ARCHIVE - Historical frames are real when available, but archive coverage is sparse/unverified across sites/times. No fake frames generated.`);
   if (cap.availability === 'PARTIAL') notes.push(`PARTIAL - ${cap.name} is available with limited verification.`);
-
   return NextResponse.json(
     {
-      status: 'LIVE',
+      data: frames,
       available: true,
+      reason: notes.length ? notes.join(' ') : null,
+      playbackSupport,
+      archiveSupport: cap.archiveSupport,
+      verificationLevel: cap.verification.level,
+      status: 'LIVE',
       provider: isTdwr ? 'FAA TDWR / IEM RIDGE' : 'NOAA NEXRAD Level III via IEM RIDGE',
       station: site.radarId,
       siteId: site.id,
@@ -128,8 +145,7 @@ export async function GET(request: NextRequest) {
       frames,
       latestTileUrl,
       compositeTileUrl,
-      loopAvailable: archiveSupported,
-      playbackSupport: archiveSupported ? 'REAL_ARCHIVE' : 'LIVE_ONLY',
+      loopAvailable: playbackSupport === 'REAL_ARCHIVE' || playbackSupport === 'PARTIAL_ARCHIVE',
       notes: notes.length ? notes : undefined,
       _meta: { fetchedAt: now.toISOString(), ok: true, dataHonesty: 'capability-matrix' },
     },

@@ -8,7 +8,7 @@ type HyperlocalData = {
   dewPointF: number;
   wetBulbF: number;
   humidity: number;
-  pressureInHg: string;
+  pressureInHg: string | number;
   pressureMb: number;
   windSpeedKt: number;
   windGustKt: number;
@@ -27,15 +27,30 @@ type Props = {
 export function HyperlocalDashboardModal({ lat, lon, siteName, onClose }: Props) {
   const [data, setData] = useState<HyperlocalData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [unavailableReason, setUnavailableReason] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
+    setUnavailableReason(null);
     fetch(`/api/weather/hyperlocal?lat=${lat}&lon=${lon}`)
       .then((res) => res.json())
       .then((json) => {
-        if (!json.error) setData(json);
+        if (json?.available === false) {
+          setData(null);
+          setUnavailableReason(json.reason || 'DATA UNAVAILABLE - Hyperlocal telemetry unavailable.');
+          return;
+        }
+        if (!json.error && typeof json.tempF === 'number') setData(json);
+        else {
+          setData(null);
+          setUnavailableReason(json?.reason || 'DATA UNAVAILABLE - Hyperlocal telemetry unavailable.');
+        }
       })
-      .catch((err) => console.warn('Hyperlocal fetch error:', err))
+      .catch((err) => {
+        console.warn('Hyperlocal fetch error:', err);
+        setData(null);
+        setUnavailableReason('DATA UNAVAILABLE - Hyperlocal telemetry request failed.');
+      })
       .finally(() => setLoading(false));
   }, [lat, lon]);
 
@@ -70,10 +85,17 @@ export function HyperlocalDashboardModal({ lat, lon, siteName, onClose }: Props)
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-[#030712]">
-          {loading || !data ? (
+          {loading ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-400">
               <span className="h-6 w-6 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin" />
               <p className="text-xs font-sans">Fetching high-resolution surface telemetry…</p>
+            </div>
+          ) : !data ? (
+            <div className="flex h-full flex-col items-center justify-center gap-3 text-amber-300">
+              <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-center">
+                <div className="text-sm font-black uppercase tracking-wider">DATA UNAVAILABLE</div>
+                <p className="mt-2 text-xs font-sans text-amber-200/90">{unavailableReason || 'No verified hyperlocal telemetry available.'}</p>
+              </div>
             </div>
           ) : (
             <>

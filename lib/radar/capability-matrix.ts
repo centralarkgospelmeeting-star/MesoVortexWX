@@ -8,9 +8,9 @@
 
 export type RadarCapabilityStatus = 'WORKING' | 'PARTIAL' | 'UNAVAILABLE' | 'RESTRICTED';
 export type RadarSourceType = 'IEM_RIDGE' | 'IEM_MRMS_TMS' | 'NOAA_AWS_MRMS' | 'NOAA_NEXRAD_LEVEL2' | 'NONE';
-export type ArchiveSupport = 'FULL' | 'PARTIAL' | 'NONE' | 'UNKNOWN';
+export type ArchiveSupport = 'FULL' | 'PARTIAL' | 'PARTIAL_ARCHIVE' | 'NONE' | 'UNKNOWN';
 export type SuperResolutionSupport = 'YES' | 'NO' | 'N/A' | 'UNKNOWN';
-export type PlaybackSupport = 'REAL_ARCHIVE' | 'LIVE_ONLY' | 'NONE' | 'UNKNOWN';
+export type PlaybackSupport = 'REAL_ARCHIVE' | 'PARTIAL_ARCHIVE' | 'LIVE_ONLY' | 'NONE' | 'UNKNOWN';
 export type VerificationLevel = 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'UNVERIFIED' | 'TESTED_LIVE' | 'TESTED_ARCHIVE';
 
 export interface RadarProductCapability {
@@ -59,16 +59,16 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
       notes: 'Current production path uses N0B-family digital reflectivity. N0Q live sampled 200 on IEM; N1Q-N3Q/archive not verified. Do not silently switch to N0Q.',
     },
     availability: 'PARTIAL',
-    archiveSupport: 'PARTIAL',
+    archiveSupport: 'PARTIAL_ARCHIVE',
     superResolutionSupport: 'UNKNOWN',
-    playbackSupport: 'REAL_ARCHIVE',
+    playbackSupport: 'PARTIAL_ARCHIVE',
     networks: ['NEXRAD', 'TDWR'],
     tiltSupport: ['0.5', '0.9', '1.3', '1.8'],
     dataHonesty: { realData: true, substitute: false, synthetic: false },
     verification: {
       level: 'PARTIALLY_VERIFIED',
       lastCheckedAt: CHECKED_AT,
-      evidence: ['app/api/nexrad/frames/route.ts', 'Sprint 2 sampled 19 NEXRAD sites: N0B/N0Q mostly 200 PNG; N1Q/N2Q/N3Q 503; KPSR/KSGX 503 for N0B/N0Q in sample', 'N0B archive spotty OK/503; N0Q archive 503 in sampled timestamps', 'TDWR TZL verified 44/44 200 PNG'],
+      evidence: ['app/api/nexrad/frames/route.ts', 'Sprint 2 sampled 19 NEXRAD sites: N0B/N0Q mostly 200 PNG; N1Q/N2Q/N3Q 503; KPSR/KSGX 503 for N0B/N0Q in sample', 'Sprint 3 archive probe: N0B 14/90 hits (10 sites, 9 offsets 15m-2d) - PARTIAL_ARCHIVE', 'Sprint 3 archive probe: TZL 0/90 hits (10 TDWR sites, 9 offsets) - LIVE_ONLY for TDWR archive', 'TDWR TZL live verified 44/44 200 PNG'],
     },
   },
   {
@@ -80,10 +80,10 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
       provider: 'IEM / NOAA NEXRAD',
       endpointTemplate: 'ridge::{{SECTOR}}-{{CODE}}-{{STAMP}}',
       productCode: 'N0U/N1U/N2U/N3U (NEXRAD), TV0 (TDWR)',
-      notes: 'Base velocity. TDWR uses TV0. N0U live sampled 200; archive sampled 503 on representative timestamps.',
+      notes: 'Base velocity. TDWR uses TV0. N0U live sampled 200; automated archive probe found 0/90 archive hits across 10 sites x 9 timestamps (15m-2d). TDWR TV0 0/90.',
     },
     availability: 'PARTIAL',
-    archiveSupport: 'UNKNOWN',
+    archiveSupport: 'NONE',
     superResolutionSupport: 'N/A',
     playbackSupport: 'LIVE_ONLY',
     networks: ['NEXRAD', 'TDWR'],
@@ -92,7 +92,7 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
     verification: {
       level: 'PARTIALLY_VERIFIED',
       lastCheckedAt: CHECKED_AT,
-      evidence: ['nexrad/frames mapping', 'Sprint 2: N0U live 200 on sampled sites', 'Sprint 2: N0U archive -15/-30/-60m sampled 503 on LZK/LWX/TLX', 'TDWR TV0 verified 44/44 200 PNG'],
+      evidence: ['nexrad/frames mapping', 'Sprint 2: N0U live 200 on sampled sites', 'Sprint 3 archive probe: N0U 0/90 hits (10 sites, 9 offsets 15m-2d)', 'Sprint 3 archive probe: TV0 0/90 hits (10 TDWR sites, 9 offsets)', 'TDWR TV0 live verified 44/44 200 PNG'],
     },
   },
   {
@@ -104,19 +104,19 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
       provider: 'IEM / NOAA NEXRAD',
       endpointTemplate: 'ridge::{{SECTOR}}-N0S-{{STAMP}}',
       productCode: 'N0S',
-      notes: 'NEXRAD SRV. Not verified as TDWR SRV; TDWR base velocity is TV0.',
+      notes: 'NEXRAD SRV. Not verified as TDWR SRV; TDWR base velocity is TV0. Automated archive probe found 12/90 hits - sparse partial archive.',
     },
     availability: 'PARTIAL',
-    archiveSupport: 'PARTIAL',
+    archiveSupport: 'PARTIAL_ARCHIVE',
     superResolutionSupport: 'N/A',
-    playbackSupport: 'REAL_ARCHIVE',
+    playbackSupport: 'PARTIAL_ARCHIVE',
     networks: ['NEXRAD'],
     tiltSupport: ['0.5'],
     dataHonesty: { realData: true, substitute: false, synthetic: false },
     verification: {
       level: 'PARTIALLY_VERIFIED',
       lastCheckedAt: CHECKED_AT,
-      evidence: ['nexrad/frames mapping', 'Sprint 2: N0S live 200 on sampled sites', 'Sprint 2: N0S archive spotty OK/503 on LZK/LWX/TLX (-60m some OK)'],
+      evidence: ['nexrad/frames mapping', 'Sprint 2: N0S live 200 on sampled sites', 'Sprint 3 archive probe: N0S 12/90 hits (10 sites, 9 offsets 15m-2d) - PARTIAL_ARCHIVE'],
     },
   },
   {
@@ -267,7 +267,7 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
     tiltSupport: [],
     dataHonesty: { realData: false, substitute: false, synthetic: false, reason: 'Source candidate exists but not verified end-to-end; integration missing.' },
     unavailableReason: 'DATA UNAVAILABLE - MESH source candidate exists but end-to-end verification/integration is incomplete.',
-    verification: { level: 'TESTED_LIVE', lastCheckedAt: CHECKED_AT, evidence: ['Sprint 2: IEM MRMS MESH 200 PNG; MESH_Max60min 200 PNG', 'Not end-to-end verified: semantics/legend/archive/pipeline integration missing'] },
+    verification: { level: 'TESTED_LIVE', lastCheckedAt: CHECKED_AT, evidence: ['Sprint 2: IEM MRMS MESH 200 PNG; MESH_Max60min 200 PNG', 'Sprint 3: same tile size (20229B) for MESH and MESH_Max60min; no timestamp/archive variant verified; mrms-t 404 sample; no legend/units metadata verified', 'Determination: UNAVAILABLE (no middle ground) - source candidate exists but not end-to-end verified'] },
   },
   {
     id: 'tops',
@@ -282,7 +282,7 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
     tiltSupport: [],
     dataHonesty: { realData: false, substitute: false, synthetic: false, reason: 'Source candidate exists but not verified end-to-end; integration missing.' },
     unavailableReason: 'DATA UNAVAILABLE - Echo Tops candidate exists (NET) but semantics/archive/integration not verified.',
-    verification: { level: 'TESTED_LIVE', lastCheckedAt: CHECKED_AT, evidence: ['Sprint 2: IEM ridge NET 200 on LZK/LWX/TLX/MHX; EET 503', 'Not end-to-end verified: semantics/legend/archive/pipeline integration missing'] },
+    verification: { level: 'TESTED_LIVE', lastCheckedAt: CHECKED_AT, evidence: ['Sprint 2: IEM ridge NET 200 on LZK/LWX/TLX/MHX; EET 503', 'Sprint 3: IEM TMS nexrad-net/nexrad-eet and m05m..m50m variants respond 200; nexrad-net-m30m differs from current - archive-candidate evidence, semantics/units/legend not end-to-end verified', 'Determination: remains UNAVAILABLE (candidate only) until units/legend/timestamp/archive/playback verified'] },
   },
   {
     id: 'vil',

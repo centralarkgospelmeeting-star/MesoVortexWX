@@ -22,6 +22,12 @@ export async function GET(request: Request) {
 
   return NextResponse.json(
     {
+      data: stations,
+      available: true,
+      reason: null,
+      playbackSupport: 'NONE',
+      archiveSupport: 'UNKNOWN',
+      verificationLevel: 'VERIFIED',
       total: stations.length,
       stations,
     },
