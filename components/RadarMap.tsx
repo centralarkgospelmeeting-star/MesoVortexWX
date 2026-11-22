@@ -348,6 +348,9 @@ export function RadarMap({
   const hurricaneHandlersBoundRef = useRef(false);
   const [glmStatus, setGlmStatus] = useState<{ state: 'idle'|'loading'|'ready'|'unavailable'; count: number; message?: string }>({ state: 'idle', count: 0 });
   const [modelStatus, setModelStatus] = useState<{ state: 'idle'|'ready'|'unavailable'; message?: string; source?: string; runTime?: string; forecastHour?: number; updateFrequency?: string; availability?: string }>({ state: 'idle' });
+  const [tileErrorDismissed, setTileErrorDismissed] = useState(false);
+  const [liveOnlyDismissed, setLiveOnlyDismissed] = useState(false);
+  useEffect(() => { if (liveOnly) setLiveOnlyDismissed(false); }, [liveOnly]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1035,6 +1038,7 @@ export function RadarMap({
   const updateRadar = useCallback(
     async (map: MapLibreMap) => {
       setTileError(null);
+      setTileErrorDismissed(false);
       if (tileErrorTimerRef.current) {
         clearTimeout(tileErrorTimerRef.current);
         tileErrorTimerRef.current = null;
@@ -1865,149 +1869,20 @@ export function RadarMap({
         </div>
       )}
 
-      {(showSpotters || showSpotterReports) && spotterStatus.state !== 'idle' && (
-        <div className="absolute right-4 top-16 z-40 max-w-[230px] rounded-xl border border-cyan-500/40 bg-slate-950/95 px-3 py-2 font-mono text-[10px] text-slate-200 shadow-2xl backdrop-blur-md">
-          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-cyan-300">
-            <span>◎</span> Spotters / Reports
-          </div>
-          {spotterStatus.state === 'loading' ? (
-            <div className="mt-1 text-slate-400">Loading live data…</div>
-          ) : spotterStatus.state === 'unavailable' ? (
-            <div className="mt-1 leading-snug text-amber-300">
-              Unavailable{spotterStatus.message ? ` — ${spotterStatus.message}` : ''}
-            </div>
-          ) : (
-            <>
-              <div className="mt-1 flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                <span>{spotterStatus.positions} spotter positions</span>
-              </div>
-              <div className="mt-0.5 flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-orange-400" />
-                <span>{spotterStatus.reports} reports (SN 3h / NWS LSR 24h)</span>
-              </div>
-              {spotterStatus.message && (
-                <div className="mt-1 leading-snug text-slate-400">{spotterStatus.message}</div>
-              )}
-            </>
-          )}
-        </div>
-      )}
-
-      {showMCD && mcdStatus.state !== 'idle' && (
-        <div className="absolute right-4 top-[11.5rem] z-40 max-w-[230px] rounded-xl border border-purple-500/40 bg-slate-950/95 px-3 py-2 font-mono text-[10px] text-slate-200 shadow-2xl backdrop-blur-md">
-          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-purple-300">
-            <span>◈</span> SPC MCDs
-          </div>
-          {mcdStatus.state === 'loading' ? (
-            <div className="mt-1 text-slate-400">Loading mesoscale discussions…</div>
-          ) : mcdStatus.state === 'unavailable' ? (
-            <div className="mt-1 leading-snug text-amber-300">
-              Unavailable{mcdStatus.message ? ` — ${mcdStatus.message}` : ''}
-            </div>
-          ) : (
-            <>
-              <div className="mt-1 flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-purple-400" />
-                <span>{mcdStatus.count} active discussion{mcdStatus.count === 1 ? '' : 's'}</span>
-              </div>
-              {mcdStatus.message && (
-                <div className="mt-1 leading-snug text-slate-400">{mcdStatus.message}</div>
-              )}
-            </>
-          )}
-        </div>
-      )}
-
-      {showHurricanes && hurricaneStatus.state !== 'idle' && (
-        <div className="absolute right-4 top-[17rem] z-40 max-w-[230px] rounded-xl border border-red-500/40 bg-slate-950/95 px-3 py-2 font-mono text-[10px] text-slate-200 shadow-2xl backdrop-blur-md">
-          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-red-300">
-            <span>🌀</span> Tropical Cyclones
-          </div>
-          {hurricaneStatus.state === 'loading' ? (
-            <div className="mt-1 text-slate-400">Loading official NHC/CPHC data…</div>
-          ) : hurricaneStatus.state === 'unavailable' ? (
-            <div className="mt-1 leading-snug text-amber-300">DATA UNAVAILABLE{hurricaneStatus.message ? ` — ${hurricaneStatus.message}` : ''}</div>
-          ) : hurricaneStatus.count === 0 ? (
-            <div className="mt-1 text-slate-400">No active tropical cyclones.</div>
-          ) : (
-            <div className="mt-1 flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
-              <span>{hurricaneStatus.count} active storm{hurricaneStatus.count === 1 ? '' : 's'} (NHC/CPHC)</span>
-            </div>
-          )}
-          <div className="mt-1 text-[9px] text-slate-500">Official NOAA/NWS feeds only. No placeholder storms.</div>
-        </div>
-      )}
-
-      {fastScanEnabled && (
-        <div className="absolute right-4 top-[22.5rem] z-40 max-w-[230px] rounded-xl border border-amber-500/40 bg-slate-950/95 px-3 py-2 font-mono text-[10px] text-slate-200 shadow-2xl backdrop-blur-md">
-          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-amber-300">
-            <span>⚡</span> FastScan
-          </div>
-          <div className="mt-1 leading-snug text-amber-200/90">
-            Polling real IEM radar frames every 10s. No verified ultra-low-latency source is configured beyond this polling.
-          </div>
-        </div>
-      )}
-
-      {flashEnabled && (
-        <div className="absolute right-4 top-[21.5rem] z-40 max-w-[230px] rounded-xl border border-pink-500/40 bg-slate-950/95 px-3 py-2 font-mono text-[10px] text-slate-200 shadow-2xl backdrop-blur-md">
-          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-pink-300">
-            <span>✦</span> Flash Reflectivity
-          </div>
-          <div className="mt-1 leading-snug text-pink-200/90">
-            Visual pulse effect on raster radar. True value-range isolation is unavailable for current raster tile source.
-          </div>
-        </div>
-      )}
-
-      {showLightning && (
-        <div className="absolute right-4 top-[26rem] z-40 max-w-[230px] rounded-xl border border-yellow-500/40 bg-slate-950/95 px-3 py-2 font-mono text-[10px] text-slate-200 shadow-2xl backdrop-blur-md">
-          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-yellow-300">
-            <span>☇</span> GLM Lightning
-          </div>
-          {glmStatus.state === 'loading' ? (
-            <div className="mt-1 text-slate-400">Loading official NOAA GLM…</div>
-          ) : glmStatus.state === 'ready' ? (
-            <div className="mt-1 text-slate-200">{glmStatus.count} flashes (5 min, GOES-East GLM)</div>
-          ) : (
-            <div className="mt-1 leading-snug text-amber-300">DATA UNAVAILABLE{glmStatus.message ? ` — ${glmStatus.message}` : ''}</div>
-          )}
-          <div className="mt-1 text-[9px] text-slate-500">Source: NOAA GOES-R GLM-L2-LCFA (AWS Open Data). No synthetic lightning.</div>
-        </div>
-      )}
-
-      {mode === 'Models' && (
-        <div className="absolute right-4 top-[31rem] z-40 max-w-[260px] rounded-xl border border-cyan-500/40 bg-slate-950/95 px-3 py-2 font-mono text-[10px] text-slate-200 shadow-2xl backdrop-blur-md">
-          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-cyan-300">
-            <span>◈</span> Model Layer
-          </div>
-          {(() => { const m = getModelById(modelId); const f = m?.fields.find(x=>x.id===modelField) || m?.fields[0]; return (
-            <div className="mt-1 space-y-0.5 text-slate-300">
-              <div><span className="text-slate-500">Source:</span> {m?.source || 'Unknown'}</div>
-              <div><span className="text-slate-500">Run:</span> {modelRun === 'latest' ? 'Latest available' : modelRun}</div>
-              <div><span className="text-slate-500">Forecast hour:</span> F{String(modelForecastHour).padStart(3,'0')}</div>
-              <div><span className="text-slate-500">Update:</span> {m?.updateFrequency || 'Unknown'}</div>
-              <div><span className="text-slate-500">Availability:</span> {f?.status === 'READY_NOW' && m?.status === 'READY_NOW' ? <span className="text-emerald-300">Available</span> : <span className="text-amber-300">DATA UNAVAILABLE</span>}</div>
-              {!(f?.status === 'READY_NOW' && m?.status === 'READY_NOW') && <div className="text-amber-300">DATA UNAVAILABLE — {f?.note || m?.notes || 'No verified source'}</div>}
-            </div>
-          ); })()}
-        </div>
-      )}
-
-      {liveOnly && !tileError && (
+      {liveOnly && !tileError && !liveOnlyDismissed && (
         <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-xl border border-amber-500/60 bg-slate-950/95 px-4 py-2 font-mono text-xs font-bold text-amber-300 shadow-2xl backdrop-blur-md">
           <span className="h-2 w-2 rounded-full bg-amber-400" />
           <span>LIVE ONLY</span>
           <span className="font-normal text-slate-400">No archive for this source</span>
+          <button type="button" onClick={() => setLiveOnlyDismissed(true)} className="ml-1 text-slate-400 hover:text-white" aria-label="Dismiss LIVE ONLY">×</button>
         </div>
       )}
 
-      {tileError && (
+      {tileError && !tileErrorDismissed && (
         <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-xl border border-red-500/60 bg-slate-950/95 px-4 py-2 font-mono text-xs text-red-400 shadow-2xl backdrop-blur-md">
           <span>⚠️</span>
           <span>{tileError}</span>
+          <button type="button" onClick={() => setTileErrorDismissed(true)} className="ml-1 text-slate-400 hover:text-white" aria-label="Dismiss error">×</button>
         </div>
       )}
     </div>

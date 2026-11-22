@@ -65,6 +65,23 @@ export default function MesoVortexWorkstation() {
   const [modelRun, setModelRun] = useState<string>('latest');
   const [modelForecastHour, setModelForecastHour] = useState<number>(0);
   const [modelSearch, setModelSearch] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [openPanel, setOpenPanel] = useState<string | null>(null);
+  const PANEL_STATE_KEY = 'mesovortex_panel_state_v1';
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PANEL_STATE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          if (typeof parsed.openPanel === 'string' || parsed.openPanel === null) setOpenPanel(parsed.openPanel);
+        }
+      }
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try { localStorage.setItem(PANEL_STATE_KEY, JSON.stringify({ openPanel })); } catch {}
+  }, [openPanel]);
   const [quadPanes, setQuadPanes] = useState<Array<{ mode: PaneMode; product: RadarProduct; satelliteSelection: SatelliteSelection; modelId: string; modelField: string }>>([
     { mode: 'Radar', product: 'ref', satelliteSelection: DEFAULT_SATELLITE_SELECTION, modelId: 'gdps-geml', modelField: 'temp' },
     { mode: 'Radar', product: 'vel', satelliteSelection: DEFAULT_SATELLITE_SELECTION, modelId: 'gdps-geml', modelField: 'temp' },
@@ -698,151 +715,6 @@ export default function MesoVortexWorkstation() {
         onToggleSweepAnimation={() => setShowSweepAnimation((v) => !v)}
       />
 
-      {hasSatellitePane && (
-        <div className="absolute right-4 bottom-24 z-30 w-80 rounded-2xl border border-slate-700 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-md">
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-[11px] font-black uppercase tracking-wider text-cyan-300">Satellite</div>
-            <div className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-bold text-cyan-200">
-              {activeSatDef.shortLabel}
-            </div>
-          </div>
-
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <label className="text-[10px] text-slate-400">
-              <div className="mb-1 font-bold uppercase tracking-wider">Satellite</div>
-              <select
-                value={activeSatSel.bird}
-                onChange={(e) => {
-                  const bird = e.target.value as SatelliteSelection['bird'];
-                  const sectors = getSectorsForBird(bird);
-                  const next = normalizeSatelliteSelection({ ...activeSatSel, bird, sector: sectors.some(s => s.id === activeSatSel.sector) ? activeSatSel.sector : sectors[0]?.id });
-                  setSatelliteSelection(next);
-                  if (quadMode) setQuadPanes((prev) => prev.map((p) => p.mode === 'Satellite' ? { ...p, satelliteSelection: next } : p));
-                }}
-                className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none"
-              >
-                {SATELLITE_BIRDS.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
-              </select>
-            </label>
-            <label className="text-[10px] text-slate-400">
-              <div className="mb-1 font-bold uppercase tracking-wider">Sector</div>
-              <select
-                value={activeSatSel.sector}
-                onChange={(e) => {
-                  const next = normalizeSatelliteSelection({ ...activeSatSel, sector: e.target.value as SatelliteSelection['sector'] });
-                  setSatelliteSelection(next);
-                  if (quadMode) setQuadPanes((prev) => prev.map((p) => p.mode === 'Satellite' ? { ...p, satelliteSelection: next } : p));
-                }}
-                className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none"
-              >
-                {getSectorsForBird(activeSatSel.bird).map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-              </select>
-            </label>
-          </div>
-
-          <label className="mt-2 block text-[10px] text-slate-400">
-            <div className="mb-1 font-bold uppercase tracking-wider">Product</div>
-            <select
-              value={activeSatSel.productId}
-              onChange={(e) => {
-                const next = normalizeSatelliteSelection({ ...activeSatSel, productId: e.target.value as SatelliteSelection['productId'] });
-                setSatelliteSelection(next);
-                if (quadMode) setQuadPanes((prev) => prev.map((p) => p.mode === 'Satellite' ? { ...p, satelliteSelection: next } : p));
-              }}
-              className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none"
-            >
-              {['Featured', 'Visible/IR', 'Water Vapor', 'RGB', 'Channels'].map((group) => {
-                const items = SATELLITE_PRODUCTS.filter((p) => p.group === group);
-                if (!items.length) return null;
-                return (
-                  <optgroup key={group} label={group}>
-                    {items.map((p) => (
-                      <option key={p.id} value={p.id}>{p.available ? '' : '⛔ '}{p.label}</option>
-                    ))}
-                  </optgroup>
-                );
-              })}
-            </select>
-          </label>
-
-          <div className="mt-2 text-[10px] leading-snug text-slate-400">{activeSatDef.description}</div>
-          {!activeSatDef.available && (
-            <div className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-300">
-              DATA UNAVAILABLE — {activeSatDef.unavailableReason || 'No verified real tile source'}
-            </div>
-          )}
-          <div className="mt-2 space-y-1 text-[10px] text-slate-500">
-            <div>Real IEM GOES XYZ tiles only. No fake/placeholder imagery.</div>
-            <div>⛔ 24-hour loop archive: no verified real XYZ archive source integrated.</div>
-            <div>⛔ Rapid-scan meso 1-min loop: current meso sector only; no verified archive/1-min loop source.</div>
-            <div>⛔ GeoColor/RGB tiles (AirMass, Sandwich, Fire, Cloud Phase, Dust, etc.): no verified real public XYZ tile source.</div>
-          </div>
-        </div>
-      )}
-
-      {hasModelsPane && (
-        <div className="absolute right-4 bottom-24 z-30 w-[22rem] max-h-[60vh] overflow-auto rounded-2xl border border-slate-700 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-md">
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-[11px] font-black uppercase tracking-wider text-cyan-300">Models</div>
-            <div className={`rounded-md border px-2 py-0.5 text-[10px] font-bold ${activeModel.status==='READY_NOW' ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : activeModel.status==='RESTRICTED' ? 'border-red-500/40 bg-red-500/10 text-red-300' : 'border-amber-500/40 bg-amber-500/10 text-amber-300'}`}>
-              {activeModel.status.replace('_',' ')}
-            </div>
-          </div>
-          <input
-            value={modelSearch}
-            onChange={(e)=>setModelSearch(e.target.value)}
-            placeholder="Search models..."
-            className="mt-2 w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] text-slate-200 outline-none placeholder:text-slate-500"
-          />
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <label className="text-[10px] text-slate-400">
-              <div className="mb-1 font-bold uppercase tracking-wider">Model</div>
-              <select value={modelId} onChange={(e)=>{ setModelId(e.target.value); const m=getModelById(e.target.value); if(m && !m.fields.find(f=>f.id===modelField)) setModelField(m.fields[0]?.id||'temp'); }} className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none">
-                {MODEL_CATALOG.filter(m=>{ const q=modelSearch.toLowerCase().trim(); return !q || m.name.toLowerCase().includes(q) || m.category.toLowerCase().includes(q) || m.id.includes(q); }).map(m=> (
-                  <option key={m.id} value={m.id}>{m.status==='READY_NOW'?'':'⛔ '}{m.name}</option>
-                ))}
-              </select>
-            </label>
-            <label className="text-[10px] text-slate-400">
-              <div className="mb-1 font-bold uppercase tracking-wider">Field</div>
-              <select value={modelField} onChange={(e)=>setModelField(e.target.value)} className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none">
-                {activeModel.fields.map(f=> <option key={f.id} value={f.id}>{f.status==='READY_NOW'?'':'⛔ '}{f.label}</option>)}
-              </select>
-            </label>
-            <label className="text-[10px] text-slate-400">
-              <div className="mb-1 font-bold uppercase tracking-wider">Run</div>
-              <select value={modelRun} onChange={(e)=>setModelRun(e.target.value)} className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none">
-                <option value="latest">Latest (available)</option>
-              </select>
-            </label>
-            <label className="text-[10px] text-slate-400">
-              <div className="mb-1 font-bold uppercase tracking-wider">Forecast Hour</div>
-              <select value={modelForecastHour} onChange={(e)=>setModelForecastHour(Number(e.target.value))} className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none">
-                {[0,1,3,6,12,24,48].map(h=> <option key={h} value={h}>F{String(h).padStart(3,'0')}</option>)}
-              </select>
-            </label>
-          </div>
-
-          <div className="mt-2 rounded-lg border border-slate-800 bg-slate-900/60 p-2 text-[10px] text-slate-300 space-y-1">
-            <div><span className="text-slate-500">Category:</span> {activeModel.category}</div>
-            <div><span className="text-slate-500">Source:</span> {activeModel.source}</div>
-            <div><span className="text-slate-500">Run time:</span> {modelRun === 'latest' ? 'Latest available (source-dependent)' : modelRun}</div>
-            <div><span className="text-slate-500">Forecast hour:</span> F{String(modelForecastHour).padStart(3,'0')}</div>
-            <div><span className="text-slate-500">Update frequency:</span> {activeModel.updateFrequency || 'Unknown'}</div>
-            <div><span className="text-slate-500">Availability:</span> {activeModelField.status === 'READY_NOW' ? 'Available (verified source)' : `DATA UNAVAILABLE — ${activeModelField.note || activeModel.status}`}</div>
-            <div><span className="text-slate-500">License:</span> {activeModel.license}</div>
-          </div>
-
-          {activeModelField.status !== 'READY_NOW' && (
-            <div className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-300">
-              DATA UNAVAILABLE — {activeModelField.note || 'No verified real source integrated for this model/field.'}
-            </div>
-          )}
-          {activeModel.notes && <div className="mt-2 text-[10px] text-slate-500">{activeModel.notes}</div>}
-          <div className="mt-2 text-[10px] text-slate-500">Foundation only: Ensembles/AI/Meteograms/Soundings/Time-height/Cross sections are architecture targets; no synthetic data.</div>
-        </div>
-      )}
-
       {banner && (
         <div
           className="absolute left-1/2 top-24 z-50 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border bg-slate-950/95 p-4 shadow-2xl backdrop-blur"
@@ -898,173 +770,200 @@ export default function MesoVortexWorkstation() {
       )}
 
       {menuOpen && (
-        <div className="fixed inset-0 z-50 flex bg-black/60 backdrop-blur-sm">
-          <div className="w-80 bg-white p-5 shadow-2xl space-y-4 text-slate-800 overflow-y-auto">
-            <div className="flex items-center justify-between border-b pb-3 font-extrabold text-base">
-              <span>MesoVortex Menu</span>
-              <button onClick={() => setMenuOpen(false)}>✕</button>
+        <div className="fixed inset-0 z-50 flex">
+          <div className="w-72 bg-slate-950/98 border-r border-slate-800 p-4 shadow-2xl text-slate-100 overflow-y-auto backdrop-blur">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
+              <span className="font-black text-sm tracking-wide text-cyan-300">MesoVortex</span>
+              <button onClick={() => setMenuOpen(false)} className="text-slate-400 hover:text-white">✕</button>
             </div>
-
-            <div className="space-y-2 text-xs font-bold">
-              <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-2">
-                <div className="mb-1 text-[10px] font-black uppercase tracking-wider text-cyan-700">Expert Mode</div>
-                <div className="text-[11px] font-semibold text-slate-600">
-                  Pair any two modes on one screen. Cameras stay synchronized.
-                </div>
-                <button
-                  type="button"
-                  onClick={() => { setExpertMode((v) => !v); setMenuOpen(false); }}
-                  className={`mt-2 w-full rounded-lg px-3 py-2 text-xs font-black transition ${
-                    expertMode ? 'bg-cyan-600 text-white' : 'bg-slate-900 text-white hover:bg-slate-800'
-                  }`}
-                >
-                  {expertMode ? 'Disable Expert Mode' : 'Enable Expert Mode'}
+            <div className="space-y-1 text-sm font-semibold">
+              {[
+                ['Weather','Weather'],
+                ['Alerts','Alerts'],
+                ['Spotters','Spotters'],
+                ['Reports','Reports'],
+                ['Models','Models'],
+                ['Satellite','Satellite'],
+                ['Tropics','Tropics'],
+                ['Discussions','Discussions'],
+                ['Lightning','Lightning'],
+                ['Settings','Settings'],
+              ].map(([id,label]) => (
+                <button key={id} type="button"
+                  onClick={() => { setOpenPanel(id); setMenuOpen(false); }}
+                  className={`w-full rounded-lg px-3 py-2 text-left transition ${openPanel===id ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
+                  {label}
                 </button>
-              </div>
-
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
-                <div className="mb-1 text-[10px] font-black uppercase tracking-wider text-slate-500">Map Projection</div>
-                <div className="grid grid-cols-2 gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setProjectionMode('mercator')}
-                    className={`rounded-lg px-2 py-1.5 text-[11px] font-black transition ${projectionMode === 'mercator' ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'}`}
-                  >
-                    Flat Map
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setProjectionMode('globe')}
-                    className={`rounded-lg px-2 py-1.5 text-[11px] font-black transition ${projectionMode === 'globe' ? 'bg-cyan-600 text-white' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'}`}
-                  >
-                    Globe
-                  </button>
-                </div>
-                <div className="mt-1 text-[10px] font-semibold text-slate-500">MapLibre globe projection. Layers and overlays preserved.</div>
-                <div className="mt-2 border-t border-slate-200 pt-2">
-                  <div className="mb-1 flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-500"><span>3D Pitch/Tilt</span><span>{mapPitch}°</span></div>
-                  <input type="range" min={0} max={60} step={5} value={mapPitch} onChange={(e)=>setMapPitch(Number(e.target.value))} className="w-full" />
-                  <div className="text-[10px] font-semibold text-slate-500">3D camera tilt over real 2D data layers (not volumetric radar).</div>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setShowRadarPills((v) => !v);
-                  setShowRadarSites((v) => !v);
-                }}
-                className="w-full p-2 text-left hover:bg-slate-100 rounded-lg"
-              >
-                {showRadarPills ? 'Hide' : 'Show'} radar site pills
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowLSR((v) => !v)}
-                className="w-full p-2 text-left hover:bg-slate-100 rounded-lg"
-              >
-                {showLSR ? 'Hide' : 'Show'} local storm reports
-              </button>
-
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 space-y-2">
-                <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">Fast Alerts</div>
-                <label className="flex items-center gap-2 font-bold cursor-pointer">
-                  <input type="checkbox" checked={showWarnings} onChange={(e) => setShowWarnings(e.target.checked)} />
-                  <span>Warning polygons</span>
-                </label>
-                <label className="flex items-center gap-2 font-bold cursor-pointer">
-                  <input type="checkbox" checked={showWatches} onChange={(e) => setShowWatches(e.target.checked)} />
-                  <span>Watch polygons</span>
-                </label>
-                <div className="pt-1 border-t border-slate-200">
-                  <div className="mb-1 text-[10px] font-black uppercase tracking-wider text-slate-500">Categories</div>
-                  <div className="grid grid-cols-2 gap-1 text-[11px] font-semibold text-slate-700">
-                    {(['warning', 'watch', 'advisory', 'statement', 'other'] as AlertCategory[]).map((category) => (
-                      <label key={category} className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={alertFilters[category]}
-                          onChange={() => toggleAlertFilter(category)}
-                        />
-                        <span>{ALERT_CATEGORY_META[category].label}</span>
-                        <span className="ml-auto text-[10px] text-slate-400">{alertCounts[category] || 0}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={audioEnabled ? disableAudio : enableAudio}
-                    className={`flex-1 rounded-lg px-2 py-1.5 text-[11px] font-black transition ${
-                      audioEnabled ? 'bg-slate-800 text-white' : 'bg-emerald-500 text-slate-950'
-                    }`}
-                  >
-                    {audioEnabled ? 'Mute Tones' : 'Enable Tones'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAlertsOpen(true)}
-                    className="flex-1 rounded-lg bg-amber-400 px-2 py-1.5 text-[11px] font-black text-slate-950"
-                  >
-                    Alert Panel
-                  </button>
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 space-y-2">
-                <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">Hurricanes</div>
-                <label className="flex items-center gap-2 font-bold cursor-pointer">
-                  <input type="checkbox" checked={showHurricanes} onChange={(e) => setShowHurricanes(e.target.checked)} />
-                  <span>Active Tropical Cyclones</span>
-                </label>
-                <div className="text-[10px] font-semibold text-slate-500">Official NHC/CPHC: position, cone, track, wind radii, advisories. No placeholder storms.</div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowMCD((v) => !v)}
-                className="w-full p-2 text-left hover:bg-slate-100 rounded-lg"
-              >
-                {showMCD ? 'Hide' : 'Show'} SPC mesoscale discussions
-              </button>
-
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 space-y-2">
-                <label className="flex items-center gap-2 font-bold cursor-pointer">
-                  <input type="checkbox" checked={showSpotters} onChange={(e) => setShowSpotters(e.target.checked)} />
-                  <span>Spotters</span>
-                </label>
-                <label className="flex items-center gap-2 font-bold cursor-pointer">
-                  <input type="checkbox" checked={showSpotterReports} onChange={(e) => setShowSpotterReports(e.target.checked)} />
-                  <span>Spotter Reports</span>
-                </label>
-                <div className="mt-1 grid grid-cols-2 gap-1 text-[11px] font-semibold text-slate-700">
-                  {[
-                    ['tornado', 'Tornado'],
-                    ['funnel', 'Funnel Cloud'],
-                    ['wallCloud', 'Wall Cloud'],
-                    ['hail', 'Hail'],
-                    ['wind', 'Wind Damage'],
-                    ['flooding', 'Flooding'],
-                  ].map(([key, label]) => (
-                    <label key={key} className="flex items-center gap-1.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={(spotterFilters as any)[key]}
-                        onChange={(e) => setSpotterFilters((prev) => ({ ...prev, [key]: e.target.checked }))}
-                      />
-                      <span>{label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="text-[10px] font-semibold text-slate-400 px-1">
-                Active view: {activePaneLabel} · {basemapStatus}
-              </div>
+              ))}
+            </div>
+            <div className="mt-4 border-t border-slate-800 pt-3 text-[10px] text-slate-500">
+              Weather data first. Panels open on demand.
             </div>
           </div>
-          <div className="flex-1" onClick={() => setMenuOpen(false)} />
+          <div className="flex-1 bg-black/30" onClick={() => setMenuOpen(false)} />
+        </div>
+      )}
+
+      {openPanel && (
+        <div className="absolute right-4 top-20 z-40 w-[22rem] max-h-[72vh] overflow-auto rounded-2xl border border-slate-700 bg-slate-950/96 p-4 shadow-2xl backdrop-blur-md text-slate-100">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="text-[11px] font-black uppercase tracking-wider text-cyan-300">{openPanel}</div>
+            <button type="button" onClick={() => setOpenPanel(null)} className="rounded-md px-2 py-0.5 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Close panel">✕</button>
+          </div>
+
+          {openPanel === 'Weather' && (
+            <div className="space-y-2 text-[11px] text-slate-300">
+              <div><span className="text-slate-500">Active view:</span> {activePaneLabel}</div>
+              <div><span className="text-slate-500">Basemap:</span> {basemapStatus}</div>
+              <div><span className="text-slate-500">Radar site:</span> {currentSite?.id || radarSite}</div>
+              <div className="text-slate-500">Map is primary. Open other panels only when needed.</div>
+            </div>
+          )}
+
+          {openPanel === 'Alerts' && (
+            <div className="space-y-3 text-[11px]">
+              <div className="text-slate-400">Fast Alerts controls. Alert polygons remain on map only when enabled.</div>
+              <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showWarnings} onChange={(e)=>setShowWarnings(e.target.checked)} />Warning polygons</label>
+              <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showWatches} onChange={(e)=>setShowWatches(e.target.checked)} />Watch polygons</label>
+              <div className="grid grid-cols-2 gap-1 text-[11px]">
+                {(['warning','watch','advisory','statement','other'] as AlertCategory[]).map((category) => (
+                  <label key={category} className="flex items-center gap-1.5 cursor-pointer text-slate-300">
+                    <input type="checkbox" checked={alertFilters[category]} onChange={() => toggleAlertFilter(category)} />
+                    <span>{ALERT_CATEGORY_META[category].label}</span>
+                    <span className="ml-auto text-slate-500">{alertCounts[category] || 0}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={audioEnabled ? disableAudio : enableAudio} className={`flex-1 rounded-lg px-2 py-1.5 text-[11px] font-black ${audioEnabled ? 'bg-slate-800 text-white' : 'bg-emerald-500 text-slate-950'}`}>{audioEnabled ? 'Mute Tones' : 'Enable Tones'}</button>
+                <button type="button" onClick={() => setAlertsOpen(true)} className="flex-1 rounded-lg bg-amber-400 px-2 py-1.5 text-[11px] font-black text-slate-950">Alert Panel</button>
+              </div>
+            </div>
+          )}
+
+          {openPanel === 'Spotters' && (
+            <div className="space-y-2 text-[11px] text-slate-300">
+              <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showSpotters} onChange={(e)=>setShowSpotters(e.target.checked)} />Spotters</label>
+              <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showSpotterReports} onChange={(e)=>setShowSpotterReports(e.target.checked)} />Spotter Reports</label>
+              <div className="grid grid-cols-2 gap-1">
+                {[['tornado','Tornado'],['funnel','Funnel Cloud'],['wallCloud','Wall Cloud'],['hail','Hail'],['wind','Wind Damage'],['flooding','Flooding']].map(([key,label]) => (
+                  <label key={key} className="flex items-center gap-1.5 cursor-pointer">
+                    <input type="checkbox" checked={(spotterFilters as any)[key]} onChange={(e)=>setSpotterFilters((prev)=>({...prev,[key]:e.target.checked}))} />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="text-[10px] text-slate-500">No permanent map card. Data appears on map only as layers when enabled.</div>
+            </div>
+          )}
+
+          {openPanel === 'Reports' && (
+            <div className="space-y-2 text-[11px] text-slate-300">
+              <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showLSR} onChange={(e)=>setShowLSR(e.target.checked)} />Local Storm Reports</label>
+              <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showSpotterReports} onChange={(e)=>setShowSpotterReports(e.target.checked)} />Spotter Reports</label>
+              <div className="text-[10px] text-slate-500">Reports are shown on-map as data layers; details available on click/inspection where supported.</div>
+            </div>
+          )}
+
+          {openPanel === 'Models' && (
+            <div className="space-y-2 text-[11px] text-slate-300">
+              <input value={modelSearch} onChange={(e)=>setModelSearch(e.target.value)} placeholder="Search models..." className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] text-slate-200 outline-none placeholder:text-slate-500" />
+              <label className="block"><div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Model</div>
+                <select value={modelId} onChange={(e)=>{ setModelId(e.target.value); const m=getModelById(e.target.value); if(m && !m.fields.find(f=>f.id===modelField)) setModelField(m.fields[0]?.id||'temp'); }} className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none">
+                  {MODEL_CATALOG.filter(m=>{ const q=modelSearch.toLowerCase().trim(); return !q || m.name.toLowerCase().includes(q) || m.category.toLowerCase().includes(q) || m.id.includes(q); }).map(m=> <option key={m.id} value={m.id}>{m.status==='READY_NOW'?'':'⛔ '}{m.name}</option>)}
+                </select></label>
+              <label className="block"><div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Field</div>
+                <select value={modelField} onChange={(e)=>setModelField(e.target.value)} className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none">
+                  {activeModel.fields.map(f=> <option key={f.id} value={f.id}>{f.status==='READY_NOW'?'':'⛔ '}{f.label}</option>)}
+                </select></label>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block"><div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Run</div><select value={modelRun} onChange={(e)=>setModelRun(e.target.value)} className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px]"><option value="latest">Latest</option></select></label>
+                <label className="block"><div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Forecast Hour</div><select value={modelForecastHour} onChange={(e)=>setModelForecastHour(Number(e.target.value))} className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px]">{[0,1,3,6,12,24,48].map(h=> <option key={h} value={h}>F{String(h).padStart(3,'0')}</option>)}</select></label>
+              </div>
+              <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-2 space-y-1 text-[10px]">
+                <div><span className="text-slate-500">Source:</span> {activeModel.source}</div>
+                <div><span className="text-slate-500">Run:</span> {modelRun==='latest'?'Latest available':modelRun}</div>
+                <div><span className="text-slate-500">Forecast hour:</span> F{String(modelForecastHour).padStart(3,'0')}</div>
+                <div><span className="text-slate-500">Update:</span> {activeModel.updateFrequency || 'Unknown'}</div>
+                <div><span className="text-slate-500">Availability:</span> {activeModelField.status==='READY_NOW' ? <span className="text-emerald-300">Available</span> : <span className="text-amber-300">DATA UNAVAILABLE — {activeModelField.note || activeModel.status}</span>}</div>
+                <div><span className="text-slate-500">License:</span> {activeModel.license}</div>
+              </div>
+            </div>
+          )}
+
+          {openPanel === 'Satellite' && (
+            <div className="space-y-2 text-[11px] text-slate-300">
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block"><div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Satellite</div>
+                  <select value={activeSatSel.bird} onChange={(e)=>{ const bird=e.target.value as SatelliteSelection['bird']; const sectors=getSectorsForBird(bird); const next=normalizeSatelliteSelection({ ...activeSatSel, bird, sector: sectors.some(s=>s.id===activeSatSel.sector)?activeSatSel.sector:sectors[0]?.id }); setSatelliteSelection(next); if(quadMode) setQuadPanes((prev)=>prev.map((p)=>p.mode==='Satellite'?{...p,satelliteSelection:next}:p)); }} className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none">
+                    {SATELLITE_BIRDS.map((b)=> <option key={b.id} value={b.id}>{b.label}</option>)}
+                  </select></label>
+                <label className="block"><div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Sector</div>
+                  <select value={activeSatSel.sector} onChange={(e)=>{ const next=normalizeSatelliteSelection({ ...activeSatSel, sector: e.target.value as SatelliteSelection['sector'] }); setSatelliteSelection(next); if(quadMode) setQuadPanes((prev)=>prev.map((p)=>p.mode==='Satellite'?{...p,satelliteSelection:next}:p)); }} className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none">
+                    {getSectorsForBird(activeSatSel.bird).map((s)=> <option key={s.id} value={s.id}>{s.label}</option>)}
+                  </select></label>
+              </div>
+              <label className="block"><div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Product</div>
+                <select value={activeSatSel.productId} onChange={(e)=>{ const next=normalizeSatelliteSelection({ ...activeSatSel, productId: e.target.value as SatelliteSelection['productId'] }); setSatelliteSelection(next); if(quadMode) setQuadPanes((prev)=>prev.map((p)=>p.mode==='Satellite'?{...p,satelliteSelection:next}:p)); }} className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none">
+                  {['Featured','Visible/IR','Water Vapor','RGB','Channels'].map((group)=>{ const items=SATELLITE_PRODUCTS.filter((p)=>p.group===group); if(!items.length) return null; return <optgroup key={group} label={group}>{items.map((p)=> <option key={p.id} value={p.id}>{p.available ? '' : '⛔ '}{p.label}</option>)}</optgroup>; })}
+                </select></label>
+              {!activeSatDef.available && <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-300">DATA UNAVAILABLE — {activeSatDef.unavailableReason || 'No verified real tile source'}</div>}
+              <div className="text-[10px] text-slate-500">{activeSatDef.description}</div>
+            </div>
+          )}
+
+          {openPanel === 'Tropics' && (
+            <div className="space-y-2 text-[11px] text-slate-300">
+              <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showHurricanes} onChange={(e)=>setShowHurricanes(e.target.checked)} />Active Tropical Cyclones</label>
+              <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-2 space-y-1 text-[10px]">
+                <div><span className="text-slate-500">Source:</span> NOAA NHC/CPHC official feeds</div>
+                <div><span className="text-slate-500">Availability:</span> {showHurricanes ? 'Enabled (data-dependent)' : 'Disabled by user'}</div>
+                <div className="text-slate-500">No placeholder storms. Details in Layer Details/Inspector behavior on map click when available.</div>
+              </div>
+            </div>
+          )}
+
+          {openPanel === 'Discussions' && (
+            <div className="space-y-2 text-[11px] text-slate-300">
+              <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showMCD} onChange={(e)=>setShowMCD(e.target.checked)} />SPC Mesoscale Discussions</label>
+              <div className="text-[10px] text-slate-500">MCD polygons render on map when enabled. No permanent floating diagnostics card.</div>
+            </div>
+          )}
+
+          {openPanel === 'Lightning' && (
+            <div className="space-y-2 text-[11px] text-slate-300">
+              <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showLightning} onChange={(e)=>setShowLightning(e.target.checked)} />GLM Lightning</label>
+              <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-2 space-y-1 text-[10px]">
+                <div><span className="text-slate-500">Source:</span> NOAA GOES-R GLM-L2-LCFA (AWS Open Data)</div>
+                <div><span className="text-slate-500">Availability:</span> {showLightning ? 'Enabled (data-dependent)' : 'Disabled by user'}</div>
+                <div className="text-slate-500">No synthetic lightning. Data unavailable is shown in-layer behavior, not permanent cards.</div>
+              </div>
+            </div>
+          )}
+
+          {openPanel === 'Settings' && (
+            <div className="space-y-3 text-[11px] text-slate-300">
+              <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-2">
+                <div className="mb-1 text-[10px] font-black uppercase tracking-wider text-slate-500">Map Projection</div>
+                <div className="grid grid-cols-2 gap-1">
+                  <button type="button" onClick={()=>setProjectionMode('mercator')} className={`rounded-lg px-2 py-1.5 text-[11px] font-black ${projectionMode==='mercator'?'bg-slate-100 text-slate-900':'bg-slate-800 text-slate-200'}`}>Flat Map</button>
+                  <button type="button" onClick={()=>setProjectionMode('globe')} className={`rounded-lg px-2 py-1.5 text-[11px] font-black ${projectionMode==='globe'?'bg-cyan-600 text-white':'bg-slate-800 text-slate-200'}`}>Globe</button>
+                </div>
+                <div className="mt-2"><div className="mb-1 flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-500"><span>3D Pitch/Tilt</span><span>{mapPitch}°</span></div><input type="range" min={0} max={60} step={5} value={mapPitch} onChange={(e)=>setMapPitch(Number(e.target.value))} className="w-full" /></div>
+              </div>
+              <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-2 space-y-2">
+                <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">Expert / Quad</div>
+                <button type="button" onClick={()=>{ setExpertMode((v)=>!v); }} className={`w-full rounded-lg px-3 py-2 text-xs font-black ${expertMode?'bg-cyan-600 text-white':'bg-slate-800 text-slate-200'}`}>{expertMode?'Disable Expert Mode':'Enable Expert Mode'}</button>
+                <button type="button" onClick={()=>{ setQuadMode((v)=>!v); }} className={`w-full rounded-lg px-3 py-2 text-xs font-black ${quadMode?'bg-violet-600 text-white':'bg-slate-800 text-slate-200'}`}>{quadMode?'Disable Quad View':'Enable Quad View'}</button>
+              </div>
+              <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-2 space-y-1">
+                <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showRadarPills} onChange={(e)=>{ setShowRadarPills(e.target.checked); setShowRadarSites(e.target.checked); }} />Radar site pills</label>
+                <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showRangeRings} onChange={(e)=>setShowRangeRings(e.target.checked)} />Range rings</label>
+                <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showCounties} onChange={(e)=>setShowCounties(e.target.checked)} />County boundaries</label>
+                <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showTornadoAnalysis} onChange={(e)=>setShowTornadoAnalysis(e.target.checked)} />Tornado analysis</label>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
