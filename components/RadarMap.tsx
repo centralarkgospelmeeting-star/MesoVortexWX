@@ -81,6 +81,8 @@ export interface RadarMapProps {
   projectionMode?: 'mercator' | 'globe';
   /** Show official NHC/CPHC active tropical cyclones. */
   showHurricanes?: boolean;
+  /** Map pitch in degrees for 3D camera view (0-75). */
+  mapPitch?: number;
   onNewScan?: (info: { latencySec: number; timestamp: string; site: string }) => void;
   onSelectSite?: (siteId: string) => void;
   onSelectWarningFromMap?: (w: any) => void;
@@ -307,6 +309,7 @@ export function RadarMap({
   satelliteSelection = DEFAULT_SATELLITE_SELECTION,
   projectionMode = 'mercator',
   showHurricanes = false,
+  mapPitch = 0,
   onNewScan,
   onSelectSite,
   onSelectWarningFromMap,
@@ -338,6 +341,12 @@ export function RadarMap({
       // Older style/runtime may reject projection changes; keep mercator safely.
     }
   }, [mapReady, projectionMode]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    try { map.setPitch(Math.max(0, Math.min(75, Number(mapPitch) || 0))); } catch {}
+  }, [mapReady, mapPitch]);
 
   useEffect(() => {
     if (!sweepEnabled) return;
@@ -1839,11 +1848,12 @@ export function RadarMap({
       {showLightning && (
         <div className="absolute right-4 top-[26rem] z-40 max-w-[230px] rounded-xl border border-yellow-500/40 bg-slate-950/95 px-3 py-2 font-mono text-[10px] text-slate-200 shadow-2xl backdrop-blur-md">
           <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-yellow-300">
-            <span>☇</span> Lightning
+            <span>☇</span> GLM Lightning
           </div>
-          <div className="mt-1 leading-snug text-yellow-200/90">
-            Unavailable — no verified real-time lightning source (US/CA/CO) is configured in this build.
+          <div className="mt-1 leading-snug text-amber-300">
+            DATA UNAVAILABLE — official NOAA GOES-R GLM feed not yet integrated. No synthetic lightning displayed.
           </div>
+          <div className="mt-1 text-[9px] text-slate-500">Target source: NOAA AWS Open Data GLM-L2-LCFA.</div>
         </div>
       )}
 

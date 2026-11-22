@@ -1,12 +1,7 @@
 export const dynamic = 'force-dynamic';
 
-// Transparent 1x1 PNG for graceful fallback (prevents broken tile errors)
-const TRANSPARENT_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAA=',
-  'base64'
-);
-
 // 2.0-inspired resilient radar tile proxy (adapted for Next.js Route Handler)
+// DATA HONESTY: do not return transparent/synthetic tiles on failure.
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const product = String(searchParams.get('product') || 'ref');
@@ -17,7 +12,7 @@ export async function GET(request: Request) {
   const y = searchParams.get('y');
 
   if (!z || !x || !y) {
-    return new Response(TRANSPARENT_PNG, { status: 200, headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=60' } });
+    return new Response(null, { status: 404, headers: { 'Cache-Control': 'no-store' } });
   }
 
   const candidates: string[] = [];
@@ -76,8 +71,8 @@ export async function GET(request: Request) {
     }
   }
 
-  return new Response(TRANSPARENT_PNG, {
-    status: 200,
-    headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=60' },
+  return new Response(null, {
+    status: 404,
+    headers: { 'Cache-Control': 'no-store', 'X-MesoVortex-Data': 'unavailable' },
   });
 }

@@ -17,6 +17,8 @@ export type CrossSectionResult = {
   freezingLevelFt: number;
   hailGrowthLevelFt: number;
   grid: number[][]; // [altitudeIdx][distanceIdx]
+  dataHonesty?: 'SYNTHETIC' | 'REAL';
+  dataHonestyNote?: string;
 };
 
 function loadImage(url: string): Promise<HTMLImageElement> {
@@ -195,5 +197,7 @@ export async function computeVerticalCrossSection(
     freezingLevelFt,
     hailGrowthLevelFt,
     grid,
+    dataHonesty: 'SYNTHETIC',
+    dataHonestyNote: 'Cross-section is currently synthetic/model-derived from sampled tiles, not a real volumetric reconstruction. Real cross-sections require verified 3D volume data pipeline.',
   };
 }

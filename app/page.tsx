@@ -90,6 +90,7 @@ export default function MesoVortexWorkstation() {
   const [showSpotters, setShowSpotters] = useState(true);
   const [showHurricanes, setShowHurricanes] = useState(true);
   const [projectionMode, setProjectionMode] = useState<'mercator' | 'globe'>('mercator');
+  const [mapPitch, setMapPitch] = useState(0);
   const [showSpotterReports, setShowSpotterReports] = useState(true);
   const [spotterFilters, setSpotterFilters] = useState({
     tornado: true,
@@ -237,6 +238,7 @@ export default function MesoVortexWorkstation() {
     showSpotterReports,
     showHurricanes,
     projectionMode,
+    mapPitch,
     spotterFilters,
     showSweepAnimation,
     showFastScan,
@@ -821,6 +823,11 @@ export default function MesoVortexWorkstation() {
                   </button>
                 </div>
                 <div className="mt-1 text-[10px] font-semibold text-slate-500">MapLibre globe projection. Layers and overlays preserved.</div>
+                <div className="mt-2 border-t border-slate-200 pt-2">
+                  <div className="mb-1 flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-500"><span>3D Pitch/Tilt</span><span>{mapPitch}°</span></div>
+                  <input type="range" min={0} max={60} step={5} value={mapPitch} onChange={(e)=>setMapPitch(Number(e.target.value))} className="w-full" />
+                  <div className="text-[10px] font-semibold text-slate-500">3D camera tilt over real 2D data layers (not volumetric radar).</div>
+                </div>
               </div>
 
               <button
