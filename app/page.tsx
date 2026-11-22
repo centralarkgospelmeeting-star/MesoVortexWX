@@ -46,8 +46,17 @@ export default function MesoVortexWorkstation() {
   const [isPlaying, setIsPlaying] = useState(false);
 
   const [expertMode, setExpertMode] = useState(false);
+  const [quadMode, setQuadMode] = useState(false);
   const [leftPane, setLeftPane] = useState<PaneMode>('Radar');
   const [rightPane, setRightPane] = useState<PaneMode>('Satellite');
+  const [quadPanes, setQuadPanes] = useState<Array<{ mode: PaneMode; product: RadarProduct }>>([
+    { mode: 'Radar', product: 'ref' },
+    { mode: 'Radar', product: 'vel' },
+    { mode: 'Radar', product: 'cc' },
+    { mode: 'Satellite', product: 'ref' },
+  ]);
+  const [playbackFrames, setPlaybackFrames] = useState<Array<{ time: string; tileUrl: string; label: string }>>([]);
+  const [playbackIndex, setPlaybackIndex] = useState(0);
 
   const [basemap, setBasemap] = useState<BasemapType>('satellite-streets');
   const [basemapStatus, setBasemapStatus] = useState('Satellite Streets (Default)');
@@ -143,6 +152,41 @@ export default function MesoVortexWorkstation() {
     try { localStorage.setItem('mesovortex_spotter_filters', JSON.stringify(spotterFilters)); } catch {}
   }, [spotterFilters]);
 
+  // Master playback timeline. Uses N0B base reflectivity archive (actual IEM
+  // timestamps). Products/sources without archive display LIVE ONLY in panes.
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch(
+          `/api/nexrad/frames?site=${encodeURIComponent(currentSite.radarId)}&product=ref&tilt=0.5`,
+          { cache: 'no-store' }
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (cancelled) return;
+        const frames = Array.isArray(data.frames)
+          ? data.frames.map((f: any) => ({ time: String(f.time), tileUrl: String(f.tileUrl), label: String(f.label || '') }))
+          : [];
+        setPlaybackFrames(frames);
+        setPlaybackIndex((prev) => (frames.length ? Math.min(prev, frames.length - 1) : 0));
+      } catch {
+        if (!cancelled) setPlaybackFrames([]);
+      }
+    };
+    load();
+    const timer = setInterval(load, 120_000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [currentSite.radarId]);
+
+  useEffect(() => {
+    if (!isPlaying || playbackFrames.length < 2) return;
+    const timer = setInterval(() => {
+      setPlaybackIndex((prev) => (prev + 1) % playbackFrames.length);
+    }, 900);
+    return () => clearInterval(timer);
+  }, [isPlaying, playbackFrames.length]);
+
   const handleSelectBasemap = (selected: BasemapType) => {
     setBasemap(selected);
     setBasemapStatus(selected === 'satellite-streets' ? 'Satellite Streets (Default)' : 'Custom Weather');
@@ -188,7 +232,17 @@ export default function MesoVortexWorkstation() {
     onSelectSite: (id: string) => setRadarSite(id),
   } as const;
 
-  const renderPane = (paneMode: PaneMode, paneId: 'left' | 'right') => (
+  const currentPlaybackFrame = playbackFrames[playbackIndex] || null;
+
+  const renderPane = (
+    paneMode: PaneMode,
+    paneProduct: RadarProduct,
+    paneId: string,
+    syncGroup: string | null,
+    onModeChange?: (mode: PaneMode) => void,
+    onProductChange?: (product: RadarProduct) => void,
+    compact = false
+  ) => (
     <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
       <div className="pointer-events-none absolute left-3 top-3 z-30 flex items-center gap-2">
         <div className="rounded-lg border border-slate-700 bg-slate-950/90 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-cyan-300 shadow-xl backdrop-blur">
@@ -196,21 +250,26 @@ export default function MesoVortexWorkstation() {
         </div>
         {paneMode === 'Radar' && (
           <div className="rounded-lg border border-slate-700 bg-slate-950/90 px-2.5 py-1 text-[10px] font-bold text-slate-200 shadow-xl backdrop-blur">
-            {product.toUpperCase()} · {tilt}°
+            {paneProduct.toUpperCase()} · {tilt}°
+          </div>
+        )}
+        {isPlaying && playbackFrames.length > 1 && (
+          <div className="rounded-lg border border-slate-700 bg-slate-950/90 px-2.5 py-1 text-[10px] font-bold text-amber-300 shadow-xl backdrop-blur">
+            {currentPlaybackFrame?.label || 'PLAYBACK'}
           </div>
         )}
       </div>
 
-      {expertMode && (
-        <div className="absolute left-3 top-12 z-30 flex items-center gap-1 rounded-xl border border-slate-700 bg-slate-950/90 p-1 shadow-xl backdrop-blur">
+      {onModeChange && (
+        <div className={`absolute left-3 ${compact ? 'top-11' : 'top-12'} z-30 flex flex-wrap items-center gap-1 rounded-xl border border-slate-700 bg-slate-950/90 p-1 shadow-xl backdrop-blur`}>
           {PANE_MODES.map((modeOption) => {
             const active = modeOption === paneMode;
             return (
               <button
                 key={modeOption}
                 type="button"
-                onClick={() => (paneId === 'left' ? setLeftPane(modeOption) : setRightPane(modeOption))}
-                className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition ${
+                onClick={() => onModeChange(modeOption)}
+                className={`rounded-lg px-2 py-1 text-[10px] font-bold transition ${
                   active ? 'bg-cyan-500 text-slate-950' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
                 }`}
               >
@@ -218,19 +277,42 @@ export default function MesoVortexWorkstation() {
               </button>
             );
           })}
+          {onProductChange && paneMode === 'Radar' && (
+            <select
+              value={paneProduct}
+              onChange={(e) => onProductChange(e.target.value as RadarProduct)}
+              className="ml-1 rounded-md border border-slate-700 bg-slate-900 px-1.5 py-1 text-[10px] font-bold text-slate-200 outline-none"
+              aria-label={`Pane ${paneId} product`}
+            >
+              <option value="ref">REF</option>
+              <option value="vel">VEL</option>
+              <option value="srvel">SRV</option>
+              <option value="cc">CC</option>
+              <option value="zdr">ZDR</option>
+              <option value="kdp">KDP</option>
+              <option value="vil">VIL</option>
+              <option value="tops">TOPS</option>
+            </select>
+          )}
         </div>
       )}
 
       <RadarMap
         {...paneProps}
         mode={paneMode}
-        product={product}
-        syncGroup={expertMode ? 'expert-main' : null}
+        product={paneProduct}
+        syncGroup={syncGroup}
+        playbackIndex={playbackIndex}
+        playbackActive={isPlaying && playbackFrames.length > 1}
       />
     </div>
   );
 
-  const activePaneLabel = expertMode ? `${leftPane} + ${rightPane}` : tab;
+  const activePaneLabel = quadMode
+    ? `Quad: ${quadPanes.map((p) => (p.mode === 'Radar' ? p.product.toUpperCase() : p.mode)).join(' / ')}`
+    : expertMode
+      ? `${leftPane} + ${rightPane}`
+      : tab;
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-[#070c14] select-none font-sans text-slate-100">
@@ -325,17 +407,18 @@ export default function MesoVortexWorkstation() {
                   key={modeTab}
                   onClick={() => {
                     setTab(modeTab);
-                    if (expertMode) setExpertMode(false);
+                    setExpertMode(false);
+                    setQuadMode(false);
                   }}
                   className={`rounded-full px-3 py-1 transition cursor-pointer flex items-center gap-1 ${
-                    !expertMode && tab === modeTab ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+                    !expertMode && !quadMode && tab === modeTab ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
                   {modeTab}
                 </button>
               ))}
               <button
-                onClick={() => setExpertMode((v) => !v)}
+                onClick={() => { setExpertMode((v) => !v); setQuadMode(false); }}
                 className={`rounded-full px-3 py-1 transition cursor-pointer flex items-center gap-1 ${
                   expertMode ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
                 }`}
@@ -343,10 +426,27 @@ export default function MesoVortexWorkstation() {
               >
                 Expert
               </button>
+              <button
+                onClick={() => { setQuadMode((v) => !v); setExpertMode(false); }}
+                className={`rounded-full px-3 py-1 transition cursor-pointer flex items-center gap-1 ${
+                  quadMode ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+                title="Four synchronized panes (desktop/tablet)"
+              >
+                Quad
+              </button>
             </div>
           </div>
 
-          {expertMode ? (
+          {quadMode ? (
+            <div className="mt-1.5 flex items-center gap-2 rounded-full bg-slate-950/90 px-3 py-1 shadow-xl border border-slate-700 text-[11px] font-bold text-slate-200 backdrop-blur">
+              <span className="text-violet-300">Quad View</span>
+              <span className="text-slate-500">•</span>
+              <span>4 panes synced</span>
+              <span className="text-slate-500">•</span>
+              <span className="text-slate-400">{isPlaying ? 'playback synced' : 'camera synced'}</span>
+            </div>
+          ) : expertMode ? (
             <div className="mt-1.5 flex items-center gap-2 rounded-full bg-slate-950/90 px-3 py-1 shadow-xl border border-slate-700 text-[11px] font-bold text-slate-200 backdrop-blur">
               <span className="text-cyan-300">Expert Mode</span>
               <span className="text-slate-500">•</span>
@@ -354,7 +454,7 @@ export default function MesoVortexWorkstation() {
               <span className="text-slate-500">+</span>
               <span>{rightPane}</span>
               <span className="text-slate-500">•</span>
-              <span className="text-slate-400">synced pan/zoom</span>
+              <span className="text-slate-400">{isPlaying ? 'playback synced' : 'synced pan/zoom'}</span>
             </div>
           ) : tab === 'Outlooks' ? (
             <div className="mt-1.5 flex items-center gap-2 rounded-full bg-white px-3 py-1 shadow-xl border border-slate-200 text-xs font-bold text-slate-700">
@@ -386,11 +486,43 @@ export default function MesoVortexWorkstation() {
       </div>
 
       <div className="absolute inset-0 pt-[22px]">
-        {expertMode ? (
+        {quadMode ? (
+          <>
+            <div className="hidden h-full w-full md:grid md:grid-cols-2 md:grid-rows-2">
+              {quadPanes.map((pane, idx) => (
+                <div key={idx} className={`min-h-0 min-w-0 ${idx % 2 === 0 ? 'border-r border-slate-700/80' : ''} ${idx < 2 ? 'border-b border-slate-700/80' : ''}`}>
+                  {renderPane(
+                    pane.mode,
+                    pane.product,
+                    String(idx),
+                    'quad-main',
+                    (mode) => setQuadPanes((prev) => prev.map((p, i) => (i === idx ? { ...p, mode } : p))),
+                    (nextProduct) => setQuadPanes((prev) => prev.map((p, i) => (i === idx ? { ...p, product: nextProduct } : p))),
+                    true
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="flex h-full w-full items-center justify-center p-6 md:hidden">
+              <div className="max-w-sm rounded-2xl border border-slate-700 bg-slate-950/95 p-6 text-center shadow-2xl backdrop-blur">
+                <div className="text-sm font-black uppercase tracking-wider text-violet-300">Quad View</div>
+                <div className="mt-2 text-base font-bold text-white">Quad View is available on tablet and desktop.</div>
+                <div className="mt-2 text-sm text-slate-400">Use a larger screen for four synchronized panes.</div>
+                <button
+                  type="button"
+                  onClick={() => setQuadMode(false)}
+                  className="mt-4 rounded-lg bg-violet-600 px-4 py-2 text-sm font-bold text-white hover:bg-violet-500"
+                >
+                  Return to single view
+                </button>
+              </div>
+            </div>
+          </>
+        ) : expertMode ? (
           <div className="flex h-full w-full">
-            {renderPane(leftPane, 'left')}
+            {renderPane(leftPane, product, 'left', 'expert-main', (mode) => setLeftPane(mode))}
             <div className="w-px bg-slate-700/80 shadow-[0_0_0_1px_rgba(15,23,42,0.8)]" />
-            {renderPane(rightPane, 'right')}
+            {renderPane(rightPane, product, 'right', 'expert-main', (mode) => setRightPane(mode))}
           </div>
         ) : (
           <RadarMap
@@ -398,6 +530,8 @@ export default function MesoVortexWorkstation() {
             mode={tab}
             product={product}
             syncGroup={null}
+            playbackIndex={playbackIndex}
+            playbackActive={isPlaying && playbackFrames.length > 1}
           />
         )}
       </div>

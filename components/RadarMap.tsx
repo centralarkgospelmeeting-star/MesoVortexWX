@@ -70,6 +70,10 @@ export interface RadarMapProps {
   alertFeatures?: any;
   /** Join camera movement with other maps sharing this id. */
   syncGroup?: string | null;
+  /** Shared playback frame index (aligned to 5-min IEM archive cadence). */
+  playbackIndex?: number;
+  /** True when global playback is active; used to show LIVE ONLY on non-archived sources. */
+  playbackActive?: boolean;
   onNewScan?: (info: { latencySec: number; timestamp: string; site: string }) => void;
   onSelectSite?: (siteId: string) => void;
   onSelectWarningFromMap?: (w: any) => void;
@@ -276,6 +280,8 @@ export function RadarMap({
   spotterData = [],
   alertFeatures = { type: 'FeatureCollection', features: [] },
   syncGroup = null,
+  playbackIndex = 0,
+  playbackActive = false,
   onNewScan,
   onSelectSite,
   onSelectWarningFromMap,
@@ -294,6 +300,7 @@ export function RadarMap({
   const [mapReady, setMapReady] = useState(false);
   const [tileError, setTileError] = useState<string | null>(null);
   const [sweepAngle, setSweepAngle] = useState(0);
+  const [liveOnly, setLiveOnly] = useState(false);
 
   useEffect(() => {
     if (!sweepEnabled) return;
@@ -708,11 +715,14 @@ export function RadarMap({
         tileErrorTimerRef.current = null;
       }
       let tileUrl = '';
+      let archiveAvailable = false;
 
       if (mode === 'Composite') {
         tileUrl = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png';
+        archiveAvailable = false;
       } else if (mode === 'Satellite') {
         tileUrl = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/goes-east-vis-1km-900913/{z}/{x}/{y}.png';
+        archiveAvailable = false;
       } else if (product === 'max_ref') {
         try {
           const res = await fetch(
@@ -721,8 +731,11 @@ export function RadarMap({
           );
           const data = await res.json();
           const frames = (data.frames || []).map((f: any) => f.tileUrl);
-          const sliceCount = Math.min(frames.length, maxRefWindow);
-          tileUrl = await computeMaxReflectivityCanvas(frames.slice(-sliceCount));
+          archiveAvailable = Boolean(data.loopAvailable);
+          const end = playbackActive && archiveAvailable ? Math.max(0, Math.min(playbackIndex, frames.length - 1)) + 1 : frames.length;
+          const windowFrames = frames.slice(0, end);
+          const sliceCount = Math.min(windowFrames.length, maxRefWindow);
+          tileUrl = await computeMaxReflectivityCanvas(windowFrames.slice(-sliceCount));
         } catch {
           setTileError('Unable to generate Max Reflectivity swath.');
           return;
@@ -735,8 +748,10 @@ export function RadarMap({
           );
           const data = await res.json();
           const frames = (data.frames || []).map((f: any) => f.tileUrl);
+          archiveAvailable = Boolean(data.loopAvailable);
           if (frames.length >= 2) {
-            tileUrl = await interpolateReflectivityFrames(frames[frames.length - 2], frames[frames.length - 1]);
+            const idx = playbackActive && archiveAvailable ? Math.max(1, Math.min(playbackIndex, frames.length - 1)) : frames.length - 1;
+            tileUrl = await interpolateReflectivityFrames(frames[idx - 1], frames[idx]);
           } else {
             tileUrl = data.latestTileUrl;
           }
@@ -754,17 +769,28 @@ export function RadarMap({
             if (map.getLayer(RADAR_LAYER_ID)) map.removeLayer(RADAR_LAYER_ID);
             if (map.getSource(RADAR_SOURCE_ID)) map.removeSource(RADAR_SOURCE_ID);
             setTileError(`Product "${product.toUpperCase()}" is unavailable.`);
+            setLiveOnly(false);
             return;
           }
           const data = await res.json();
-          tileUrl = data.latestTileUrl;
+          archiveAvailable = Boolean(data.loopAvailable);
+          const frames = Array.isArray(data.frames) ? data.frames : [];
+          if (playbackActive && archiveAvailable && frames.length > 0) {
+            const idx = Math.max(0, Math.min(playbackIndex, frames.length - 1));
+            tileUrl = String(frames[idx]?.tileUrl || data.latestTileUrl);
+          } else {
+            tileUrl = data.latestTileUrl;
+          }
         } catch {
           if (map.getLayer(RADAR_LAYER_ID)) map.removeLayer(RADAR_LAYER_ID);
           if (map.getSource(RADAR_SOURCE_ID)) map.removeSource(RADAR_SOURCE_ID);
           setTileError(`Network error loading ${product.toUpperCase()}.`);
+          setLiveOnly(false);
           return;
         }
       }
+
+      setLiveOnly(Boolean(playbackActive && !archiveAvailable));
 
       if (!tileUrl) return;
 
@@ -813,7 +839,7 @@ export function RadarMap({
         beforeId
       );
     },
-    [mode, product, tilt, maxRefWindow, site.radarId, radarOpacity, fastScanEnabled, onNewScan]
+    [mode, product, tilt, maxRefWindow, site.radarId, radarOpacity, fastScanEnabled, onNewScan, playbackIndex, playbackActive]
   );
 
   const updateRangeRings = useCallback((map: MapLibreMap, lat: number, lon: number) => {
@@ -1545,6 +1571,14 @@ export function RadarMap({
           <div className="mt-1 leading-snug text-yellow-200/90">
             Unavailable — no verified real-time lightning source (US/CA/CO) is configured in this build.
           </div>
+        </div>
+      )}
+
+      {liveOnly && !tileError && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-xl border border-amber-500/60 bg-slate-950/95 px-4 py-2 font-mono text-xs font-bold text-amber-300 shadow-2xl backdrop-blur-md">
+          <span className="h-2 w-2 rounded-full bg-amber-400" />
+          <span>LIVE ONLY</span>
+          <span className="font-normal text-slate-400">No archive for this source</span>
         </div>
       )}
 
