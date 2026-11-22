@@ -267,7 +267,7 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
     tiltSupport: [],
     dataHonesty: { realData: false, substitute: false, synthetic: false, reason: 'Source candidate exists but not verified end-to-end; integration missing.' },
     unavailableReason: 'DATA UNAVAILABLE - MESH source candidate exists but end-to-end verification/integration is incomplete.',
-    verification: { level: 'TESTED_LIVE', lastCheckedAt: CHECKED_AT, evidence: ['Sprint 2: IEM MRMS MESH 200 PNG; MESH_Max60min 200 PNG', 'Sprint 3: same tile size (20229B) for MESH and MESH_Max60min; no timestamp/archive variant verified; mrms-t 404 sample; no legend/units metadata verified', 'Determination: UNAVAILABLE (no middle ground) - source candidate exists but not end-to-end verified'] },
+    verification: { level: 'TESTED_LIVE', lastCheckedAt: CHECKED_AT, evidence: ['Sprint 2: IEM MRMS MESH 200 PNG; MESH_Max60min 200 PNG', 'Sprint 3: same tile size (20229B) for MESH and MESH_Max60min; no timestamp/archive variant verified; no legend/units metadata verified', 'Sprint 4: mrms-t::MESH and fabricated timestamp path returned same 20229B/200 as current - timestamp/archive semantics not trustworthy from probes; no legend/units/end-to-end verification', 'Determination: UNAVAILABLE (no middle ground) - not verifiable for WORKING enablement'] },
   },
   {
     id: 'tops',
@@ -282,7 +282,7 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
     tiltSupport: [],
     dataHonesty: { realData: false, substitute: false, synthetic: false, reason: 'Source candidate exists but not verified end-to-end; integration missing.' },
     unavailableReason: 'DATA UNAVAILABLE - Echo Tops candidate exists (NET) but semantics/archive/integration not verified.',
-    verification: { level: 'TESTED_LIVE', lastCheckedAt: CHECKED_AT, evidence: ['Sprint 2: IEM ridge NET 200 on LZK/LWX/TLX/MHX; EET 503', 'Sprint 3: IEM TMS nexrad-net/nexrad-eet and m05m..m50m variants respond 200; nexrad-net-m30m differs from current - archive-candidate evidence, semantics/units/legend not end-to-end verified', 'Determination: remains UNAVAILABLE (candidate only) until units/legend/timestamp/archive/playback verified'] },
+    verification: { level: 'TESTED_LIVE', lastCheckedAt: CHECKED_AT, evidence: ['Sprint 2: IEM ridge NET 200 on LZK/LWX/TLX/MHX; EET 503', 'Sprint 3: IEM TMS nexrad-net/nexrad-eet and m05m..m50m variants respond 200; nexrad-net-m30m differs from current - archive-candidate evidence', 'Sprint 4: IEM json/radar products for LZK did not list NET; ridge NET-0 returned 334B on sampled sites; ridge NET timestamped -15m..-120m returned 503 on LZK/TLX/FWS/LWX/OKX', 'Sprint 4: composite nexrad-net has rolling m05m-m50m (m55m 404) but single-site ridge archive/timestamp integrity not verified; units/legend/end-to-end pipeline not verified', 'Determination: UNAVAILABLE - not fully verified for WORKING enablement'] },
   },
   {
     id: 'vil',
