@@ -1,142 +1,241 @@
 'use client';
 
-import { useState } from 'react';
-
-export type WeatherAlertItem = {
-  id: string;
-  event: string;
-  headline: string;
-  severity: string;
-  areaDesc: string;
-  population?: string;
-  state?: string;
-  wfo?: string;
-  expiresMin?: number;
-};
+import {
+  ALERT_CATEGORY_META,
+  ALL_ALERT_CATEGORIES,
+  alertExpiryLabel,
+  formatAlertTime,
+  type AlertCategory,
+  type AlertCategoryFilters,
+  type WeatherAlert,
+} from '../lib/alerts/model';
 
 type Props = {
-  alerts: WeatherAlertItem[];
+  alerts: WeatherAlert[];
+  counts: Record<AlertCategory, number>;
+  filters: AlertCategoryFilters;
+  onToggleFilter: (category: AlertCategory) => void;
+  onSetAllFilters: (value: boolean) => void;
+  audioEnabled: boolean;
+  audioCategories: AlertCategoryFilters;
+  onEnableAudio: () => void;
+  onDisableAudio: () => void;
+  onToggleAudioCategory: (category: AlertCategory) => void;
+  onTestTone: (category: AlertCategory) => void;
+  lastUpdated: string | null;
+  error: string | null;
+  loading: boolean;
+  onRefresh: () => void;
   onClose: () => void;
-  onSelectAlert: (alert: WeatherAlertItem) => void;
+  onSelectAlert: (alert: WeatherAlert) => void;
 };
 
-export function WeatherWiseAlertsPanel({ alerts, onClose, onSelectAlert }: Props) {
-  const [filter, setFilter] = useState<'All' | 'Warnings' | 'Watches'>('All');
+function shortTime(iso: string | null): string {
+  if (!iso) return '—';
+  const parsed = Date.parse(iso);
+  if (!Number.isFinite(parsed)) return '—';
+  return new Date(parsed).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
 
-  const warnings = alerts.filter((a) => a.event.includes('Warning'));
-  const count = alerts.length;
+export function WeatherWiseAlertsPanel({
+  alerts,
+  counts,
+  filters,
+  onToggleFilter,
+  onSetAllFilters,
+  audioEnabled,
+  audioCategories,
+  onEnableAudio,
+  onDisableAudio,
+  onToggleAudioCategory,
+  onTestTone,
+  lastUpdated,
+  error,
+  loading,
+  onRefresh,
+  onClose,
+  onSelectAlert,
+}: Props) {
+  const total = alerts.length;
 
   return (
-    <div className="absolute right-0 top-0 bottom-0 z-40 w-[360px] bg-white text-slate-800 shadow-2xl border-l border-slate-200 flex flex-col font-sans select-none animate-slide-left">
-      {/* Top Header */}
-      <div className="flex items-center justify-between p-4 border-b border-slate-100">
+    <div className="absolute right-0 top-0 bottom-0 z-40 flex w-[380px] max-w-[100vw] flex-col border-l border-slate-700 bg-[#0b1220] text-slate-100 shadow-2xl font-sans select-none">
+      <div className="flex items-center justify-between border-b border-slate-800 p-4">
         <div className="flex items-center gap-2">
-          <span className="font-extrabold text-base text-slate-900">Current Alerts</span>
-          <span className="rounded-full bg-slate-950 px-2.5 py-0.5 text-xs font-black text-white">
-            {count}
+          <span className="text-base font-black text-white">Fast Alerts</span>
+          <span className="rounded-full bg-amber-400 px-2.5 py-0.5 text-xs font-black text-slate-950">
+            {total}
           </span>
+          {loading && <span className="text-[10px] font-semibold text-slate-400">syncing…</span>}
         </div>
-        <button
-          onClick={onClose}
-          className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
-        >
-          ✕
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={onRefresh}
+            title="Refresh alerts"
+            className="rounded-full p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-white"
+          >
+            ↻
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-white"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
-      {/* Filter Buttons */}
-      <div className="p-3 border-b border-slate-100 space-y-2">
-        <div className="flex items-center gap-1.5 text-xs font-bold">
+      <div className="space-y-3 border-b border-slate-800 p-3">
+        <div className="flex flex-wrap items-center gap-1.5">
           <button
-            onClick={() => setFilter('All')}
-            className={`rounded-full px-3 py-1 transition ${
-              filter === 'All' ? 'bg-amber-400 text-slate-950' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
+            type="button"
+            onClick={() => onSetAllFilters(true)}
+            className="rounded-full bg-slate-800 px-2.5 py-1 text-[11px] font-bold text-slate-200 transition hover:bg-slate-700"
           >
             All
           </button>
-          <button
-            onClick={() => setFilter('Warnings')}
-            className={`rounded-full px-3 py-1 transition ${
-              filter === 'Warnings' ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            Warnings
-          </button>
-          <button
-            onClick={() => setFilter('Watches')}
-            className={`rounded-full px-3 py-1 transition ${
-              filter === 'Watches' ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            Watches
-          </button>
-          <button className="rounded-full bg-slate-100 px-2 py-1 text-slate-600 hover:bg-slate-200">
-            ➕
-          </button>
+          {ALL_ALERT_CATEGORIES.map((category) => {
+            const meta = ALERT_CATEGORY_META[category];
+            const active = filters[category];
+            return (
+              <button
+                key={category}
+                type="button"
+                onClick={() => onToggleFilter(category)}
+                className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${
+                  active
+                    ? 'border-slate-500 bg-slate-700 text-white'
+                    : 'border-slate-800 bg-slate-900 text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                <span>{meta.label}</span>
+                <span className={`rounded-full px-1.5 text-[10px] ${active ? 'bg-slate-950 text-slate-200' : 'bg-slate-800 text-slate-500'}`}>
+                  {counts[category] || 0}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
-        <button className="w-full rounded-xl bg-slate-950 py-1.5 text-center text-xs font-bold text-amber-300 hover:bg-slate-900 transition flex items-center justify-center gap-1.5">
-          <span>⚙</span> Settings
-        </button>
+        <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className={`text-sm ${audioEnabled ? 'text-emerald-400' : 'text-slate-500'}`}>
+                {audioEnabled ? '🔔' : '🔕'}
+              </span>
+              <div>
+                <div className="text-[11px] font-bold text-slate-200">
+                  {audioEnabled ? 'Alert tone armed' : 'Alert tone off'}
+                </div>
+                <div className="text-[10px] text-slate-500">
+                  {audioEnabled ? 'New matching alerts play a tone.' : 'Enable to hear new alerts.'}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={audioEnabled ? onDisableAudio : onEnableAudio}
+              className={`rounded-full px-3 py-1 text-[11px] font-black transition ${
+                audioEnabled
+                  ? 'bg-slate-800 text-slate-200 hover:bg-slate-700'
+                  : 'bg-emerald-500 text-slate-950 hover:bg-emerald-400'
+              }`}
+            >
+              {audioEnabled ? 'Mute' : 'Enable'}
+            </button>
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {(['warning', 'watch', 'advisory', 'statement'] as AlertCategory[]).map((category) => {
+              const active = audioCategories[category];
+              return (
+                <button
+                  key={category}
+                  type="button"
+                  onClick={() => onToggleAudioCategory(category)}
+                  className={`rounded-full border px-2 py-0.5 text-[10px] font-bold transition ${
+                    active
+                      ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-300'
+                      : 'border-slate-700 bg-slate-900 text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  {ALERT_CATEGORY_META[category].label}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => onTestTone('warning')}
+              className="ml-auto rounded-full border border-slate-700 px-2 py-0.5 text-[10px] font-bold text-slate-300 transition hover:border-slate-500 hover:text-white"
+            >
+              Test tone
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Alerts Feed */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        {/* Category Header */}
-        <div className="flex items-center justify-between text-xs font-bold text-slate-700 px-1">
-          <div className="flex items-center gap-1.5">
-            <span>Warnings</span>
-            <span className="rounded-full bg-slate-950 px-2 py-0.2 text-[10px] text-white font-mono">
-              {warnings.length}
-            </span>
-          </div>
-          <span className="text-slate-400 text-[11px] cursor-pointer">👁</span>
-        </div>
+      <div className="flex-1 space-y-2 overflow-y-auto p-3">
+        {alerts.map((alert) => {
+          const meta = ALERT_CATEGORY_META[alert.category];
+          return (
+            <button
+              type="button"
+              key={alert.id}
+              onClick={() => onSelectAlert(alert)}
+              className="w-full rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-left transition hover:border-slate-600 hover:bg-slate-900"
+              style={{ borderLeft: `3px solid ${alert.color}` }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className={`rounded-md px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${meta.badge}`}>
+                  {meta.singular}
+                </span>
+                <span className="font-mono text-[10px] text-slate-500">{shortTime(alert.sent)}</span>
+              </div>
 
-        <div className="flex items-center gap-1.5 text-xs font-bold text-amber-600 px-1">
-          <span>🌩️ Severe Thunderstorm</span>
-          <span className="rounded-full bg-slate-950 px-1.5 text-[10px] text-white">
-            {warnings.length}
-          </span>
-          <span className="text-slate-400 text-[11px] ml-auto">ⓘ</span>
-        </div>
+              <div className="mt-1.5 text-xs font-black leading-snug text-white">{alert.event}</div>
+              <div className="mt-1 line-clamp-2 text-[11px] leading-snug text-slate-300">
+                {alert.headline}
+              </div>
 
-        {/* Warning Cards (Pink/Red Background) */}
-        {warnings.map((a, i) => (
-          <div
-            key={a.id || i}
-            onClick={() => onSelectAlert(a)}
-            className="rounded-2xl border border-red-200 bg-red-50/80 hover:bg-red-100/90 p-3.5 space-y-2 cursor-pointer transition shadow-sm"
-          >
-            <div className="text-xs font-bold text-red-950 leading-snug">
-              {a.headline || '60 mph wind gusts and quarter size hail.'}
-            </div>
+              <div className="mt-2 flex flex-wrap items-center gap-1 text-[10px] font-semibold">
+                {alert.wfo && (
+                  <span className="rounded bg-slate-800 px-1.5 py-0.5 text-slate-300">{alert.wfo}</span>
+                )}
+                <span className="rounded bg-slate-800 px-1.5 py-0.5 text-slate-400">{alert.severity}</span>
+                {alert.urgency && alert.urgency !== 'Unknown' && (
+                  <span className="rounded bg-slate-800 px-1.5 py-0.5 text-slate-400">{alert.urgency}</span>
+                )}
+              </div>
 
-            {/* Threat Badges Row */}
-            <div className="flex items-center gap-1.5 text-[10px] font-black text-white font-mono">
-              <span className="rounded-md bg-slate-950 px-2 py-0.5">
-                👥 {a.population || '5.8K'}
-              </span>
-              <span className="rounded-md bg-slate-950 px-2 py-0.5">
-                {a.state || 'AR'}
-              </span>
-              <span className="rounded-md bg-slate-950 px-2 py-0.5">
-                {a.wfo || 'KLZK'}
-              </span>
-            </div>
+              <div className="mt-2 truncate text-[10px] text-slate-500">{alert.areaDesc || 'Area unavailable'}</div>
+              <div className="mt-1 text-[10px] font-semibold text-amber-300">
+                {alertExpiryLabel(alert)} · Issued {formatAlertTime(alert.sent)}
+              </div>
+            </button>
+          );
+        })}
 
-            <div className="text-[10px] text-slate-500 font-medium">
-              Expires in {a.expiresMin || 27} minutes
-            </div>
-          </div>
-        ))}
-
-        {warnings.length === 0 && (
-          <div className="p-8 text-center text-xs text-slate-400">
-            No active severe warnings currently reported.
+        {alerts.length === 0 && !loading && (
+          <div className="p-8 text-center text-xs text-slate-500">
+            No active alerts match the selected categories.
           </div>
         )}
+        {alerts.length === 0 && loading && (
+          <div className="p-8 text-center text-xs text-slate-500">Loading NWS alerts…</div>
+        )}
+      </div>
+
+      <div className="border-t border-slate-800 px-3 py-2 text-[10px] text-slate-500">
+        <div className="flex items-center justify-between gap-2">
+          <span>
+            Source: NWS active alerts
+            {lastUpdated ? ` · updated ${new Date(lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+          </span>
+          <span>Auto-refresh 30 s</span>
+        </div>
+        {error && <div className="mt-1 font-semibold text-amber-300">{error}</div>}
       </div>
     </div>
   );

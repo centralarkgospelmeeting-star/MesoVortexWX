@@ -1,11 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { RadarMap, BasemapType, ModeTab } from '../components/RadarMap';
 import { WeatherWiseRadarCard } from '../components/WeatherWiseRadarCard';
-import { WeatherWiseAlertsPanel, WeatherAlertItem } from '../components/WeatherWiseAlertsPanel';
+import { WeatherWiseAlertsPanel } from '../components/WeatherWiseAlertsPanel';
 import { RADAR_SITES } from '../lib/radar-config';
+import { useFastAlerts } from '../lib/alerts/use-fast-alerts';
+import {
+  ALERT_CATEGORY_META,
+  alertsToFeatureCollection,
+  type AlertCategory,
+} from '../lib/alerts/model';
 
 type RadarProduct =
   | 'ref'
@@ -25,8 +31,10 @@ type RadarProduct =
   | 'qpe';
 
 type SpcDay = 'Day 1' | 'Day 2' | 'Day 3';
+type PaneMode = 'Radar' | 'Satellite' | 'Composite';
 
 const BASEMAP_STORAGE_KEY = 'mesovortex_basemap_preference';
+const PANE_MODES: PaneMode[] = ['Radar', 'Satellite', 'Composite'];
 
 export default function MesoVortexWorkstation() {
   const [tab, setTab] = useState<ModeTab>('Radar');
@@ -36,6 +44,10 @@ export default function MesoVortexWorkstation() {
   const [radarSite, setRadarSite] = useState('KLZK');
   const [maxRefWindow, setMaxRefWindow] = useState(10);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  const [expertMode, setExpertMode] = useState(false);
+  const [leftPane, setLeftPane] = useState<PaneMode>('Radar');
+  const [rightPane, setRightPane] = useState<PaneMode>('Satellite');
 
   const [basemap, setBasemap] = useState<BasemapType>('satellite-streets');
   const [basemapStatus, setBasemapStatus] = useState('Satellite Streets (Default)');
@@ -56,8 +68,8 @@ export default function MesoVortexWorkstation() {
   const [showWatches, setShowWatches] = useState(true);
   const [showWarnings, setShowWarnings] = useState(true);
   const [showMCD, setShowMCD] = useState(true);
-  const [showSpotters, setShowSpotters] = useState(true); // Spotter people/positions
-  const [showSpotterReports, setShowSpotterReports] = useState(true); // Spotter report events
+  const [showSpotters, setShowSpotters] = useState(true);
+  const [showSpotterReports, setShowSpotterReports] = useState(true);
   const [spotterFilters, setSpotterFilters] = useState({
     tornado: true,
     funnel: true,
@@ -72,8 +84,28 @@ export default function MesoVortexWorkstation() {
   const [flashRange, setFlashRange] = useState<[number, number]>([60, 80]);
 
   const [alertsOpen, setAlertsOpen] = useState(false);
-  const [liveAlerts, setLiveAlerts] = useState<WeatherAlertItem[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  const {
+    alerts,
+    filtered: filteredAlerts,
+    counts: alertCounts,
+    filters: alertFilters,
+    toggleFilter: toggleAlertFilter,
+    setAllFilters: setAllAlertFilters,
+    audioEnabled,
+    audioCategories,
+    enableAudio,
+    disableAudio,
+    toggleAudioCategory,
+    testTone,
+    banner,
+    dismissBanner,
+    lastUpdated,
+    error: alertError,
+    loading: alertsLoading,
+    refresh: refreshAlerts,
+  } = useFastAlerts();
 
   const currentSite =
     RADAR_SITES.find((s) => s.id === radarSite) || RADAR_SITES[0];
@@ -121,25 +153,84 @@ export default function MesoVortexWorkstation() {
     }
   };
 
-  useEffect(() => {
-    fetch('https://api.weather.gov/alerts/active?status=actual&message_type=alert')
-      .then((res) => res.json())
-      .then((data) => {
-        const items = (data.features || []).map((f: any, i: number) => ({
-          id: f.id || `alert-${i}`,
-          event: f.properties?.event || 'Severe Warning',
-          headline: f.properties?.headline || f.properties?.description?.slice(0, 75) || 'Severe Weather Warning',
-          severity: f.properties?.severity || 'Immediate',
-          areaDesc: f.properties?.areaDesc || '',
-          population: `${Math.round(2 + Math.random() * 8)}K`,
-          state: f.properties?.areaDesc?.split(',').pop()?.trim() || 'US',
-          wfo: currentSite.radarId,
-          expiresMin: Math.round(15 + Math.random() * 45),
-        }));
-        setLiveAlerts(items);
-      })
-      .catch((err) => console.warn('[Alerts Fetch Error]:', err));
-  }, [currentSite.radarId]);
+  // Alerts rendered on the map honor the category filters and visibility toggles.
+  const mapAlertFeatures = useMemo(() => {
+    const visible = filteredAlerts.filter((alert) => {
+      if (alert.category === 'warning') return showWarnings;
+      if (alert.category === 'watch') return showWatches;
+      return true;
+    });
+    return alertsToFeatureCollection(visible);
+  }, [filteredAlerts, showWarnings, showWatches]);
+
+  const paneProps = {
+    radarSite,
+    tilt,
+    maxRefWindow,
+    basemap,
+    spcDay,
+    radarOpacity,
+    showRangeRings,
+    showRadarPills,
+    showLightning,
+    showLSR,
+    showWatches,
+    showWarnings,
+    showMCD,
+    showSpotters,
+    showSpotterReports,
+    spotterFilters,
+    showSweepAnimation,
+    showFastScan,
+    showFlashReflectivity,
+    flashRange,
+    alertFeatures: mapAlertFeatures,
+    onSelectSite: (id: string) => setRadarSite(id),
+  } as const;
+
+  const renderPane = (paneMode: PaneMode, paneId: 'left' | 'right') => (
+    <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+      <div className="pointer-events-none absolute left-3 top-3 z-30 flex items-center gap-2">
+        <div className="rounded-lg border border-slate-700 bg-slate-950/90 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-cyan-300 shadow-xl backdrop-blur">
+          {paneMode}
+        </div>
+        {paneMode === 'Radar' && (
+          <div className="rounded-lg border border-slate-700 bg-slate-950/90 px-2.5 py-1 text-[10px] font-bold text-slate-200 shadow-xl backdrop-blur">
+            {product.toUpperCase()} · {tilt}°
+          </div>
+        )}
+      </div>
+
+      {expertMode && (
+        <div className="absolute left-3 top-12 z-30 flex items-center gap-1 rounded-xl border border-slate-700 bg-slate-950/90 p-1 shadow-xl backdrop-blur">
+          {PANE_MODES.map((modeOption) => {
+            const active = modeOption === paneMode;
+            return (
+              <button
+                key={modeOption}
+                type="button"
+                onClick={() => (paneId === 'left' ? setLeftPane(modeOption) : setRightPane(modeOption))}
+                className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition ${
+                  active ? 'bg-cyan-500 text-slate-950' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                {modeOption}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <RadarMap
+        {...paneProps}
+        mode={paneMode}
+        product={product}
+        syncGroup={expertMode ? 'expert-main' : null}
+      />
+    </div>
+  );
+
+  const activePaneLabel = expertMode ? `${leftPane} + ${rightPane}` : tab;
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-[#070c14] select-none font-sans text-slate-100">
@@ -157,7 +248,7 @@ export default function MesoVortexWorkstation() {
            product === 'vil' ? 'VIL (kg/m\u00b2)' :
            product.toUpperCase()}
         </span>
-        <div className="flex h-2 w-72 overflow-hidden rounded border border-slate-700 mx-2">
+        <div className="mx-2 flex h-2 w-72 overflow-hidden rounded border border-slate-700">
           <div className="flex-1 bg-[#04e9e7]" />
           <div className="flex-1 bg-[#019ff4]" />
           <div className="flex-1 bg-[#0300f4]" />
@@ -177,7 +268,7 @@ export default function MesoVortexWorkstation() {
       </aside>
 
       <div className="pointer-events-none absolute top-7 left-0 right-0 z-40 flex items-center justify-between px-4">
-        <div className="flex items-center gap-2 pointer-events-auto">
+        <div className="pointer-events-auto flex items-center gap-2">
           <button
             onClick={() => setMenuOpen((v) => !v)}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-400 text-slate-950 shadow-xl hover:bg-amber-300 transition font-black text-lg border border-amber-300 cursor-pointer"
@@ -232,18 +323,40 @@ export default function MesoVortexWorkstation() {
               {(['Radar', 'Composite', 'Satellite', 'Outlooks'] as ModeTab[]).map((modeTab) => (
                 <button
                   key={modeTab}
-                  onClick={() => setTab(modeTab)}
+                  onClick={() => {
+                    setTab(modeTab);
+                    if (expertMode) setExpertMode(false);
+                  }}
                   className={`rounded-full px-3 py-1 transition cursor-pointer flex items-center gap-1 ${
-                    tab === modeTab ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+                    !expertMode && tab === modeTab ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
                   {modeTab}
                 </button>
               ))}
+              <button
+                onClick={() => setExpertMode((v) => !v)}
+                className={`rounded-full px-3 py-1 transition cursor-pointer flex items-center gap-1 ${
+                  expertMode ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+                title="Pair any two modes side-by-side with synchronized camera movement"
+              >
+                Expert
+              </button>
             </div>
           </div>
 
-          {tab === 'Outlooks' && (
+          {expertMode ? (
+            <div className="mt-1.5 flex items-center gap-2 rounded-full bg-slate-950/90 px-3 py-1 shadow-xl border border-slate-700 text-[11px] font-bold text-slate-200 backdrop-blur">
+              <span className="text-cyan-300">Expert Mode</span>
+              <span className="text-slate-500">•</span>
+              <span>{leftPane}</span>
+              <span className="text-slate-500">+</span>
+              <span>{rightPane}</span>
+              <span className="text-slate-500">•</span>
+              <span className="text-slate-400">synced pan/zoom</span>
+            </div>
+          ) : tab === 'Outlooks' ? (
             <div className="mt-1.5 flex items-center gap-2 rounded-full bg-white px-3 py-1 shadow-xl border border-slate-200 text-xs font-bold text-slate-700">
               <span className="px-1">Categorical</span>
               <span className="text-slate-300">|</span>
@@ -259,44 +372,34 @@ export default function MesoVortexWorkstation() {
                 </button>
               ))}
             </div>
-          )}
+          ) : null}
         </div>
 
         <button
           onClick={() => setAlertsOpen((v) => !v)}
           className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-amber-400 hover:bg-amber-300 px-3 py-1.5 text-slate-950 font-black text-xs shadow-xl border border-amber-300 transition cursor-pointer"
+          title="Open Fast Alerts"
         >
-          <span>{liveAlerts.length || 0}</span>
+          <span>{alerts.length || 0}</span>
           <span>alerts</span>
         </button>
       </div>
 
-      <div className="absolute inset-0">
-        <RadarMap
-          product={product}
-          radarSite={radarSite}
-          mode={tab}
-          tilt={tilt}
-          maxRefWindow={maxRefWindow}
-          basemap={basemap}
-          spcDay={spcDay}
-          radarOpacity={radarOpacity}
-          showRangeRings={showRangeRings}
-          showRadarPills={showRadarPills}
-          showLightning={showLightning}
-          showLSR={showLSR}
-          showWatches={showWatches}
-          showWarnings={showWarnings}
-          showMCD={showMCD}
-          showSpotters={showSpotters}
-          showSpotterReports={showSpotterReports}
-          spotterFilters={spotterFilters}
-          showSweepAnimation={showSweepAnimation}
-          showFastScan={showFastScan}
-          showFlashReflectivity={showFlashReflectivity}
-          flashRange={flashRange}
-          onSelectSite={(id) => setRadarSite(id)}
-        />
+      <div className="absolute inset-0 pt-[22px]">
+        {expertMode ? (
+          <div className="flex h-full w-full">
+            {renderPane(leftPane, 'left')}
+            <div className="w-px bg-slate-700/80 shadow-[0_0_0_1px_rgba(15,23,42,0.8)]" />
+            {renderPane(rightPane, 'right')}
+          </div>
+        ) : (
+          <RadarMap
+            {...paneProps}
+            mode={tab}
+            product={product}
+            syncGroup={null}
+          />
+        )}
       </div>
 
       <WeatherWiseRadarCard
@@ -349,22 +452,85 @@ export default function MesoVortexWorkstation() {
         onToggleSweepAnimation={() => setShowSweepAnimation((v) => !v)}
       />
 
+      {banner && (
+        <div
+          className="absolute left-1/2 top-24 z-50 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border bg-slate-950/95 p-4 shadow-2xl backdrop-blur"
+          style={{ borderColor: banner.color }}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white" style={{ backgroundColor: banner.color }}>
+                  {ALERT_CATEGORY_META[banner.category].singular}
+                </span>
+                <span className="text-[11px] font-semibold text-slate-400">{banner.severity}</span>
+                {banner.wfo && <span className="text-[11px] font-semibold text-slate-500">{banner.wfo}</span>}
+              </div>
+              <div className="mt-1 text-sm font-black text-white">{banner.event}</div>
+              <div className="mt-1 line-clamp-2 text-xs text-slate-300">{banner.headline}</div>
+              <div className="mt-1 truncate text-[11px] text-slate-500">{banner.areaDesc}</div>
+            </div>
+            <button
+              type="button"
+              onClick={dismissBanner}
+              className="rounded-full p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+              aria-label="Dismiss alert banner"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {alertsOpen && (
         <WeatherWiseAlertsPanel
-          alerts={liveAlerts}
+          alerts={filteredAlerts}
+          counts={alertCounts}
+          filters={alertFilters}
+          onToggleFilter={toggleAlertFilter}
+          onSetAllFilters={setAllAlertFilters}
+          audioEnabled={audioEnabled}
+          audioCategories={audioCategories}
+          onEnableAudio={enableAudio}
+          onDisableAudio={disableAudio}
+          onToggleAudioCategory={toggleAudioCategory}
+          onTestTone={testTone}
+          lastUpdated={lastUpdated}
+          error={alertError}
+          loading={alertsLoading}
+          onRefresh={refreshAlerts}
           onClose={() => setAlertsOpen(false)}
-          onSelectAlert={() => {}}
+          onSelectAlert={() => {
+            setAlertsOpen(true);
+          }}
         />
       )}
 
       {menuOpen && (
         <div className="fixed inset-0 z-50 flex bg-black/60 backdrop-blur-sm">
-          <div className="w-80 bg-white p-5 shadow-2xl space-y-4 text-slate-800">
+          <div className="w-80 bg-white p-5 shadow-2xl space-y-4 text-slate-800 overflow-y-auto">
             <div className="flex items-center justify-between border-b pb-3 font-extrabold text-base">
               <span>MesoVortex Menu</span>
               <button onClick={() => setMenuOpen(false)}>✕</button>
             </div>
+
             <div className="space-y-2 text-xs font-bold">
+              <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-2">
+                <div className="mb-1 text-[10px] font-black uppercase tracking-wider text-cyan-700">Expert Mode</div>
+                <div className="text-[11px] font-semibold text-slate-600">
+                  Pair any two modes on one screen. Cameras stay synchronized.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setExpertMode((v) => !v); setMenuOpen(false); }}
+                  className={`mt-2 w-full rounded-lg px-3 py-2 text-xs font-black transition ${
+                    expertMode ? 'bg-cyan-600 text-white' : 'bg-slate-900 text-white hover:bg-slate-800'
+                  }`}
+                >
+                  {expertMode ? 'Disable Expert Mode' : 'Enable Expert Mode'}
+                </button>
+              </div>
+
               <button
                 type="button"
                 onClick={() => {
@@ -382,20 +548,53 @@ export default function MesoVortexWorkstation() {
               >
                 {showLSR ? 'Hide' : 'Show'} local storm reports
               </button>
-              <button
-                type="button"
-                onClick={() => setShowWatches((v) => !v)}
-                className="w-full p-2 text-left hover:bg-slate-100 rounded-lg"
-              >
-                {showWatches ? 'Hide' : 'Show'} watches
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowWarnings((v) => !v)}
-                className="w-full p-2 text-left hover:bg-slate-100 rounded-lg"
-              >
-                {showWarnings ? 'Hide' : 'Show'} warning polygons
-              </button>
+
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 space-y-2">
+                <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">Fast Alerts</div>
+                <label className="flex items-center gap-2 font-bold cursor-pointer">
+                  <input type="checkbox" checked={showWarnings} onChange={(e) => setShowWarnings(e.target.checked)} />
+                  <span>Warning polygons</span>
+                </label>
+                <label className="flex items-center gap-2 font-bold cursor-pointer">
+                  <input type="checkbox" checked={showWatches} onChange={(e) => setShowWatches(e.target.checked)} />
+                  <span>Watch polygons</span>
+                </label>
+                <div className="pt-1 border-t border-slate-200">
+                  <div className="mb-1 text-[10px] font-black uppercase tracking-wider text-slate-500">Categories</div>
+                  <div className="grid grid-cols-2 gap-1 text-[11px] font-semibold text-slate-700">
+                    {(['warning', 'watch', 'advisory', 'statement', 'other'] as AlertCategory[]).map((category) => (
+                      <label key={category} className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={alertFilters[category]}
+                          onChange={() => toggleAlertFilter(category)}
+                        />
+                        <span>{ALERT_CATEGORY_META[category].label}</span>
+                        <span className="ml-auto text-[10px] text-slate-400">{alertCounts[category] || 0}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={audioEnabled ? disableAudio : enableAudio}
+                    className={`flex-1 rounded-lg px-2 py-1.5 text-[11px] font-black transition ${
+                      audioEnabled ? 'bg-slate-800 text-white' : 'bg-emerald-500 text-slate-950'
+                    }`}
+                  >
+                    {audioEnabled ? 'Mute Tones' : 'Enable Tones'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAlertsOpen(true)}
+                    className="flex-1 rounded-lg bg-amber-400 px-2 py-1.5 text-[11px] font-black text-slate-950"
+                  >
+                    Alert Panel
+                  </button>
+                </div>
+              </div>
+
               <button
                 type="button"
                 onClick={() => setShowMCD((v) => !v)}
@@ -433,23 +632,9 @@ export default function MesoVortexWorkstation() {
                   ))}
                 </div>
               </div>
-              <div
-                onClick={() => {
-                  setRadarSite('KLZK');
-                  setMenuOpen(false);
-                }}
-                className="p-2 hover:bg-slate-100 rounded-lg cursor-pointer"
-              >
-                Center on Little Rock (KLZK)
-              </div>
-              <div
-                onClick={() => {
-                  setRadarSite('KTLX');
-                  setMenuOpen(false);
-                }}
-                className="p-2 hover:bg-slate-100 rounded-lg cursor-pointer"
-              >
-                Center on Oklahoma City (KTLX)
+
+              <div className="text-[10px] font-semibold text-slate-400 px-1">
+                Active view: {activePaneLabel} · {basemapStatus}
               </div>
             </div>
           </div>

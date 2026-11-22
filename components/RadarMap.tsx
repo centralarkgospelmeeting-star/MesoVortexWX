@@ -6,6 +6,8 @@ import type { Map as MapLibreMap, StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { RADAR_SITES } from '../lib/radar-config';
 import { computeMaxReflectivityCanvas, interpolateReflectivityFrames } from '../lib/max-reflectivity';
+import { registerSyncedMap } from '../lib/map-sync';
+import { ALERT_CATEGORY_META, formatAlertTime, type WeatherAlert } from '../lib/alerts/model';
 
 // Next/webpack bundles maplibre-gl, so the library's relative worker URL
 // (./maplibre-gl-worker.mjs) resolves to a chunk that does not exist. Serve the
@@ -64,6 +66,10 @@ export interface RadarMapProps {
   flashRange?: [number, number];
   spotterReports?: SpotterPin[];
   spotterData?: any[];
+  /** Normalized NWS alerts (warnings, watches, advisories, statements). */
+  alertFeatures?: any;
+  /** Join camera movement with other maps sharing this id. */
+  syncGroup?: string | null;
   onNewScan?: (info: { latencySec: number; timestamp: string; site: string }) => void;
   onSelectSite?: (siteId: string) => void;
   onSelectWarningFromMap?: (w: any) => void;
@@ -268,6 +274,8 @@ export function RadarMap({
   flashRange = [60, 80],
   showLightning = false,
   spotterData = [],
+  alertFeatures = { type: 'FeatureCollection', features: [] },
+  syncGroup = null,
   onNewScan,
   onSelectSite,
   onSelectWarningFromMap,
@@ -316,6 +324,8 @@ export function RadarMap({
   const mcdHandlersBoundRef = useRef(false);
   const showMCDRef = useRef(showMCD);
   const showWarningsRef = useRef(showWarnings);
+  const alertFeaturesRef = useRef<any>(alertFeatures);
+  const onSelectWarningRef = useRef(onSelectWarningFromMap);
   const towerPillMarkersRef = useRef<maplibregl.Marker[]>([]);
   const showRadarPillsRef = useRef(showRadarPills);
   const selectedRadarSiteRef = useRef(radarSite);
@@ -403,119 +413,140 @@ export function RadarMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [basemap]);
 
-  const updateWarnings = useCallback((map: MapLibreMap) => {
-    fetch('https://api.weather.gov/alerts/active?status=actual&message_type=alert')
-      .then((res) => res.json())
-      .then((geojson) => {
-        const polygonFeatures = (geojson.features || []).filter((f: any) => {
-          const event = f.properties?.event || '';
-          return (
-            f.geometry &&
-            (event.includes('Warning') || event.includes('Tornado') || event.includes('Thunderstorm'))
-          );
-        });
+  const updateWarnings = useCallback((map: MapLibreMap, geojson?: any) => {
+    const sourceData = geojson ?? alertFeaturesRef.current ?? { type: 'FeatureCollection', features: [] };
+    const features = Array.isArray(sourceData?.features) ? sourceData.features : [];
+    const validGeoJSON = { type: 'FeatureCollection', features };
 
-        const validGeoJSON = { type: 'FeatureCollection', features: polygonFeatures };
-        const source = map.getSource(WARNINGS_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+    const source = map.getSource(WARNINGS_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+    if (source) {
+      source.setData(validGeoJSON as any);
+      return;
+    }
 
-        if (source) {
-          source.setData(validGeoJSON as any);
-        } else {
-          map.addSource(WARNINGS_SOURCE_ID, { type: 'geojson', data: validGeoJSON as any });
+    map.addSource(WARNINGS_SOURCE_ID, { type: 'geojson', data: validGeoJSON as any });
 
-          const beforeId =
-            map.getLayer(MCD_FILL_ID) ? MCD_FILL_ID :
-            map.getLayer(SPOTTER_HALO_LAYER_ID) ? SPOTTER_HALO_LAYER_ID :
-            undefined;
+    const beforeId =
+      map.getLayer(MCD_FILL_ID) ? MCD_FILL_ID :
+      map.getLayer(SPOTTER_HALO_LAYER_ID) ? SPOTTER_HALO_LAYER_ID :
+      undefined;
 
-          map.addLayer({
-            id: WARNINGS_FILL_ID,
-            type: 'fill',
-            source: WARNINGS_SOURCE_ID,
-            paint: {
-              'fill-color': [
-                'match',
-                ['get', 'event'],
-                'Tornado Warning', '#dc2626',
-                'Severe Thunderstorm Warning', '#f59e0b',
-                'Flash Flood Warning', '#10b981',
-                '#3b82f6',
-              ],
-              'fill-opacity': 0.18,
-            },
-          }, beforeId);
+    // Category-aware styling: colors come from normalized alert properties.
+    // Watches/advisories/statements render with dashed outlines so they are
+    // visually distinct from solid warning polygons at a glance.
+    map.addLayer(
+      {
+        id: WARNINGS_FILL_ID,
+        type: 'fill',
+        source: WARNINGS_SOURCE_ID,
+        paint: {
+          'fill-color': ['coalesce', ['get', 'color'], '#3b82f6'],
+          'fill-opacity': [
+            'match',
+            ['get', 'category'],
+            'warning', 0.18,
+            'watch', 0.1,
+            'advisory', 0.08,
+            'statement', 0.06,
+            0.08,
+          ],
+        },
+      },
+      beforeId
+    );
 
-          map.addLayer({
-            id: WARNINGS_LINE_OUTER_ID,
-            type: 'line',
-            source: WARNINGS_SOURCE_ID,
-            paint: {
-              'line-color': [
-                'match',
-                ['get', 'event'],
-                'Tornado Warning', '#dc2626',
-                'Severe Thunderstorm Warning', '#ffffff',
-                'Flash Flood Warning', '#059669',
-                '#1d4ed8',
-              ],
-              'line-width': 3.5,
-            },
-          }, beforeId);
+    map.addLayer(
+      {
+        id: WARNINGS_LINE_OUTER_ID,
+        type: 'line',
+        source: WARNINGS_SOURCE_ID,
+        paint: {
+          'line-color': ['coalesce', ['get', 'color'], '#1d4ed8'],
+          'line-width': [
+            'match',
+            ['get', 'category'],
+            'warning', 3.5,
+            'watch', 2.8,
+            'advisory', 2.2,
+            2,
+          ],
+          'line-dasharray': [
+            'match',
+            ['get', 'category'],
+            'warning', ['literal', [1, 0]],
+            'watch', ['literal', [2, 1.5]],
+            'advisory', ['literal', [4, 2]],
+            'statement', ['literal', [1.5, 1.5]],
+            ['literal', [3, 2]],
+          ],
+        },
+      },
+      beforeId
+    );
 
-          map.addLayer({
-            id: WARNINGS_LINE_INNER_ID,
-            type: 'line',
-            source: WARNINGS_SOURCE_ID,
-            paint: {
-              'line-color': [
-                'match',
-                ['get', 'event'],
-                'Tornado Warning', '#f87171',
-                'Severe Thunderstorm Warning', '#fbbf24',
-                'Flash Flood Warning', '#34d399',
-                '#60a5fa',
-              ],
-              'line-width': 1.8,
-            },
-          }, beforeId);
+    map.addLayer(
+      {
+        id: WARNINGS_LINE_INNER_ID,
+        type: 'line',
+        source: WARNINGS_SOURCE_ID,
+        paint: {
+          'line-color': ['coalesce', ['get', 'lineColor'], '#60a5fa'],
+          'line-width': [
+            'match',
+            ['get', 'category'],
+            'warning', 1.8,
+            'watch', 1.2,
+            'advisory', 1,
+            0.8,
+          ],
+          'line-opacity': 0.9,
+        },
+      },
+      beforeId
+    );
 
-          if (!warningHandlersBoundRef.current) {
-            warningHandlersBoundRef.current = true;
-            map.on('click', WARNINGS_FILL_ID, (e) => {
-              const props = e.features?.[0]?.properties;
-              if (!props) return;
-              if (onSelectWarningFromMap) onSelectWarningFromMap(props);
+    if (!warningHandlersBoundRef.current) {
+      warningHandlersBoundRef.current = true;
+      map.on('click', WARNINGS_FILL_ID, (e) => {
+        const props = e.features?.[0]?.properties;
+        if (!props) return;
+        if (onSelectWarningRef.current) onSelectWarningRef.current(props);
 
-              const isTor = props.event === 'Tornado Warning';
-              const headline = escapeHtml(props.headline || props.description || 'Active Warning');
-              const area = escapeHtml(props.areaDesc || '');
-              const event = escapeHtml(props.event || 'Warning');
-              new maplibregl.Popup({ closeButton: true, offset: 12 })
-                .setLngLat(e.lngLat)
-                .setHTML(
-                  `<div style="font-family:system-ui;padding:6px;max-width:260px;color:#0f172a;">
-                    <span style="background:${isTor ? '#dc2626' : '#d97706'};color:#fff;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:900;text-transform:uppercase;">
-                      ${event}
-                    </span>
-                    <div style="font-size:12px;font-weight:800;margin-top:6px;line-height:1.3;">
-                      ${headline}
-                    </div>
-                    <div style="font-size:10px;color:#64748b;margin-top:4px;">${area}</div>
-                  </div>`
-                )
-                .addTo(map);
-            });
-            map.on('mouseenter', WARNINGS_FILL_ID, () => {
-              map.getCanvas().style.cursor = 'pointer';
-            });
-            map.on('mouseleave', WARNINGS_FILL_ID, () => {
-              map.getCanvas().style.cursor = '';
-            });
-          }
-        }
-      })
-      .catch((err) => console.warn('[Warnings Notice]:', err));
-  }, [onSelectWarningFromMap]);
+        const category = String(props.category || 'warning');
+        const meta = ALERT_CATEGORY_META[category as keyof typeof ALERT_CATEGORY_META] || ALERT_CATEGORY_META.warning;
+        const headline = escapeHtml(props.headline || props.event || 'Active Alert');
+        const area = escapeHtml(props.areaDesc || '');
+        const event = escapeHtml(props.event || 'Weather Alert');
+        const severity = escapeHtml(props.severity || 'Unknown');
+        const expires = props.expires ? escapeHtml(formatAlertTime(String(props.expires))) : 'Unavailable';
+        const color = escapeHtml(String(props.color || '#dc2626'));
+
+        new maplibregl.Popup({ closeButton: true, offset: 12, maxWidth: '320px' })
+          .setLngLat(e.lngLat)
+          .setHTML(
+            `<div style="font-family:system-ui;padding:8px;max-width:300px;color:#0f172a;">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+                <span style="background:${color};color:#fff;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:900;text-transform:uppercase;">
+                  ${escapeHtml(meta.singular)}
+                </span>
+                <span style="font-size:10px;font-weight:700;color:#475569;">${severity}</span>
+              </div>
+              <div style="font-size:12px;font-weight:800;line-height:1.35;color:#0f172a;">${event}</div>
+              <div style="font-size:11px;color:#334155;margin-top:5px;line-height:1.35;">${headline}</div>
+              ${area ? `<div style="font-size:10px;color:#64748b;margin-top:6px;">${area}</div>` : ''}
+              <div style="font-size:10px;color:#64748b;margin-top:4px;">Expires: ${expires}</div>
+            </div>`
+          )
+          .addTo(map);
+      });
+      map.on('mouseenter', WARNINGS_FILL_ID, () => {
+        map.getCanvas().style.cursor = 'pointer';
+      });
+      map.on('mouseleave', WARNINGS_FILL_ID, () => {
+        map.getCanvas().style.cursor = '';
+      });
+    }
+  }, []);
 
   const removeWarningLayers = useCallback((map: MapLibreMap) => {
     [WARNINGS_LINE_INNER_ID, WARNINGS_LINE_OUTER_ID, WARNINGS_FILL_ID].forEach((layerId) => {
@@ -1241,6 +1272,26 @@ export function RadarMap({
     if (!showSpotterReports) document.querySelectorAll('.maplibregl-popup').forEach((p) => p.remove());
   }, [showSpotterReports]);
 
+  useEffect(() => {
+    showWarningsRef.current = showWarnings;
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    if (showWarnings) updateWarnings(map, alertFeaturesRef.current);
+    else removeWarningLayers(map);
+  }, [showWarnings, mapReady, updateWarnings, removeWarningLayers]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    if (showWarningsRef.current) updateWarnings(map, alertFeatures);
+  }, [alertFeatures, mapReady, updateWarnings]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !syncGroup) return;
+    return registerSyncedMap(syncGroup, map);
+  }, [syncGroup, mapReady]);
+
   // Mobile spotter pulse. Imperative MapLibre paint updates only: no React
   // state changes per frame, so the rest of the workstation is not re-rendered.
   useEffect(() => {
@@ -1300,6 +1351,14 @@ export function RadarMap({
   useEffect(() => {
     onSelectSiteRef.current = onSelectSite;
   }, [onSelectSite]);
+
+  useEffect(() => {
+    alertFeaturesRef.current = alertFeatures;
+  }, [alertFeatures]);
+
+  useEffect(() => {
+    onSelectWarningRef.current = onSelectWarningFromMap;
+  }, [onSelectWarningFromMap]);
 
   useEffect(() => {
     showRadarPillsRef.current = showRadarPills;
