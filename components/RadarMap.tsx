@@ -796,41 +796,90 @@ export function RadarMap({
           const isReport = props.kind === 'report';
           const when = props.timeIso
             ? new Date(props.timeIso).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
-            : 'time unknown';
+            : 'Unavailable';
           const age =
             typeof props.ageMinutes === 'number' && props.ageMinutes >= 0
-              ? `${props.ageMinutes} min ago`
-              : '';
+              ? `${props.ageMinutes} min`
+              : 'Unavailable';
           const safeUrl =
             typeof props.url === 'string' && /^https:\/\/(www\.)?spotternetwork\.org\//i.test(props.url)
               ? props.url
               : null;
 
-          const heading = isReport
-            ? `<div style="font-size:13px;font-weight:900;color:#fff;">${escapeHtml(props.reportType || 'Report')}</div>
-               <div style="font-size:11px;color:#e2e8f0;margin-top:2px;">${escapeHtml(props.name || 'Spotter')}</div>`
-            : `<div style="font-size:12px;font-weight:800;color:#e2e8f0;">Spotter position</div>
-               <div style="font-size:12px;font-weight:700;color:#fff;margin-top:2px;">${escapeHtml(props.name || 'Spotter')}</div>`;
+          const coords = e.features?.[0]?.geometry?.coordinates;
+          const lon = Array.isArray(coords) ? Number(coords[0]) : NaN;
+          const lat = Array.isArray(coords) ? Number(coords[1]) : NaN;
+          const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
+          const posText = hasCoords ? `${Math.abs(lat).toFixed(4)}°${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon).toFixed(4)}°${lon >= 0 ? 'E' : 'W'}` : 'Unavailable';
 
-          const location = props.location
-            ? `<div style="font-size:11px;color:#cbd5e1;margin-top:4px;">${escapeHtml(props.location)}</div>`
-            : '';
-          const notes = props.notes
-            ? `<div style="font-size:11px;color:#e2e8f0;margin-top:6px;line-height:1.45;">${escapeHtml(props.notes)}</div>`
-            : '';
+          // Distance from selected radar site (derived, real).
+          let distanceText = 'Unavailable';
+          if (hasCoords && Number.isFinite(site?.lat) && Number.isFinite(site?.lon)) {
+            const toRad = (d: number) => (d * Math.PI) / 180;
+            const dLat = toRad(lat - site.lat);
+            const dLon = toRad(lon - site.lon);
+            const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(site.lat)) * Math.cos(toRad(lat)) * Math.sin(dLon / 2) ** 2;
+            const km = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            distanceText = `${(km * 0.621371).toFixed(1)} mi`;
+          }
+
+          const name = escapeHtml(props.name || 'Spotter');
+          const spotterId = escapeHtml(props.id || 'Unavailable');
+          const callsign = escapeHtml(props.callsign || 'Unavailable');
+          const movement = escapeHtml(props.movement || 'Unavailable');
+          const experience = escapeHtml(props.experienceLevel || 'Unavailable');
+          const county = escapeHtml(props.county || 'Unavailable');
+          const lastReport = isReport ? escapeHtml(props.reportType || 'Report') : 'Position update';
+          const locationText = props.location ? escapeHtml(props.location) : 'Unavailable';
+          const notes = props.notes ? escapeHtml(props.notes) : '';
+
+          const row = (label: string, value: string) => `
+            <div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid rgba(255,255,255,0.08);font-size:11px;">
+              <span style="color:#94a3b8;font-weight:600;">${label}</span>
+              <span style="color:#e2e8f0;font-weight:600;text-align:right;word-break:break-word;">${value}</span>
+            </div>`;
+
           const link = safeUrl
-            ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:7px;font-size:11px;font-weight:700;color:#38bdf8;">View on Spotter Network ↗</a>`
+            ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:10px;font-size:11px;font-weight:700;color:#38bdf8;">View on Spotter Network ↗</a>`
             : '';
 
-          new maplibregl.Popup({ closeButton: true, offset: 12, maxWidth: '290px' })
+          new maplibregl.Popup({ closeButton: true, offset: 12, maxWidth: '340px', className: 'mv-spotter-popup' })
             .setLngLat(e.lngLat)
             .setHTML(
-              `<div style="font-family:system-ui;padding:8px;background:#0f172a;border-radius:10px;max-width:280px;">
-                ${heading}
-                ${location}
-                ${notes}
-                <div style="font-size:10px;color:#94a3b8;margin-top:7px;">${escapeHtml(when)}${age ? ` · ${escapeHtml(age)}` : ''}</div>
+              `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#080e18;color:#f8fafc;padding:14px;border-radius:12px;min-width:280px;max-width:330px;box-shadow:0 20px 35px -5px rgba(0,0,0,0.85);border:1px solid rgba(255,255,255,0.12);">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.08);">
+                  <div style="display:flex;align-items:center;gap:6px;">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 8px #ef4444;"></span>
+                    <span style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;color:#f87171;">SPOTTER NETWORK</span>
+                  </div>
+                  <span style="font-size:9px;font-weight:800;background:#1e293b;color:#cbd5e1;padding:2px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;">${movement !== 'Unavailable' ? movement : 'Unknown'}</span>
+                </div>
+
+                <div style="font-size:16px;font-weight:800;color:#ffffff;line-height:1.2;margin-bottom:2px;">${name}</div>
+                <div style="font-size:11px;color:#94a3b8;margin-bottom:8px;">${isReport ? 'Ground report' : 'Live spotter position'}</div>
+
+                <div style="background:#0f172a;border-radius:8px;padding:10px;margin:8px 0;border:1px solid rgba(255,255,255,0.08);">
+                  <div style="font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Location</div>
+                  <div style="display:flex;justify-content:space-between;gap:12px;font-size:11px;margin-bottom:4px;"><span style="color:#94a3b8;">Position</span><span style="color:#f1f5f9;font-weight:700;text-align:right;">${escapeHtml(posText)}</span></div>
+                  <div style="display:flex;justify-content:space-between;gap:12px;font-size:11px;"><span style="color:#94a3b8;">Reported</span><span style="color:#e2e8f0;text-align:right;">${escapeHtml(when)}</span></div>
+                </div>
+
+                <div style="margin-top:4px;">
+                  ${row('Spotter ID', spotterId)}
+                  ${row('Network', 'Spotter Network')}
+                  ${row('Callsign', callsign)}
+                  ${row('Experience Level', experience)}
+                  ${row('Last Report', escapeHtml(lastReport))}
+                  ${row('Age', escapeHtml(age))}
+                  ${row('Movement', movement)}
+                  ${row('Distance From Radar', escapeHtml(distanceText))}
+                  ${row('County', county)}
+                  ${props.location ? row('Location', locationText) : ''}
+                </div>
+
+                ${notes ? `<div style="margin-top:8px;padding:8px 9px;border-radius:8px;background:#111827;border:1px solid rgba(255,255,255,0.08);font-size:11px;color:#cbd5e1;line-height:1.45;"><span style="color:#94a3b8;font-weight:700;">Notes: </span>${notes}</div>` : ''}
                 ${link}
+                <div style="margin-top:8px;font-size:10px;color:#64748b;line-height:1.4;">Contact details (phone/email/web) are not shown because public feeds do not expose them.</div>
               </div>`
             )
             .addTo(map);
