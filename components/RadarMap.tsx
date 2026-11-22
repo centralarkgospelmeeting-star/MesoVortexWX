@@ -93,6 +93,7 @@ export interface RadarMapProps {
   onSelectSite?: (siteId: string) => void;
   onSelectWarningFromMap?: (w: any) => void;
   onCrossSectionComplete?: (pointA: [number, number], pointB: [number, number]) => void;
+  focusTarget?: { lat: number; lon: number; zoom?: number; ts?: number } | null;
   [key: string]: any;
 }
 
@@ -329,9 +330,12 @@ export function RadarMap({
   onSelectSite,
   onSelectWarningFromMap,
   onCrossSectionComplete,
+  focusTarget = null,
 }: RadarMapProps) {
-  const sweepEnabled = sweepAnimationProp ?? showSweepAnimation;
+  const [scanIngesting, setScanIngesting] = useState(false);
+  const [scanIngestDismissed, setScanIngestDismissed] = useState(false);
   const fastScanEnabled = fastScanProp ?? showFastScan;
+  const sweepEnabled = (sweepAnimationProp ?? showSweepAnimation) || fastScanEnabled;
   const flashEnabled = flashReflectivityProp ?? showFlashReflectivity;
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -350,7 +354,10 @@ export function RadarMap({
   const [modelStatus, setModelStatus] = useState<{ state: 'idle'|'ready'|'unavailable'; message?: string; source?: string; runTime?: string; forecastHour?: number; updateFrequency?: string; availability?: string }>({ state: 'idle' });
   const [tileErrorDismissed, setTileErrorDismissed] = useState(false);
   const [liveOnlyDismissed, setLiveOnlyDismissed] = useState(false);
+  const [flashDismissed, setFlashDismissed] = useState(false);
   useEffect(() => { if (liveOnly) setLiveOnlyDismissed(false); }, [liveOnly]);
+  useEffect(() => { if (flashEnabled) setFlashDismissed(false); }, [flashEnabled]);
+  useEffect(() => { if (!scanIngesting) return; setScanIngestDismissed(false); const t = setTimeout(() => setScanIngesting(false), 90000); return () => clearTimeout(t); }, [scanIngesting]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1156,6 +1163,7 @@ export function RadarMap({
 
       if (tileUrl !== prevTileUrlRef.current) {
         if (prevTileUrlRef.current && fastScanEnabled) {
+          setScanIngesting(true);
           onNewScan?.({
             latencySec: 0,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
@@ -1177,6 +1185,16 @@ export function RadarMap({
       const existingSource = map.getSource(RADAR_SOURCE_ID) as any;
       const beforeId = map.getLayer(WARNINGS_FILL_ID) ? WARNINGS_FILL_ID : undefined;
 
+      const isSatelliteMode = mode === 'Satellite';
+      const rasterPaint: any = {
+        'raster-opacity': radarOpacity,
+        'raster-fade-duration': 0,
+        'raster-saturation': isSatelliteMode ? 0.18 : 0,
+        'raster-contrast': isSatelliteMode ? 0.18 : 0,
+        'raster-brightness-min': isSatelliteMode ? 0.02 : 0,
+        'raster-brightness-max': isSatelliteMode ? 1 : 1,
+      };
+
       if (existingSource && typeof existingSource.setTiles === 'function') {
         // Switch raster tiles without rebuilding the map or tearing down layers.
         existingSource.setTiles([tileUrl]);
@@ -1186,15 +1204,16 @@ export function RadarMap({
               id: RADAR_LAYER_ID,
               type: 'raster',
               source: RADAR_SOURCE_ID,
-              paint: {
-                'raster-opacity': radarOpacity,
-                'raster-fade-duration': 0,
-              },
+              paint: rasterPaint,
             },
             beforeId
           );
         } else {
-          map.setPaintProperty(RADAR_LAYER_ID, 'raster-opacity', radarOpacity);
+          map.setPaintProperty(RADAR_LAYER_ID, 'raster-opacity', rasterPaint['raster-opacity']);
+          map.setPaintProperty(RADAR_LAYER_ID, 'raster-saturation', rasterPaint['raster-saturation']);
+          map.setPaintProperty(RADAR_LAYER_ID, 'raster-contrast', rasterPaint['raster-contrast']);
+          map.setPaintProperty(RADAR_LAYER_ID, 'raster-brightness-min', rasterPaint['raster-brightness-min']);
+          map.setPaintProperty(RADAR_LAYER_ID, 'raster-brightness-max', rasterPaint['raster-brightness-max']);
         }
       } else {
         if (map.getLayer(RADAR_LAYER_ID)) map.removeLayer(RADAR_LAYER_ID);
@@ -1212,10 +1231,7 @@ export function RadarMap({
             id: RADAR_LAYER_ID,
             type: 'raster',
             source: RADAR_SOURCE_ID,
-            paint: {
-              'raster-opacity': radarOpacity,
-              'raster-fade-duration': 0,
-            },
+            paint: rasterPaint,
           },
           beforeId
         );
@@ -1757,6 +1773,13 @@ export function RadarMap({
   }, [site.lon, site.lat, radarSite, mapReady, updateRangeRings]);
 
   useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !focusTarget) return;
+    if (typeof focusTarget.lat !== 'number' || typeof focusTarget.lon !== 'number') return;
+    map.flyTo({ center: [focusTarget.lon, focusTarget.lat], zoom: focusTarget.zoom ?? 9, duration: 1200 });
+  }, [focusTarget?.ts, focusTarget?.lat, focusTarget?.lon, focusTarget?.zoom, mapReady]);
+
+  useEffect(() => {
     onSelectSiteRef.current = onSelectSite;
   }, [onSelectSite]);
 
@@ -1796,8 +1819,16 @@ export function RadarMap({
 
     const geojson = makeSweepGeoJSON(site.lat, site.lon, sweepAngle);
     const existing = map.getSource(SWEEP_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+    const fillOpacity = scanIngesting ? 0.22 : 0.08;
+    const lineOpacity = scanIngesting ? 1 : 0.55;
+    const lineWidth = scanIngesting ? 2.5 : 1.5;
     if (existing) {
       existing.setData(geojson as any);
+      if (map.getLayer(SWEEP_FILL_ID)) map.setPaintProperty(SWEEP_FILL_ID, 'fill-opacity', fillOpacity);
+      if (map.getLayer(SWEEP_LINE_ID)) {
+        map.setPaintProperty(SWEEP_LINE_ID, 'line-opacity', lineOpacity);
+        map.setPaintProperty(SWEEP_LINE_ID, 'line-width', lineWidth);
+      }
     } else {
       map.addSource(SWEEP_SOURCE_ID, { type: 'geojson', data: geojson as any });
       map.addLayer({
@@ -1807,7 +1838,7 @@ export function RadarMap({
         filter: ['==', '$type', 'Polygon'],
         paint: {
           'fill-color': '#22c55e',
-          'fill-opacity': 0.12,
+          'fill-opacity': fillOpacity,
         },
       });
       map.addLayer({
@@ -1817,8 +1848,8 @@ export function RadarMap({
         filter: ['==', '$type', 'LineString'],
         paint: {
           'line-color': '#4ade80',
-          'line-width': 2,
-          'line-opacity': 0.9,
+          'line-width': lineWidth,
+          'line-opacity': lineOpacity,
         },
       });
     }
@@ -1826,7 +1857,7 @@ export function RadarMap({
     return () => {
       // Data updates every tick; layers persist across ticks for smooth animation.
     };
-  }, [sweepEnabled, mapReady, sweepAngle, site.lat, site.lon]);
+  }, [sweepEnabled, mapReady, sweepAngle, site.lat, site.lon, scanIngesting]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1860,12 +1891,11 @@ export function RadarMap({
       <div ref={containerRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
       <canvas ref={sweepCanvasRef} className="radar-sweep-canvas" />
 
-      {flashEnabled && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-full border border-purple-500/80 bg-slate-950/90 px-4 py-1.5 text-xs font-mono font-black text-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.4)] backdrop-blur-md animate-pulse">
-          <span className="h-2 w-2 rounded-full bg-purple-400 animate-ping" />
+      {flashEnabled && !flashDismissed && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-full border border-purple-500/80 bg-slate-950/90 px-4 py-1.5 text-xs font-mono font-black text-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.4)] backdrop-blur-md">
+          <span className="h-2 w-2 rounded-full bg-purple-400 animate-pulse" />
           <span>FLASH REFLECTIVITY (VISUAL)</span>
-          <span className="text-slate-500">|</span>
-          <span className="text-yellow-400 font-bold">{flashRange ? `${flashRange[0]}–${flashRange[1]}+ dBZ` : '60+ dBZ'}</span>
+          <button type="button" onClick={() => setFlashDismissed(true)} className="ml-1 text-slate-400 hover:text-white" aria-label="Dismiss flash indicator">×</button>
         </div>
       )}
 
@@ -1883,6 +1913,15 @@ export function RadarMap({
           <span>⚠️</span>
           <span>{tileError}</span>
           <button type="button" onClick={() => setTileErrorDismissed(true)} className="ml-1 text-slate-400 hover:text-white" aria-label="Dismiss error">×</button>
+        </div>
+      )}
+
+      {fastScanEnabled && scanIngesting && !scanIngestDismissed && !tileError && (
+        <div className="absolute top-28 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-xl border border-emerald-500/60 bg-slate-950/95 px-4 py-2 font-mono text-xs font-bold text-emerald-300 shadow-2xl backdrop-blur-md">
+          <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span>SCAN INGEST FRONTIER</span>
+          <span className="font-normal text-slate-400">New scan detected; sweep indicates ingest window</span>
+          <button type="button" onClick={() => setScanIngestDismissed(true)} className="ml-1 text-slate-400 hover:text-white" aria-label="Dismiss scan ingest">×</button>
         </div>
       )}
     </div>

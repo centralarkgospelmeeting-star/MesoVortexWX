@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 export type ProductKey =
   | 'ref'
@@ -19,7 +19,10 @@ export type ProductKey =
   | 'hhc'
   | 'qpe';
 
+export type ModeTab = 'Radar' | '3D Radar' | 'Composite' | 'Satellite' | 'Models' | 'Outlooks';
+
 export type Props = {
+  mode?: ModeTab | string;
   siteId: string;
   siteName: string;
   product: string;
@@ -28,12 +31,11 @@ export type Props = {
   onSelectProduct: (p: any) => void;
   onSelectTilt: (t: string) => void;
   onTogglePlay: () => void;
+  onClose?: () => void;
 
-  // Max Reflectivity Window
   maxRefWindow?: number;
   onSelectMaxRefWindow?: (w: number) => void;
 
-  // Display Controls (All Optional)
   gateFilter?: number;
   onChangeGateFilter?: (val: number) => void;
   opacity?: number;
@@ -43,7 +45,6 @@ export type Props = {
   colorTable?: string;
   onChangeColorTable?: (table: string) => void;
 
-  // Map Overlays (All Optional)
   showLightning?: boolean;
   onToggleLightning?: () => void;
   showStormTracks?: boolean;
@@ -71,51 +72,67 @@ export type Props = {
   showFlashReflectivity?: boolean;
   onToggleFlashReflectivity?: () => void;
 
-  // Advanced Actions (All Optional)
-  onOpenComparison?: () => void;
-  onOpenCrossSection?: () => void;
-  onOpenBeamViz?: () => void;
-  onOpen3DAnalysis?: () => void;
+  // Satellite
+  satelliteBird?: string;
+  satelliteProductId?: string;
+  onSelectSatelliteBird?: (bird: string) => void;
+  onSelectSatelliteProduct?: (id: string) => void;
+  satelliteProducts?: Array<{ id: string; label: string; available: boolean }>;
+
+  // Models
+  modelId?: string;
+  modelField?: string;
+  modelOptions?: Array<{ id: string; label: string; status: string }>;
+  modelFieldOptions?: Array<{ id: string; label: string; status: string }>;
+  onSelectModel?: (id: string) => void;
+  onSelectModelField?: (id: string) => void;
+
+  // Outlooks/Composite
+  spcDay?: string;
+  onSelectSpcDay?: (day: string) => void;
+  compositeProduct?: string;
+  onSelectCompositeProduct?: (id: string) => void;
+
   [key: string]: any;
 };
 
 const PRODUCT_GROUPS: {
   category: string;
-  items: { key: string; short: string; label: string; iconBg: string }[];
+  items: { key: string; short: string; label: string; iconBg: string; available?: boolean; reason?: string }[];
 }[] = [
   {
     category: 'Reflectivity & Swaths',
     items: [
-      { key: 'ref', short: 'REF', label: 'Base Reflectivity', iconBg: 'from-blue-600 via-green-500 to-red-600' },
-      { key: 'max_ref', short: 'MAX', label: 'Max Reflectivity Swath', iconBg: 'from-amber-400 via-red-600 to-purple-700' },
-      { key: 'ref_x', short: 'RFX', label: 'Reflectivity X (Lerp)', iconBg: 'from-cyan-500 via-yellow-400 to-rose-600' },
+      { key: 'ref', short: 'REF', label: 'Base Reflectivity', iconBg: 'from-blue-600 via-green-500 to-red-600', available: true },
+      { key: 'max_ref', short: 'MAX', label: 'Max Reflectivity Swath', iconBg: 'from-amber-400 via-red-600 to-purple-700', available: true },
+      { key: 'ref_x', short: 'RFX', label: 'Reflectivity X (Lerp)', iconBg: 'from-cyan-500 via-yellow-400 to-rose-600', available: true },
     ],
   },
   {
     category: 'Velocity & Moments',
     items: [
-      { key: 'vel', short: 'VEL', label: 'Base Velocity', iconBg: 'from-emerald-500 via-slate-800 to-red-600' },
-      { key: 'srvel', short: 'SRV', label: 'Storm-Relative Velocity', iconBg: 'from-teal-500 via-slate-900 to-rose-600' },
-      { key: 'norm_vel', short: 'NRV', label: 'Normalized Velocity', iconBg: 'from-cyan-600 via-slate-900 to-amber-500' },
-      { key: 'sw', short: 'SW', label: 'Spectrum Width', iconBg: 'from-slate-600 via-blue-500 to-emerald-400' },
+      { key: 'vel', short: 'VEL', label: 'Base Velocity', iconBg: 'from-emerald-500 via-slate-800 to-red-600', available: true },
+      { key: 'srvel', short: 'SRV', label: 'Storm-Relative Velocity', iconBg: 'from-teal-500 via-slate-900 to-rose-600', available: true },
+      { key: 'norm_vel', short: 'NRV', label: 'Normalized Rotation/Shear', iconBg: 'from-cyan-600 via-slate-900 to-amber-500', available: false, reason: 'DATA UNAVAILABLE - no verified normalized rotation/shear source; current source duplicates velocity' },
+      { key: 'sw', short: 'SW', label: 'Spectrum Width', iconBg: 'from-slate-600 via-blue-500 to-emerald-400', available: false, reason: 'DATA UNAVAILABLE - IEM ridge N0W not verified/rendering for current source' },
     ],
   },
   {
     category: 'Dual-Pol Moments',
     items: [
-      { key: 'cc', short: 'CC', label: 'Correlation Coefficient', iconBg: 'from-rose-500 via-purple-600 to-blue-500' },
-      { key: 'min_cc', short: 'MCC', label: 'Min CC (TDS Focus)', iconBg: 'from-purple-800 via-rose-600 to-blue-400' },
-      { key: 'zdr', short: 'ZDR', label: 'Differential Reflectivity', iconBg: 'from-purple-500 via-amber-400 to-cyan-400' },
-      { key: 'kdp', short: 'KDP', label: 'Specific Diff Phase', iconBg: 'from-cyan-500 via-blue-600 to-teal-400' },
+      { key: 'cc', short: 'CC', label: 'Correlation Coefficient', iconBg: 'from-rose-500 via-purple-600 to-blue-500', available: false, reason: 'DATA UNAVAILABLE - IEM ridge N0C not verified/rendering for current source' },
+      { key: 'min_cc', short: 'MCC', label: 'Min CC (TDS Focus)', iconBg: 'from-purple-800 via-rose-600 to-blue-400', available: false, reason: 'DATA UNAVAILABLE - no verified real source' },
+      { key: 'zdr', short: 'ZDR', label: 'Differential Reflectivity', iconBg: 'from-purple-500 via-amber-400 to-cyan-400', available: false, reason: 'DATA UNAVAILABLE - IEM ridge N0X not verified/rendering for current source' },
+      { key: 'kdp', short: 'KDP', label: 'Specific Diff Phase', iconBg: 'from-cyan-500 via-blue-600 to-teal-400', available: false, reason: 'DATA UNAVAILABLE - IEM ridge N0K not verified/rendering for current source' },
     ],
   },
   {
     category: 'Derived & Vertical Structure',
     items: [
-      { key: 'tops', short: 'TOP', label: 'Digital Echo Tops', iconBg: 'from-indigo-600 via-purple-500 to-pink-500' },
-      { key: 'vil', short: 'VIL', label: 'Digital VIL (Hail Mass)', iconBg: 'from-amber-500 via-red-600 to-rose-700' },
-      { key: 'hhc', short: 'HHC', label: 'Hydrometeor Class', iconBg: 'from-emerald-500 via-yellow-400 to-blue-600' },
-      { key: 'qpe', short: 'QPE', label: '1-Hour Precipitation (DPR)', iconBg: 'from-blue-500 via-cyan-400 to-emerald-400' },
+      { key: 'tops', short: 'TOP', label: 'Digital Echo Tops', iconBg: 'from-indigo-600 via-purple-500 to-pink-500', available: true },
+      { key: 'vil', short: 'VIL', label: 'Digital VIL (Hail Mass)', iconBg: 'from-amber-500 via-red-600 to-rose-700', available: true },
+      { key: 'hhc', short: 'HHC', label: 'Hydrometeor Class', iconBg: 'from-emerald-500 via-yellow-400 to-blue-600', available: false, reason: 'DATA UNAVAILABLE - no verified real IEM ridge tile endpoint for HHC' },
+      { key: 'qpe', short: 'QPE', label: '1-Hour Precipitation (DPR)', iconBg: 'from-blue-500 via-cyan-400 to-emerald-400', available: false, reason: 'DATA UNAVAILABLE - no verified real IEM ridge tile endpoint for DPR/QPE' },
     ],
   },
 ];
@@ -124,367 +141,197 @@ const TILTS = ['0.5', '0.9', '1.3', '1.8', '2.4', '3.1'];
 const MAX_REF_WINDOWS = [5, 10, 20, 30];
 
 export function WeatherWiseRadarCard({
+  mode = 'Radar',
   siteId,
+  siteName,
   product,
   tilt,
   isPlaying,
   onSelectProduct,
   onSelectTilt,
   onTogglePlay,
+  onClose,
   maxRefWindow = 10,
   onSelectMaxRefWindow,
-  showWarnings = true,
-  onToggleWarnings,
-  showMCD = true,
-  onToggleMCD,
-  showSpotters = false,
-  onToggleSpotters,
-  showSpotterReports = false,
-  onToggleSpotterReports,
+  colorTable = 'nws',
+  onChangeColorTable,
   showSweepAnimation = true,
   onToggleSweepAnimation,
   showFastScan = false,
   onToggleFastScan,
-  showFlashReflectivity = false,
-  onToggleFlashReflectivity,
-  showLightning = false,
-  onToggleLightning,
+  satelliteBird,
+  satelliteProductId,
+  onSelectSatelliteBird,
+  onSelectSatelliteProduct,
+  satelliteProducts = [],
+  modelId,
+  modelField,
+  modelOptions = [],
+  modelFieldOptions = [],
+  onSelectModel,
+  onSelectModelField,
+  spcDay = 'Day 1',
+  onSelectSpcDay,
+  compositeProduct = 'ref',
+  onSelectCompositeProduct,
 }: Props) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const [tiltMenuOpen, setTiltMenuOpen] = useState(false);
+  const isRadarMode = mode === 'Radar' || mode === '3D Radar';
+  const isComposite = mode === 'Composite';
+  const isSatellite = mode === 'Satellite';
+  const isModels = mode === 'Models';
+  const isOutlooks = mode === 'Outlooks';
 
-  let activeLabel = 'Base Reflectivity';
-  for (const group of PRODUCT_GROUPS) {
-    const item = group.items.find((i) => i.key === product);
-    if (item) {
-      activeLabel = item.label;
-      break;
+  const activeLabel = useMemo(() => {
+    for (const group of PRODUCT_GROUPS) {
+      const item = group.items.find((i) => i.key === product);
+      if (item) return item.label;
     }
-  }
+    return product;
+  }, [product]);
 
   const isMaxRef = product === 'max_ref';
 
   return (
-    <div className="absolute bottom-5 left-5 z-30 w-[360px] max-h-[82vh] rounded-2xl bg-white/95 text-slate-800 shadow-2xl backdrop-blur-md border border-slate-200/90 font-sans select-none overflow-hidden transition-all flex flex-col">
-      {/* Top Header Row */}
-      <div className="flex items-center justify-between p-3 border-b border-slate-200/80 bg-slate-50/80">
-        <div>
-          <span className="text-[10px] font-black uppercase tracking-wider text-blue-600">MESOVORTEX WX</span>
-          <div className="flex items-center gap-1.5 font-extrabold text-xs text-slate-900 leading-tight">
-            <span>{siteId}</span>
-            <span className="text-slate-400">·</span>
-            <span className="truncate max-w-[170px]">{activeLabel}</span>
+    <div className="pointer-events-auto absolute bottom-3 left-1/2 z-30 w-[min(72rem,calc(100vw-1.5rem))] -translate-x-1/2 rounded-2xl border border-slate-700/80 bg-slate-950/92 text-slate-100 shadow-2xl backdrop-blur-md font-sans select-none overflow-hidden">
+      <div className="flex items-center gap-2 border-b border-slate-800 px-3 py-2">
+        <div className="min-w-0">
+          <div className="text-[10px] font-black uppercase tracking-wider text-cyan-400">MesoVortexWX • {mode}</div>
+          <div className="truncate text-xs font-bold text-slate-200">
+            {isRadarMode ? `${siteId} · ${activeLabel}` : isSatellite ? 'Satellite Controls' : isModels ? 'Model Controls' : isComposite ? 'Composite Controls' : 'Outlook Controls'}
           </div>
         </div>
-
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setExpanded((v) => !v)}
-            className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition cursor-pointer text-xs"
-            title="Expand / Collapse"
-          >
-            {expanded ? '▾' : '▴'}
-          </button>
-          <button
-            onClick={() => setTiltMenuOpen((v) => !v)}
-            className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition cursor-pointer text-xs"
-            title="Elevation Tilts"
-          >
-            🔲
-          </button>
-          <button
-            onClick={onTogglePlay}
-            className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition font-bold cursor-pointer text-xs"
-            title={isPlaying ? 'Pause' : 'Play'}
-          >
-            {isPlaying ? '❚❚' : '▶'}
-          </button>
+        <div className="ml-auto flex items-center gap-1.5">
+          {isRadarMode && (
+            <>
+              <div className="relative">
+                <button type="button" onClick={() => setTiltMenuOpen((v) => !v)} className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] font-bold hover:bg-slate-800">Tilt {tilt}°</button>
+                {tiltMenuOpen && (
+                  <div className="absolute right-0 bottom-full mb-1 w-24 rounded-xl bg-slate-950 shadow-2xl border border-slate-700 p-1 space-y-1 z-40">
+                    {TILTS.map((t) => (
+                      <button key={t} type="button" onClick={() => { onSelectTilt(t); setTiltMenuOpen(false); }} className={`w-full rounded-lg py-1 text-center text-xs font-bold transition ${tilt === t ? 'bg-cyan-600 text-white' : 'text-slate-200 hover:bg-slate-800'}`}>{t}°</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <select value={colorTable} onChange={(e) => onChangeColorTable?.(e.target.value)} className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] font-bold text-slate-200 outline-none">
+                <option value="nws">NWS</option>
+                <option value="br">BR</option>
+                <option value="vel">VEL</option>
+                <option value="cc">CC</option>
+              </select>
+            </>
+          )}
+          <button type="button" onClick={onTogglePlay} className="rounded-lg bg-cyan-600 px-2.5 py-1 text-[11px] font-black text-white hover:bg-cyan-500">{isPlaying ? 'Pause' : 'Play'}</button>
+          <button type="button" onClick={() => setExpanded((v) => !v)} className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] font-bold hover:bg-slate-800">{expanded ? 'Less' : 'More'}</button>
+          {onClose && <button type="button" onClick={onClose} className="rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Close control bar">✕</button>}
         </div>
       </div>
 
-      {expanded && (
-        <div className="flex-1 overflow-y-auto p-3.5 space-y-3.5 text-xs">
-          {/* Metadata & Tilt Row */}
-          <div className="flex items-center justify-between pt-0.5">
-            <div className="text-[11px] text-slate-500 font-medium">
-              <div>VCP: 212 Convective ⓘ</div>
-              <div className="text-[10px] text-emerald-600 font-bold flex items-center gap-1 mt-0.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Live Feed Active
-              </div>
-            </div>
-
-            <div className="relative">
-              <button
-                onClick={() => setTiltMenuOpen((v) => !v)}
-                className="flex items-center gap-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 px-3 py-1 font-bold text-slate-700 border border-slate-300 transition cursor-pointer"
-              >
-                <span>Tilt: {tilt}°</span>
-                <span className="text-[10px]">▾</span>
-              </button>
-
-              {tiltMenuOpen && (
-                <div className="absolute right-0 bottom-full mb-1 w-24 rounded-xl bg-white shadow-2xl border border-slate-200 p-1 space-y-1 z-40">
-                  {TILTS.map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => {
-                        onSelectTilt(t);
-                        setTiltMenuOpen(false);
-                      }}
-                      className={`w-full rounded-lg py-1 text-center text-xs font-bold transition cursor-pointer ${
-                        tilt === t ? 'bg-blue-600 text-white' : 'text-slate-700 hover:bg-slate-100'
-                      }`}
-                    >
-                      {t}°
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Rolling Window Selector (Only active on Max Reflectivity) */}
-          {isMaxRef && onSelectMaxRefWindow && (
-            <div className="rounded-xl border border-purple-200 bg-purple-50/80 p-2.5 space-y-1.5 animate-fade-in">
-              <div className="flex items-center justify-between text-[11px] font-bold text-purple-900">
-                <span>Maximum Composite Window:</span>
-                <span className="font-mono text-purple-700">{maxRefWindow} Scans</span>
-              </div>
-              <div className="grid grid-cols-4 gap-1">
-                {MAX_REF_WINDOWS.map((w) => (
+      <div className="px-3 py-2">
+        {isRadarMode && (
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-1.5">
+              {PRODUCT_GROUPS.flatMap(g => g.items).map((item) => {
+                const active = product === item.key;
+                const unavailable = item.available === false;
+                return (
                   <button
-                    key={w}
-                    onClick={() => onSelectMaxRefWindow(w)}
-                    className={`rounded-lg py-1 text-[11px] font-bold transition cursor-pointer ${
-                      maxRefWindow === w
-                        ? 'bg-purple-600 text-white shadow-sm'
-                        : 'bg-white text-purple-800 border border-purple-200 hover:bg-purple-100'
-                    }`}
+                    key={item.key}
+                    type="button"
+                    onClick={() => { if (!unavailable) onSelectProduct(item.key); }}
+                    title={unavailable ? `${item.label} — ${item.reason || 'DATA UNAVAILABLE'}` : item.label}
+                    className={`rounded-lg border px-2 py-1 text-[10px] font-bold transition ${active ? 'border-cyan-500 bg-cyan-500/15 text-cyan-200' : unavailable ? 'border-amber-900/40 bg-slate-900/40 text-slate-500 cursor-not-allowed' : 'border-slate-700 bg-slate-900/70 text-slate-300 hover:bg-slate-800'}`}
                   >
-                    {w} Scans
+                    {unavailable ? '⛔ ' : ''}{item.short}
                   </button>
-                ))}
-              </div>
+                );
+              })}
             </div>
-          )}
 
-          {/* Product Grid */}
-          <div className="space-y-3">
-            {PRODUCT_GROUPS.map((group) => (
-              <div key={group.category} className="space-y-1">
-                <span className="text-[9px] font-bold uppercase text-slate-400">{group.category}</span>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {group.items.map((item) => {
-                    const active = product === item.key;
-                    return (
-                      <button
-                        key={item.key}
-                        onClick={() => onSelectProduct(item.key)}
-                        title={item.label}
-                        className={`flex flex-col items-center p-1.5 rounded-xl border transition cursor-pointer ${
-                          active
-                            ? 'border-blue-600 bg-blue-50/80 shadow-sm ring-1 ring-blue-500'
-                            : 'border-slate-100 bg-slate-50/60 hover:bg-slate-100'
-                        }`}
-                      >
-                        <div
-                          className={`h-7 w-7 rounded-lg bg-gradient-to-br ${item.iconBg} shadow-inner border border-white/60 mb-0.5 flex items-center justify-center text-[9px] font-black text-white`}
-                        >
-                          {item.short}
-                        </div>
-                        <span className={`text-[8.5px] font-bold leading-none truncate w-full text-center ${active ? 'text-blue-700' : 'text-slate-600'}`}>
-                          {item.short}
-                        </span>
-                      </button>
-                    );
-                  })}
+            {expanded && (
+              <div className="space-y-2 border-t border-slate-800 pt-2">
+                {isMaxRef && onSelectMaxRefWindow && (
+                  <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                    <span className="text-slate-400 font-bold">Max window:</span>
+                    {MAX_REF_WINDOWS.map((w) => (
+                      <button key={w} type="button" onClick={() => onSelectMaxRefWindow(w)} className={`rounded-md px-2 py-0.5 font-bold ${maxRefWindow===w ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>{w}</button>
+                    ))}
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-1.5 text-[11px]">
+                  <button type="button" onClick={onToggleSweepAnimation} className={`rounded-md px-2 py-1 font-bold border ${showSweepAnimation ? 'border-green-500/60 bg-green-500/10 text-green-300' : 'border-slate-700 bg-slate-900 text-slate-400'}`}>Sweep {showSweepAnimation?'ON':'OFF'}</button>
+                  <button type="button" onClick={onToggleFastScan} className={`rounded-md px-2 py-1 font-bold border ${showFastScan ? 'border-amber-500/60 bg-amber-500/10 text-amber-300' : 'border-slate-700 bg-slate-900 text-slate-400'}`}>Fast Scan {showFastScan?'ON':'OFF'}</button>
+                  <span className="text-[10px] text-slate-500 self-center">Fast Scan is a visual ingest indicator; real scan availability depends on source.</span>
                 </div>
+                <div className="text-[10px] text-slate-500">Map overlays moved to sidebar/drawer panels. Weather data remains primary.</div>
               </div>
-            ))}
+            )}
           </div>
+        )}
 
-          {/* Real-data map overlays */}
-          <div className="space-y-1.5 border-t border-slate-200/80 pt-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[9px] font-bold uppercase text-slate-400">Map Overlays</span>
-              <span className="text-[9px] text-slate-400">Real feeds only</span>
+        {isSatellite && (
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Satellite</span>
+              {['goes-east','goes-west'].map((b) => (
+                <button key={b} type="button" onClick={() => onSelectSatelliteBird?.(b)} className={`rounded-lg px-2.5 py-1 text-[11px] font-bold border ${satelliteBird===b ? 'border-cyan-500 bg-cyan-500/15 text-cyan-200' : 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'}`}>{b === 'goes-east' ? 'GOES-East' : 'GOES-West'}</button>
+              ))}
             </div>
-
-            <button
-              onClick={onToggleWarnings}
-              className={`flex w-full items-center justify-between rounded-xl border px-2.5 py-1.5 transition cursor-pointer ${
-                showWarnings
-                  ? 'border-amber-500 bg-amber-50 text-amber-900'
-                  : 'border-slate-200 bg-slate-50/60 text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <span className="flex items-center gap-1.5 text-[11px] font-bold">
-                <span className="h-2 w-2 rounded-full bg-amber-500" />
-                Warning Polygons
-              </span>
-              <span
-                className={`rounded-md px-1.5 py-0.5 text-[9px] font-black ${
-                  showWarnings ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-600'
-                }`}
-              >
-                {showWarnings ? 'ON' : 'OFF'}
-              </span>
-            </button>
-
-            <button
-              onClick={onToggleMCD}
-              className={`flex w-full items-center justify-between rounded-xl border px-2.5 py-1.5 transition cursor-pointer ${
-                showMCD
-                  ? 'border-purple-600 bg-purple-50 text-purple-900'
-                  : 'border-slate-200 bg-slate-50/60 text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <span className="flex items-center gap-1.5 text-[11px] font-bold">
-                <span className="h-2 w-2 rounded-full bg-purple-500" />
-                SPC Mesoscale Discussions
-              </span>
-              <span
-                className={`rounded-md px-1.5 py-0.5 text-[9px] font-black ${
-                  showMCD ? 'bg-purple-600 text-white' : 'bg-slate-200 text-slate-600'
-                }`}
-              >
-                {showMCD ? 'ON' : 'OFF'}
-              </span>
-            </button>
-
-            <button
-              onClick={onToggleSpotters}
-              className={`flex w-full items-center justify-between rounded-xl border px-2.5 py-1.5 transition cursor-pointer ${
-                showSpotters
-                  ? 'border-cyan-600 bg-cyan-50 text-cyan-800'
-                  : 'border-slate-200 bg-slate-50/60 text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <span className="flex items-center gap-1.5 text-[11px] font-bold">
-                <span className="h-2 w-2 rounded-full bg-red-500" />
-                Spotters
-              </span>
-              <span
-                className={`rounded-md px-1.5 py-0.5 text-[9px] font-black ${
-                  showSpotters ? 'bg-cyan-600 text-white' : 'bg-slate-200 text-slate-600'
-                }`}
-              >
-                {showSpotters ? 'ON' : 'OFF'}
-              </span>
-            </button>
-
-            <button
-              onClick={onToggleSpotterReports}
-              className={`flex w-full items-center justify-between rounded-xl border px-2.5 py-1.5 transition cursor-pointer ${
-                showSpotterReports
-                  ? 'border-orange-600 bg-orange-50 text-orange-900'
-                  : 'border-slate-200 bg-slate-50/60 text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <span className="flex items-center gap-1.5 text-[11px] font-bold">
-                <span className="h-2 w-2 rounded-full bg-orange-500" />
-                Spotter Reports
-              </span>
-              <span
-                className={`rounded-md px-1.5 py-0.5 text-[9px] font-black ${
-                  showSpotterReports ? 'bg-orange-600 text-white' : 'bg-slate-200 text-slate-600'
-                }`}
-              >
-                {showSpotterReports ? 'ON' : 'OFF'}
-              </span>
-            </button>
-
-            <button
-              onClick={onToggleSweepAnimation}
-              className={`flex w-full items-center justify-between rounded-xl border px-2.5 py-1.5 transition cursor-pointer ${
-                showSweepAnimation
-                  ? 'border-green-600 bg-green-50 text-green-900'
-                  : 'border-slate-200 bg-slate-50/60 text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <span className="flex items-center gap-1.5 text-[11px] font-bold">
-                <span className="h-2 w-2 rounded-full bg-green-500" />
-                Radar Sweep Animation
-              </span>
-              <span
-                className={`rounded-md px-1.5 py-0.5 text-[9px] font-black ${
-                  showSweepAnimation ? 'bg-green-600 text-white' : 'bg-slate-200 text-slate-600'
-                }`}
-              >
-                {showSweepAnimation ? 'ON' : 'OFF'}
-              </span>
-            </button>
-
-            <button
-              onClick={onToggleFastScan}
-              className={`flex w-full items-center justify-between rounded-xl border px-2.5 py-1.5 transition cursor-pointer ${
-                showFastScan
-                  ? 'border-amber-600 bg-amber-50 text-amber-900'
-                  : 'border-slate-200 bg-slate-50/60 text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <span className="flex items-center gap-1.5 text-[11px] font-bold">
-                <span className="h-2 w-2 rounded-full bg-amber-500" />
-                FastScan (Ultra-Low Latency)
-              </span>
-              <span
-                className={`rounded-md px-1.5 py-0.5 text-[9px] font-black ${
-                  showFastScan ? 'bg-amber-600 text-white' : 'bg-slate-200 text-slate-600'
-                }`}
-              >
-                {showFastScan ? 'ON' : 'OFF'}
-              </span>
-            </button>
-
-            <button
-              onClick={onToggleFlashReflectivity}
-              className={`flex w-full items-center justify-between rounded-xl border px-2.5 py-1.5 transition cursor-pointer ${
-                showFlashReflectivity
-                  ? 'border-pink-600 bg-pink-50 text-pink-900'
-                  : 'border-slate-200 bg-slate-50/60 text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <span className="flex items-center gap-1.5 text-[11px] font-bold">
-                <span className="h-2 w-2 rounded-full bg-pink-500" />
-                Flash Reflectivity Range
-              </span>
-              <span
-                className={`rounded-md px-1.5 py-0.5 text-[9px] font-black ${
-                  showFlashReflectivity ? 'bg-pink-600 text-white' : 'bg-slate-200 text-slate-600'
-                }`}
-              >
-                {showFlashReflectivity ? 'ON' : 'OFF'}
-              </span>
-            </button>
-
-            <button
-              onClick={onToggleLightning}
-              className={`flex w-full items-center justify-between rounded-xl border px-2.5 py-1.5 transition cursor-pointer ${
-                showLightning
-                  ? 'border-yellow-500 bg-yellow-50 text-yellow-900'
-                  : 'border-slate-200 bg-slate-50/60 text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <span className="flex items-center gap-1.5 text-[11px] font-bold">
-                <span className="h-2 w-2 rounded-full bg-yellow-400" />
-                Synchronized Lightning
-              </span>
-              <span
-                className={`rounded-md px-1.5 py-0.5 text-[9px] font-black ${
-                  showLightning ? 'bg-yellow-500 text-white' : 'bg-slate-200 text-slate-600'
-                }`}
-              >
-                {showLightning ? 'ON' : 'OFF'}
-              </span>
-            </button>
-
-            <p className="text-[9px] leading-snug text-slate-400">
-              Warnings/MCDs: real NWS/SPC feeds. Spotters: real Spotter Network feed. Sweep: visual animation. FastScan/Lightning show explicit unavailable state until verified real sources are configured.
-            </p>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Product</span>
+              {(satelliteProducts.length ? satelliteProducts : [
+                {id:'visible',label:'Visible',available:true},{id:'ir',label:'Infrared',available:true},{id:'wv-mid',label:'Water Vapor',available:true}
+              ]).filter(p=>['visible','ir','wv-mid','wv-upper','wv-lower','ch13','ch02','ch09'].includes(p.id)).slice(0,5).map((p) => (
+                <button key={p.id} type="button" onClick={() => p.available && onSelectSatelliteProduct?.(p.id)} className={`rounded-lg px-2.5 py-1 text-[11px] font-bold border ${satelliteProductId===p.id ? 'border-cyan-500 bg-cyan-500/15 text-cyan-200' : p.available ? 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800' : 'border-amber-700/50 bg-slate-900 text-amber-400/70 cursor-not-allowed'}`} title={p.available ? p.label : `${p.label} (DATA UNAVAILABLE)`}>{!p.available ? '⛔ ' : ''}{p.label}</button>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {isModels && (
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Model</span>
+              <select value={modelId} onChange={(e) => onSelectModel?.(e.target.value)} className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-bold text-slate-200 outline-none min-w-[14rem]">
+                {modelOptions.map((m) => <option key={m.id} value={m.id}>{m.status==='READY_NOW'?'':'⛔ '}{m.label}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Field</span>
+              {modelFieldOptions.map((f) => (
+                <button key={f.id} type="button" onClick={() => onSelectModelField?.(f.id)} className={`rounded-lg px-2.5 py-1 text-[11px] font-bold border ${modelField===f.id ? 'border-cyan-500 bg-cyan-500/15 text-cyan-200' : f.status==='READY_NOW' ? 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800' : 'border-amber-700/40 bg-slate-900 text-amber-400/70'}`}>
+                  {f.status!=='READY_NOW' ? '⛔ ' : ''}{f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {isComposite && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Composite</span>
+            {[
+              {id:'ref', label:'Regional/National Reflectivity'},
+              {id:'max_ref', label:'Max Reflectivity Swath'},
+            ].map((p) => (
+              <button key={p.id} type="button" onClick={() => onSelectCompositeProduct?.(p.id)} className={`rounded-lg px-2.5 py-1 text-[11px] font-bold border ${(compositeProduct||product)===p.id ? 'border-cyan-500 bg-cyan-500/15 text-cyan-200' : 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'}`}>{p.label}</button>
+            ))}
+            <span className="text-[10px] text-slate-500">Composite uses real IEM/NEXRAD mosaic where available.</span>
+          </div>
+        )}
+
+        {isOutlooks && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">SPC Outlook</span>
+            {['Day 1','Day 2','Day 3'].map((d) => (
+              <button key={d} type="button" onClick={() => onSelectSpcDay?.(d)} className={`rounded-lg px-2.5 py-1 text-[11px] font-bold border ${spcDay===d ? 'border-cyan-500 bg-cyan-500/15 text-cyan-200' : 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'}`}>{d}</button>
+            ))}
+            <span className="text-[10px] text-slate-500">Categorical outlook displayed on map from real SPC/NWS source.</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

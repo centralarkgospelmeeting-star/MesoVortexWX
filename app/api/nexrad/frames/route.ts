@@ -50,6 +50,23 @@ export async function GET(request: Request) {
         );
     }
   } else {
+    const UNVERIFIED: Record<string, string> = {
+      norm_vel: 'DATA UNAVAILABLE - no verified normalized rotation/shear source; current IEM mapping duplicates base velocity (N0U).',
+      sw: 'DATA UNAVAILABLE - Spectrum Width (N0W) not verified as rendering from current IEM ridge source.',
+      cc: 'DATA UNAVAILABLE - Correlation Coefficient (N0C) not verified as rendering from current IEM ridge source.',
+      min_cc: 'DATA UNAVAILABLE - Min CC has no verified real source.',
+      zdr: 'DATA UNAVAILABLE - Differential Reflectivity (N0X) not verified as rendering from current IEM ridge source.',
+      kdp: 'DATA UNAVAILABLE - Specific Differential Phase (N0K) not verified as rendering from current IEM ridge source.',
+      hhc: 'DATA UNAVAILABLE - Hydrometeor Classification has no verified real IEM ridge tile endpoint.',
+      qpe: 'DATA UNAVAILABLE - 1-Hour Precipitation (DPR/QPE) has no verified real IEM ridge tile endpoint.',
+    };
+    if (UNVERIFIED[productKey]) {
+      return NextResponse.json(
+        { error: UNVERIFIED[productKey], available: false, productKey, reason: UNVERIFIED[productKey] },
+        { status: 404 }
+      );
+    }
+
     switch (productKey) {
       case 'vel':
         productCode = tilt === '0.9' ? 'N1U' : tilt === '1.3' ? 'N2U' : tilt === '1.8' ? 'N3U' : 'N0U';
@@ -58,33 +75,11 @@ export async function GET(request: Request) {
         productCode = 'N0S';
         archiveSupported = true;
         break;
-      case 'norm_vel':
-        productCode = 'N0U';
-        break;
-      case 'sw':
-        productCode = 'N0W';
-        break;
-      case 'cc':
-      case 'min_cc':
-        productCode = 'N0C';
-        break;
-      case 'zdr':
-        productCode = 'N0X';
-        break;
-      case 'kdp':
-        productCode = 'N0K';
-        break;
       case 'tops':
         productCode = 'NET'; // Verified IEM product code for Net Echo Tops
         break;
       case 'vil':
         productCode = 'N0Z'; // Verified IEM product code for Vertically Integrated Liquid
-        break;
-      case 'hhc':
-        productCode = 'HHC';
-        break;
-      case 'qpe':
-        productCode = 'DPR';
         break;
       case 'ref':
       case 'max_ref':

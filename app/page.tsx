@@ -67,6 +67,12 @@ export default function MesoVortexWorkstation() {
   const [modelSearch, setModelSearch] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [openPanel, setOpenPanel] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Array<{label:string;type:string;lat?:number;lon?:number;siteId?:string}>>([]);
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [focusTarget, setFocusTarget] = useState<{lat:number;lon:number;zoom:number;ts:number} | null>(null);
+  const [bottomBarOpen, setBottomBarOpen] = useState(true);
   const PANEL_STATE_KEY = 'mesovortex_panel_state_v1';
   useEffect(() => {
     try {
@@ -75,13 +81,14 @@ export default function MesoVortexWorkstation() {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === 'object') {
           if (typeof parsed.openPanel === 'string' || parsed.openPanel === null) setOpenPanel(parsed.openPanel);
+          if (typeof parsed.bottomBarOpen === 'boolean') setBottomBarOpen(parsed.bottomBarOpen);
         }
       }
     } catch {}
   }, []);
   useEffect(() => {
-    try { localStorage.setItem(PANEL_STATE_KEY, JSON.stringify({ openPanel })); } catch {}
-  }, [openPanel]);
+    try { localStorage.setItem(PANEL_STATE_KEY, JSON.stringify({ openPanel, bottomBarOpen })); } catch {}
+  }, [openPanel, bottomBarOpen]);
   const [quadPanes, setQuadPanes] = useState<Array<{ mode: PaneMode; product: RadarProduct; satelliteSelection: SatelliteSelection; modelId: string; modelField: string }>>([
     { mode: 'Radar', product: 'ref', satelliteSelection: DEFAULT_SATELLITE_SELECTION, modelId: 'gdps-geml', modelField: 'temp' },
     { mode: 'Radar', product: 'vel', satelliteSelection: DEFAULT_SATELLITE_SELECTION, modelId: 'gdps-geml', modelField: 'temp' },
@@ -272,10 +279,74 @@ export default function MesoVortexWorkstation() {
     showFlashReflectivity,
     flashRange,
     alertFeatures: mapAlertFeatures,
+    focusTarget,
     onSelectSite: (id: string) => setRadarSite(id),
   } as const;
 
   const currentPlaybackFrame = playbackFrames[playbackIndex] || null;
+
+  const parseLatLon = (q: string): { lat: number; lon: number } | null => {
+    const m = q.trim().match(/^\s*(-?\d{1,2}(?:\.\d+)?)\s*[,\s]\s*(-?\d{1,3}(?:\.\d+)?)\s*$/);
+    if (!m) return null;
+    const lat = Number(m[1]); const lon = Number(m[2]);
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+    return { lat, lon };
+  };
+
+  const runSearch = async (q: string) => {
+    const query = q.trim();
+    setSearchQuery(q);
+    if (!query) { setSearchResults([]); return; }
+    setSearchBusy(true);
+    try {
+      const results: Array<{label:string;type:string;lat?:number;lon?:number;siteId?:string}> = [];
+      const ll = parseLatLon(query);
+      if (ll) results.push({ label: `${ll.lat.toFixed(4)}, ${ll.lon.toFixed(4)}`, type: 'Lat/Lon', lat: ll.lat, lon: ll.lon });
+      const ql = query.toLowerCase();
+      for (const s of RADAR_SITES) {
+        if (s.id.toLowerCase().includes(ql) || s.radarId.toLowerCase().includes(ql) || s.name.toLowerCase().includes(ql)) {
+          results.push({ label: `${s.id} — ${s.name}`, type: 'Radar Site', lat: s.lat, lon: s.lon, siteId: s.id });
+        }
+        if (results.length >= 8) break;
+      }
+      const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || (window as any).__MAPBOX_TOKEN__ || '';
+      if (token && query.length >= 2) {
+        const types = 'place,postcode,address,poi,district,region,locality';
+        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${token}&autocomplete=true&limit=6&types=${types}&country=US,CA,MX`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          for (const f of (data.features || [])) {
+            const placeType = Array.isArray(f.place_type) ? f.place_type[0] : 'place';
+            const typeLabel = placeType === 'postcode' ? 'ZIP/Postal'
+              : placeType === 'poi' ? 'Airport/POI'
+              : placeType === 'region' ? 'State/Region'
+              : placeType === 'district' || placeType === 'locality' ? 'County/Locality'
+              : 'City/Place';
+            const [lon, lat] = f.center || [];
+            if (typeof lat === 'number' && typeof lon === 'number') {
+              results.push({ label: f.place_name || f.text || query, type: typeLabel, lat, lon });
+            }
+          }
+        }
+      }
+      const seen = new Set<string>();
+      const deduped = results.filter(r => { const k = `${r.type}|${r.label}`; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 12);
+      setSearchResults(deduped);
+    } catch {
+      setSearchResults([]);
+    } finally { setSearchBusy(false); }
+  };
+
+  const handleSearchSelect = (r: {label:string;type:string;lat?:number;lon?:number;siteId?:string}) => {
+    if (r.siteId) setRadarSite(r.siteId);
+    if (typeof r.lat === 'number' && typeof r.lon === 'number') {
+      setFocusTarget({ lat: r.lat, lon: r.lon, zoom: r.type === 'Radar Site' ? 8 : r.type === 'State/Region' ? 6 : r.type === 'County/Locality' ? 9 : 10, ts: Date.now() });
+    }
+    setSearchOpen(false);
+    setSearchQuery('');
+    setSearchResults([]);
+  };
 
   const renderPane = (
     paneMode: PaneMode,
@@ -316,7 +387,7 @@ export default function MesoVortexWorkstation() {
       </div>
 
       {onModeChange && (
-        <div className={`absolute left-3 ${compact ? 'top-11' : 'top-12'} z-30 flex flex-wrap items-center gap-1 rounded-xl border border-slate-700 bg-slate-950/90 p-1 shadow-xl backdrop-blur`}>
+        <div className={`absolute left-2 ${compact ? 'top-9' : 'top-10'} z-20 flex items-center gap-0.5 rounded-lg border border-slate-700/70 bg-slate-950/75 p-0.5 shadow-lg backdrop-blur`}>
           {PANE_MODES.map((modeOption) => {
             const active = modeOption === paneMode;
             return (
@@ -324,66 +395,16 @@ export default function MesoVortexWorkstation() {
                 key={modeOption}
                 type="button"
                 onClick={() => onModeChange(modeOption)}
-                className={`rounded-lg px-2 py-1 text-[10px] font-bold transition ${
-                  active ? 'bg-cyan-500 text-slate-950' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                }`}
+                className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold transition ${active ? 'bg-cyan-500 text-slate-950' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
               >
                 {modeOption}
               </button>
             );
           })}
           {onProductChange && paneMode === 'Radar' && (
-            <select
-              value={paneProduct}
-              onChange={(e) => onProductChange(e.target.value as RadarProduct)}
-              className="ml-1 rounded-md border border-slate-700 bg-slate-900 px-1.5 py-1 text-[10px] font-bold text-slate-200 outline-none"
-              aria-label={`Pane ${paneId} product`}
-            >
-              <option value="ref">REF</option>
-              <option value="vel">VEL</option>
-              <option value="srvel">SRV</option>
-              <option value="cc">CC</option>
-              <option value="zdr">ZDR</option>
-              <option value="kdp">KDP</option>
-              <option value="vil">VIL</option>
-              <option value="tops">TOPS</option>
+            <select value={paneProduct} onChange={(e) => onProductChange(e.target.value as RadarProduct)} className="ml-0.5 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-[9px] font-bold text-slate-200 outline-none" aria-label={`Pane ${paneId} product`}>
+              <option value="ref">REF</option><option value="vel">VEL</option><option value="srvel">SRV</option><option value="cc">CC</option><option value="zdr">ZDR</option><option value="kdp">KDP</option>
             </select>
-          )}
-          {onSatelliteSelectionChange && paneMode === 'Satellite' && (
-            <select
-              value={paneSatelliteSelection.productId}
-              onChange={(e) => onSatelliteSelectionChange({ ...paneSatelliteSelection, productId: e.target.value as any })}
-              className="ml-1 max-w-[140px] rounded-md border border-slate-700 bg-slate-900 px-1.5 py-1 text-[10px] font-bold text-slate-200 outline-none"
-              aria-label={`Pane ${paneId} satellite product`}
-            >
-              {SATELLITE_PRODUCTS.map((p) => (
-                <option key={p.id} value={p.id}>{p.available ? '' : '⛔ '}{p.shortLabel}</option>
-              ))}
-            </select>
-          )}
-          {paneMode === 'Models' && (
-            <>
-              <select
-                value={modelId}
-                onChange={(e) => { setModelId(e.target.value); const m = getModelById(e.target.value); if (m && !m.fields.find(f=>f.id===modelField)) setModelField(m.fields[0]?.id || 'temp'); }}
-                className="ml-1 max-w-[140px] rounded-md border border-slate-700 bg-slate-900 px-1.5 py-1 text-[10px] font-bold text-slate-200 outline-none"
-                aria-label={`Pane ${paneId} model`}
-              >
-                {MODEL_CATALOG.map((m) => (
-                  <option key={m.id} value={m.id}>{m.status === 'READY_NOW' ? '' : '⛔ '}{m.name.split('(')[0].trim()}</option>
-                ))}
-              </select>
-              <select
-                value={modelField}
-                onChange={(e) => setModelField(e.target.value)}
-                className="rounded-md border border-slate-700 bg-slate-900 px-1.5 py-1 text-[10px] font-bold text-slate-200 outline-none"
-                aria-label={`Pane ${paneId} model field`}
-              >
-                {activeModel.fields.map((f) => (
-                  <option key={f.id} value={f.id}>{f.status === 'READY_NOW' ? '' : '⛔ '}{f.label}</option>
-                ))}
-              </select>
-            </>
           )}
         </div>
       )}
@@ -510,8 +531,18 @@ export default function MesoVortexWorkstation() {
               <span className="text-[10px] text-slate-400">▾</span>
             </div>
 
+            <button
+              type="button"
+              onClick={() => { setSearchOpen((v) => !v); setSearchResults([]); }}
+              className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition"
+              title="Search cities, ZIP, airports, radar sites, lat/lon, counties, states"
+              aria-label="Search"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.65" y2="16.65"/></svg>
+            </button>
+
             <div className="flex items-center gap-1 font-bold text-xs">
-              {(['Radar', 'Composite', 'Satellite', 'Outlooks'] as ModeTab[]).map((modeTab) => (
+              {(['Radar', 'Composite', 'Satellite', 'Outlooks', 'Models'] as ModeTab[]).map((modeTab) => (
                 <button
                   key={modeTab}
                   onClick={() => {
@@ -546,6 +577,33 @@ export default function MesoVortexWorkstation() {
               </button>
             </div>
           </div>
+
+          {searchOpen && (
+            <div className="mt-2 w-[min(32rem,calc(100vw-2rem))] rounded-2xl border border-slate-700 bg-slate-950/96 p-3 shadow-2xl backdrop-blur text-slate-100">
+              <div className="flex items-center gap-2">
+                <input
+                  autoFocus
+                  value={searchQuery}
+                  onChange={(e) => { const v=e.target.value; setSearchQuery(v); runSearch(v); }}
+                  onKeyDown={(e) => { if (e.key === 'Escape') { setSearchOpen(false); } if (e.key === 'Enter' && searchResults[0]) handleSearchSelect(searchResults[0]); }}
+                  placeholder="City, ZIP, airport, radar site, lat/lon, county, state..."
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-cyan-500"
+                />
+                <button type="button" onClick={() => setSearchOpen(false)} className="rounded-lg px-2 py-2 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Close search">✕</button>
+              </div>
+              <div className="mt-1 text-[10px] text-slate-500">Supports: Cities, ZIP codes, Airports, Radar sites, Lat/Lon, Counties, States</div>
+              <div className="mt-2 max-h-64 overflow-auto space-y-1">
+                {searchBusy && <div className="px-2 py-1 text-xs text-slate-400">Searching...</div>}
+                {!searchBusy && searchQuery.trim() && searchResults.length === 0 && <div className="px-2 py-1 text-xs text-slate-500">No results.</div>}
+                {searchResults.map((r, i) => (
+                  <button key={`${r.type}-${r.label}-${i}`} type="button" onClick={() => handleSearchSelect(r)} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left hover:bg-slate-800">
+                    <span className="text-xs text-slate-200 truncate pr-2">{r.label}</span>
+                    <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-cyan-400">{r.type}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {quadMode ? (
             <div className="mt-1.5 flex items-center gap-2 rounded-full bg-slate-950/90 px-3 py-1 shadow-xl border border-slate-700 text-[11px] font-bold text-slate-200 backdrop-blur">
@@ -665,55 +723,55 @@ export default function MesoVortexWorkstation() {
         )}
       </div>
 
-      <WeatherWiseRadarCard
-        siteId={currentSite.id}
-        siteName={currentSite.name}
-        product={product}
-        tilt={tilt}
-        maxRefWindow={maxRefWindow}
-        isPlaying={isPlaying}
-        onSelectProduct={(p) => setProduct(p as RadarProduct)}
-        onSelectTilt={(t) => setTilt(t)}
-        onSelectMaxRefWindow={(w) => setMaxRefWindow(w)}
-        onTogglePlay={() => setIsPlaying((p) => !p)}
-        gateFilter={gateFilter}
-        onChangeGateFilter={(val) => setGateFilter(val)}
-        opacity={radarOpacity}
-        onChangeOpacity={(val) => setRadarOpacity(val)}
-        smoothing={smoothing}
-        onToggleSmoothing={() => setSmoothing((v) => !v)}
-        colorTable={colorTable}
-        onChangeColorTable={(tbl) => setColorTable(tbl)}
-        showLightning={showLightning}
-        onToggleLightning={() => setShowLightning((v) => !v)}
-        showFastScan={showFastScan}
-        onToggleFastScan={() => setShowFastScan((v) => !v)}
-        showFlashReflectivity={showFlashReflectivity}
-        onToggleFlashReflectivity={() => setShowFlashReflectivity((v) => !v)}
-        showStormTracks={showStormTracks}
-        onToggleStormTracks={() => setShowStormTracks((v) => !v)}
-        showRadarSites={showRadarSites}
-        onToggleRadarSites={() => {
-          setShowRadarSites((v) => !v);
-          setShowRadarPills((v) => !v);
-        }}
-        showRangeRings={showRangeRings}
-        onToggleRangeRings={() => setShowRangeRings((v) => !v)}
-        showCounties={showCounties}
-        onToggleCounties={() => setShowCounties((v) => !v)}
-        showTornadoAnalysis={showTornadoAnalysis}
-        onToggleTornadoAnalysis={() => setShowTornadoAnalysis((v) => !v)}
-        showWarnings={showWarnings}
-        onToggleWarnings={() => setShowWarnings((v) => !v)}
-        showMCD={showMCD}
-        onToggleMCD={() => setShowMCD((v) => !v)}
-        showSpotters={showSpotters}
-        onToggleSpotters={() => setShowSpotters((v) => !v)}
-        showSpotterReports={showSpotterReports}
-        onToggleSpotterReports={() => setShowSpotterReports((v) => !v)}
-        showSweepAnimation={showSweepAnimation}
-        onToggleSweepAnimation={() => setShowSweepAnimation((v) => !v)}
-      />
+      {bottomBarOpen ? (
+        <WeatherWiseRadarCard
+          mode={quadMode ? (quadPanes[0]?.mode || 'Radar') : expertMode ? leftPane : tab}
+          siteId={currentSite.id}
+          siteName={currentSite.name}
+          product={product}
+          tilt={tilt}
+          maxRefWindow={maxRefWindow}
+          isPlaying={isPlaying}
+          onSelectProduct={(p) => setProduct(p as RadarProduct)}
+          onSelectTilt={(t) => setTilt(t)}
+          onSelectMaxRefWindow={(w) => setMaxRefWindow(w)}
+          onTogglePlay={() => setIsPlaying((p) => !p)}
+          onClose={() => setBottomBarOpen(false)}
+          colorTable={colorTable}
+          onChangeColorTable={(tbl) => setColorTable(tbl)}
+          showSweepAnimation={showSweepAnimation}
+          onToggleSweepAnimation={() => setShowSweepAnimation((v) => !v)}
+          showFastScan={showFastScan}
+          onToggleFastScan={() => setShowFastScan((v) => !v)}
+          satelliteBird={activeSatSel.bird}
+          satelliteProductId={activeSatSel.productId}
+          onSelectSatelliteBird={(bird) => {
+            const b = bird as SatelliteSelection['bird'];
+            const sectors = getSectorsForBird(b);
+            const next = normalizeSatelliteSelection({ ...activeSatSel, bird: b, sector: sectors.some(s=>s.id===activeSatSel.sector)?activeSatSel.sector:sectors[0]?.id });
+            setSatelliteSelection(next);
+            if (quadMode) setQuadPanes((prev)=>prev.map((p)=>p.mode==='Satellite'?{...p,satelliteSelection:next}:p));
+          }}
+          onSelectSatelliteProduct={(id) => {
+            const next = normalizeSatelliteSelection({ ...activeSatSel, productId: id as SatelliteSelection['productId'] });
+            setSatelliteSelection(next);
+            if (quadMode) setQuadPanes((prev)=>prev.map((p)=>p.mode==='Satellite'?{...p,satelliteSelection:next}:p));
+          }}
+          satelliteProducts={SATELLITE_PRODUCTS.filter(p => ['visible','ir','wv-mid','wv-upper','wv-lower'].includes(p.id)).map(p => ({ id: p.id, label: p.shortLabel, available: p.available }))}
+          modelId={modelId}
+          modelField={modelField}
+          modelOptions={MODEL_CATALOG.map(m => ({ id: m.id, label: m.name.split('(')[0].trim(), status: m.status }))}
+          modelFieldOptions={activeModel.fields.map(f => ({ id: f.id, label: f.label, status: f.status }))}
+          onSelectModel={(id) => { setModelId(id); const m=getModelById(id); if(m && !m.fields.find(f=>f.id===modelField)) setModelField(m.fields[0]?.id||'temp'); }}
+          onSelectModelField={(id) => setModelField(id)}
+          spcDay={spcDay}
+          onSelectSpcDay={(d) => setSpcDay(d as SpcDay)}
+          compositeProduct={product}
+          onSelectCompositeProduct={(id) => setProduct(id as RadarProduct)}
+        />
+      ) : (
+        <button type="button" onClick={() => setBottomBarOpen(true)} className="absolute bottom-3 left-1/2 z-30 -translate-x-1/2 rounded-full border border-slate-700 bg-slate-950/90 px-3 py-1.5 text-[11px] font-bold text-slate-200 shadow-xl backdrop-blur hover:bg-slate-900">Show Controls</button>
+      )}
 
       {banner && (
         <div
