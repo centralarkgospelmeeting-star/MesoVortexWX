@@ -295,6 +295,10 @@ export function RadarMap({
   const mcdHandlersBoundRef = useRef(false);
   const showMCDRef = useRef(showMCD);
   const showWarningsRef = useRef(showWarnings);
+  const towerPillMarkersRef = useRef<maplibregl.Marker[]>([]);
+  const showRadarPillsRef = useRef(showRadarPills);
+  const selectedRadarSiteRef = useRef(radarSite);
+  const onSelectSiteRef = useRef(onSelectSite);
   const [mcdStatus, setMcdStatus] = useState<{
     state: 'idle' | 'loading' | 'ready' | 'unavailable';
     count: number;
@@ -360,6 +364,7 @@ export function RadarMap({
       if (showMCDRef.current) updateMCD(map);
       updateRadar(map);
       updateRangeRings(map, site.lat, site.lon);
+      if (showRadarPillsRef.current) renderTowerPills(map);
       if (showSpottersRef.current || showSpotterReportsRef.current) updateSpotters(map);
     });
 
@@ -370,6 +375,7 @@ export function RadarMap({
       }
       radarSourceHealthyRef.current = false;
       setMapReady(false);
+      clearTowerPills();
       map.remove();
       mapRef.current = null;
     };
@@ -800,6 +806,37 @@ export function RadarMap({
     }
   }, []);
 
+  const clearTowerPills = useCallback(() => {
+    towerPillMarkersRef.current.forEach((marker) => marker.remove());
+    towerPillMarkersRef.current = [];
+  }, []);
+
+  const renderTowerPills = useCallback(
+    (map: MapLibreMap) => {
+      clearTowerPills();
+      const activeSite = selectedRadarSiteRef.current;
+
+      RADAR_SITES.forEach((s) => {
+        const isActive = s.id === activeSite || s.radarId === activeSite;
+        const pill = document.createElement('div');
+        pill.className = 'ww-radar-pill' + (isActive ? ' active' : '');
+        pill.title = `${s.name} (${s.id})`;
+        pill.innerHTML = `<span class="ww-dot"></span><span>${s.radarId}</span>`;
+        pill.onclick = (e) => {
+          e.stopPropagation();
+          onSelectSiteRef.current?.(s.id);
+        };
+
+        const marker = new maplibregl.Marker({ element: pill })
+          .setLngLat([s.lon, s.lat])
+          .addTo(map);
+
+        towerPillMarkersRef.current.push(marker);
+      });
+    },
+    [clearTowerPills]
+  );
+
   const removeSpotterLayers = useCallback((map: MapLibreMap) => {
     [SPOTTER_CLUSTER_COUNT_ID, SPOTTER_CLUSTER_LAYER_ID, SPOTTER_POSITION_LAYER_ID, SPOTTER_HALO_LAYER_ID, SPOTTER_REPORT_LAYER_ID].forEach((id) => { if (map.getLayer(id)) map.removeLayer(id); });
     if (map.getSource(SPOTTER_SOURCE_ID)) map.removeSource(SPOTTER_SOURCE_ID);
@@ -1062,7 +1099,22 @@ export function RadarMap({
       updateRangeRings(map, site.lat, site.lon);
     }
   }, [site.lon, site.lat, radarSite, mapReady, updateRangeRings]);
-  
+
+  useEffect(() => {
+    onSelectSiteRef.current = onSelectSite;
+  }, [onSelectSite]);
+
+  useEffect(() => {
+    showRadarPillsRef.current = showRadarPills;
+    selectedRadarSiteRef.current = radarSite;
+
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+
+    if (showRadarPills) renderTowerPills(map);
+    else clearTowerPills();
+  }, [showRadarPills, radarSite, mapReady, renderTowerPills, clearTowerPills]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
