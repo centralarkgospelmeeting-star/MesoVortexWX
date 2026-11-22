@@ -9,6 +9,7 @@ import { computeMaxReflectivityCanvas, interpolateReflectivityFrames } from '../
 import { registerSyncedMap } from '../lib/map-sync';
 import { ALERT_CATEGORY_META, formatAlertTime, type WeatherAlert } from '../lib/alerts/model';
 import { DEFAULT_SATELLITE_SELECTION, getSatelliteTileUrl, normalizeSatelliteSelection, type SatelliteSelection } from '../lib/satellite';
+import { getModelById } from '../lib/model-registry';
 
 // Next/webpack bundles maplibre-gl, so the library's relative worker URL
 // (./maplibre-gl-worker.mjs) resolves to a chunk that does not exist. Serve the
@@ -83,6 +84,11 @@ export interface RadarMapProps {
   showHurricanes?: boolean;
   /** Map pitch in degrees for 3D camera view (0-75). */
   mapPitch?: number;
+  /** Model workstation selection (verified sources only). */
+  modelId?: string;
+  modelField?: string;
+  modelRun?: string;
+  modelForecastHour?: number;
   onNewScan?: (info: { latencySec: number; timestamp: string; site: string }) => void;
   onSelectSite?: (siteId: string) => void;
   onSelectWarningFromMap?: (w: any) => void;
@@ -142,6 +148,8 @@ const HURRICANE_CURRENT_LABEL_ID = 'mv-hurricane-current-label';
 const GLM_SOURCE_ID = 'mv-glm-source';
 const GLM_LAYER_ID = 'mv-glm-layer';
 const GLM_GLOW_ID = 'mv-glm-glow';
+const MODEL_SOURCE_ID = 'mv-model-source';
+const MODEL_LAYER_ID = 'mv-model-layer';
 const SPOTTER_PULSE_LAYER_ID = 'mv-spotters-pulse';
 const SPOTTER_POSITION_LAYER_ID = 'mv-spotters-position';
 const SPOTTER_REPORT_LAYER_ID = 'mv-spotters-report';
@@ -313,6 +321,10 @@ export function RadarMap({
   projectionMode = 'mercator',
   showHurricanes = false,
   mapPitch = 0,
+  modelId = 'gdps-geml',
+  modelField = 'temp',
+  modelRun = 'latest',
+  modelForecastHour = 0,
   onNewScan,
   onSelectSite,
   onSelectWarningFromMap,
@@ -335,6 +347,7 @@ export function RadarMap({
   const [hurricaneStatus, setHurricaneStatus] = useState<{ state: 'idle' | 'loading' | 'ready' | 'unavailable'; count: number; message?: string }>({ state: 'idle', count: 0 });
   const hurricaneHandlersBoundRef = useRef(false);
   const [glmStatus, setGlmStatus] = useState<{ state: 'idle'|'loading'|'ready'|'unavailable'; count: number; message?: string }>({ state: 'idle', count: 0 });
+  const [modelStatus, setModelStatus] = useState<{ state: 'idle'|'ready'|'unavailable'; message?: string; source?: string; runTime?: string; forecastHour?: number; updateFrequency?: string; availability?: string }>({ state: 'idle' });
 
   useEffect(() => {
     const map = mapRef.current;
@@ -966,6 +979,59 @@ export function RadarMap({
     return () => { cancelled = true; clearInterval(timer); };
   }, [mapReady, showLightning]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const removeModel = () => {
+      if (map.getLayer(MODEL_LAYER_ID)) map.removeLayer(MODEL_LAYER_ID);
+      if (map.getSource(MODEL_SOURCE_ID)) map.removeSource(MODEL_SOURCE_ID);
+    };
+    if (mode !== 'Models') {
+      removeModel();
+      setModelStatus({ state: 'idle' });
+      return;
+    }
+
+    const model = getModelById(modelId);
+    const field = model?.fields.find(f => f.id === modelField) || model?.fields[0];
+    const provenance = {
+      source: model?.source || 'Unknown',
+      runTime: modelRun === 'latest' ? 'Latest available' : modelRun,
+      forecastHour: modelForecastHour,
+      updateFrequency: model?.updateFrequency || 'Unknown',
+    };
+
+    if (!model || !field || model.status !== 'READY_NOW' || field.status !== 'READY_NOW' || !field.wmsLayer) {
+      removeModel();
+      setModelStatus({
+        state: 'unavailable',
+        message: field?.note || model?.notes || 'DATA UNAVAILABLE - no verified real source integrated for this model/field.',
+        ...provenance,
+        availability: 'DATA UNAVAILABLE',
+      });
+      return;
+    }
+
+    const wmsUrl = `https://geo.weather.gc.ca/geomet?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true&LAYERS=${encodeURIComponent(field.wmsLayer)}&STYLES=&CRS=EPSG:3857&WIDTH=256&HEIGHT=256&BBOX={bbox-epsg-3857}`;
+    const beforeId = map.getLayer('radar-layer') ? 'radar-layer' : map.getLayer(MCD_FILL_ID) ? MCD_FILL_ID : map.getLayer(WARNINGS_FILL_ID) ? WARNINGS_FILL_ID : undefined;
+    try {
+      const src = map.getSource(MODEL_SOURCE_ID) as maplibregl.RasterTileSource | undefined;
+      if (src) {
+        // @ts-ignore - setTiles exists on raster tile sources
+        src.setTiles([wmsUrl]);
+      } else {
+        map.addSource(MODEL_SOURCE_ID, { type: 'raster', tiles: [wmsUrl], tileSize: 256 });
+      }
+      if (!map.getLayer(MODEL_LAYER_ID)) {
+        map.addLayer({ id: MODEL_LAYER_ID, type: 'raster', source: MODEL_SOURCE_ID, paint: { 'raster-opacity': 0.75 } }, beforeId);
+      }
+      setModelStatus({ state: 'ready', ...provenance, availability: 'Available (verified WMS)' });
+    } catch (e: any) {
+      removeModel();
+      setModelStatus({ state: 'unavailable', message: String(e?.message || e), ...provenance, availability: 'DATA UNAVAILABLE' });
+    }
+  }, [mapReady, mode, modelId, modelField, modelRun, modelForecastHour]);
+
   const updateRadar = useCallback(
     async (map: MapLibreMap) => {
       setTileError(null);
@@ -1007,6 +1073,12 @@ export function RadarMap({
           setLiveOnly(false);
           return;
         }
+      } else if (mode === 'Models') {
+        if (map.getLayer(RADAR_LAYER_ID)) map.removeLayer(RADAR_LAYER_ID);
+        if (map.getSource(RADAR_SOURCE_ID)) map.removeSource(RADAR_SOURCE_ID);
+        setLiveOnly(false);
+        setTileError(null);
+        return;
       } else if (product === 'max_ref') {
         try {
           const res = await fetch(
@@ -1903,6 +1975,24 @@ export function RadarMap({
             <div className="mt-1 leading-snug text-amber-300">DATA UNAVAILABLE{glmStatus.message ? ` — ${glmStatus.message}` : ''}</div>
           )}
           <div className="mt-1 text-[9px] text-slate-500">Source: NOAA GOES-R GLM-L2-LCFA (AWS Open Data). No synthetic lightning.</div>
+        </div>
+      )}
+
+      {mode === 'Models' && (
+        <div className="absolute right-4 top-[31rem] z-40 max-w-[260px] rounded-xl border border-cyan-500/40 bg-slate-950/95 px-3 py-2 font-mono text-[10px] text-slate-200 shadow-2xl backdrop-blur-md">
+          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-cyan-300">
+            <span>◈</span> Model Layer
+          </div>
+          {(() => { const m = getModelById(modelId); const f = m?.fields.find(x=>x.id===modelField) || m?.fields[0]; return (
+            <div className="mt-1 space-y-0.5 text-slate-300">
+              <div><span className="text-slate-500">Source:</span> {m?.source || 'Unknown'}</div>
+              <div><span className="text-slate-500">Run:</span> {modelRun === 'latest' ? 'Latest available' : modelRun}</div>
+              <div><span className="text-slate-500">Forecast hour:</span> F{String(modelForecastHour).padStart(3,'0')}</div>
+              <div><span className="text-slate-500">Update:</span> {m?.updateFrequency || 'Unknown'}</div>
+              <div><span className="text-slate-500">Availability:</span> {f?.status === 'READY_NOW' && m?.status === 'READY_NOW' ? <span className="text-emerald-300">Available</span> : <span className="text-amber-300">DATA UNAVAILABLE</span>}</div>
+              {!(f?.status === 'READY_NOW' && m?.status === 'READY_NOW') && <div className="text-amber-300">DATA UNAVAILABLE — {f?.note || m?.notes || 'No verified source'}</div>}
+            </div>
+          ); })()}
         </div>
       )}
 

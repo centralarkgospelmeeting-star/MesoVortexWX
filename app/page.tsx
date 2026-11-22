@@ -21,6 +21,7 @@ import {
   normalizeSatelliteSelection,
   type SatelliteSelection,
 } from '../lib/satellite';
+import { MODEL_CATALOG, getModelById } from '../lib/model-registry';
 
 type RadarProduct =
   | 'ref'
@@ -40,10 +41,10 @@ type RadarProduct =
   | 'qpe';
 
 type SpcDay = 'Day 1' | 'Day 2' | 'Day 3';
-type PaneMode = 'Radar' | 'Satellite' | 'Composite';
+type PaneMode = 'Radar' | 'Satellite' | 'Composite' | 'Models';
 
 const BASEMAP_STORAGE_KEY = 'mesovortex_basemap_preference';
-const PANE_MODES: PaneMode[] = ['Radar', 'Satellite', 'Composite'];
+const PANE_MODES: PaneMode[] = ['Radar', 'Satellite', 'Composite', 'Models'];
 
 export default function MesoVortexWorkstation() {
   const [tab, setTab] = useState<ModeTab>('Radar');
@@ -59,11 +60,16 @@ export default function MesoVortexWorkstation() {
   const [leftPane, setLeftPane] = useState<PaneMode>('Radar');
   const [rightPane, setRightPane] = useState<PaneMode>('Satellite');
   const [satelliteSelection, setSatelliteSelection] = useState<SatelliteSelection>(DEFAULT_SATELLITE_SELECTION);
-  const [quadPanes, setQuadPanes] = useState<Array<{ mode: PaneMode; product: RadarProduct; satelliteSelection: SatelliteSelection }>>([
-    { mode: 'Radar', product: 'ref', satelliteSelection: DEFAULT_SATELLITE_SELECTION },
-    { mode: 'Radar', product: 'vel', satelliteSelection: DEFAULT_SATELLITE_SELECTION },
-    { mode: 'Radar', product: 'cc', satelliteSelection: DEFAULT_SATELLITE_SELECTION },
-    { mode: 'Satellite', product: 'ref', satelliteSelection: DEFAULT_SATELLITE_SELECTION },
+  const [modelId, setModelId] = useState<string>('gdps-geml');
+  const [modelField, setModelField] = useState<string>('temp');
+  const [modelRun, setModelRun] = useState<string>('latest');
+  const [modelForecastHour, setModelForecastHour] = useState<number>(0);
+  const [modelSearch, setModelSearch] = useState('');
+  const [quadPanes, setQuadPanes] = useState<Array<{ mode: PaneMode; product: RadarProduct; satelliteSelection: SatelliteSelection; modelId: string; modelField: string }>>([
+    { mode: 'Radar', product: 'ref', satelliteSelection: DEFAULT_SATELLITE_SELECTION, modelId: 'gdps-geml', modelField: 'temp' },
+    { mode: 'Radar', product: 'vel', satelliteSelection: DEFAULT_SATELLITE_SELECTION, modelId: 'gdps-geml', modelField: 'temp' },
+    { mode: 'Radar', product: 'cc', satelliteSelection: DEFAULT_SATELLITE_SELECTION, modelId: 'gdps-geml', modelField: 'temp' },
+    { mode: 'Satellite', product: 'ref', satelliteSelection: DEFAULT_SATELLITE_SELECTION, modelId: 'gdps-geml', modelField: 'temp' },
   ]);
   const [playbackFrames, setPlaybackFrames] = useState<Array<{ time: string; tileUrl: string; label: string }>>([]);
   const [playbackIndex, setPlaybackIndex] = useState(0);
@@ -239,6 +245,10 @@ export default function MesoVortexWorkstation() {
     showHurricanes,
     projectionMode,
     mapPitch,
+    modelId,
+    modelField,
+    modelRun,
+    modelForecastHour,
     spotterFilters,
     showSweepAnimation,
     showFastScan,
@@ -274,6 +284,11 @@ export default function MesoVortexWorkstation() {
         {paneMode === 'Satellite' && (
           <div className="rounded-lg border border-slate-700 bg-slate-950/90 px-2.5 py-1 text-[10px] font-bold text-slate-200 shadow-xl backdrop-blur">
             {getSatelliteProductDef(paneSatelliteSelection.productId).shortLabel}
+          </div>
+        )}
+        {paneMode === 'Models' && (
+          <div className="rounded-lg border border-slate-700 bg-slate-950/90 px-2.5 py-1 text-[10px] font-bold text-slate-200 shadow-xl backdrop-blur">
+            {(getModelById(modelId)?.name || modelId).split('(')[0].trim()} · {activeModelField.label}{activeModelField.status !== 'READY_NOW' ? ' · DATA UNAVAILABLE' : ''}
           </div>
         )}
         {isPlaying && playbackFrames.length > 1 && (
@@ -329,6 +344,30 @@ export default function MesoVortexWorkstation() {
               ))}
             </select>
           )}
+          {paneMode === 'Models' && (
+            <>
+              <select
+                value={modelId}
+                onChange={(e) => { setModelId(e.target.value); const m = getModelById(e.target.value); if (m && !m.fields.find(f=>f.id===modelField)) setModelField(m.fields[0]?.id || 'temp'); }}
+                className="ml-1 max-w-[140px] rounded-md border border-slate-700 bg-slate-900 px-1.5 py-1 text-[10px] font-bold text-slate-200 outline-none"
+                aria-label={`Pane ${paneId} model`}
+              >
+                {MODEL_CATALOG.map((m) => (
+                  <option key={m.id} value={m.id}>{m.status === 'READY_NOW' ? '' : '⛔ '}{m.name.split('(')[0].trim()}</option>
+                ))}
+              </select>
+              <select
+                value={modelField}
+                onChange={(e) => setModelField(e.target.value)}
+                className="rounded-md border border-slate-700 bg-slate-900 px-1.5 py-1 text-[10px] font-bold text-slate-200 outline-none"
+                aria-label={`Pane ${paneId} model field`}
+              >
+                {activeModel.fields.map((f) => (
+                  <option key={f.id} value={f.id}>{f.status === 'READY_NOW' ? '' : '⛔ '}{f.label}</option>
+                ))}
+              </select>
+            </>
+          )}
         </div>
       )}
 
@@ -356,8 +395,16 @@ export default function MesoVortexWorkstation() {
       ? leftPane === 'Satellite' || rightPane === 'Satellite'
       : tab === 'Satellite';
 
+  const hasModelsPane = quadMode
+    ? quadPanes.some((p) => p.mode === 'Models')
+    : expertMode
+      ? leftPane === 'Models' || rightPane === 'Models'
+      : tab === 'Models';
+
   const activeSatSel = normalizeSatelliteSelection(satelliteSelection);
   const activeSatDef = getSatelliteProductDef(activeSatSel.productId);
+  const activeModel = getModelById(modelId) || MODEL_CATALOG[0];
+  const activeModelField = activeModel.fields.find(f => f.id === modelField) || activeModel.fields[0];
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-[#070c14] select-none font-sans text-slate-100">
@@ -509,6 +556,14 @@ export default function MesoVortexWorkstation() {
               <span className="text-slate-500">•</span>
               <span>{activeSatDef.shortLabel}</span>
               {!activeSatDef.available && <span className="text-amber-300">• DATA UNAVAILABLE</span>}
+            </div>
+          ) : tab === 'Models' ? (
+            <div className="mt-1.5 flex items-center gap-2 rounded-full bg-slate-950/90 px-3 py-1 shadow-xl border border-slate-700 text-[11px] font-bold text-slate-200 backdrop-blur">
+              <span className="text-cyan-300">{activeModel.name.split('(')[0].trim()}</span>
+              <span className="text-slate-500">•</span>
+              <span>{activeModelField.label}</span>
+              <span className="text-slate-500">•</span>
+              <span className={activeModelField.status==='READY_NOW' ? 'text-emerald-300' : 'text-amber-300'}>{activeModelField.status==='READY_NOW' ? 'VERIFIED' : 'DATA UNAVAILABLE'}</span>
             </div>
           ) : tab === 'Outlooks' ? (
             <div className="mt-1.5 flex items-center gap-2 rounded-full bg-white px-3 py-1 shadow-xl border border-slate-200 text-xs font-bold text-slate-700">
@@ -722,6 +777,69 @@ export default function MesoVortexWorkstation() {
             <div>⛔ Rapid-scan meso 1-min loop: current meso sector only; no verified archive/1-min loop source.</div>
             <div>⛔ GeoColor/RGB tiles (AirMass, Sandwich, Fire, Cloud Phase, Dust, etc.): no verified real public XYZ tile source.</div>
           </div>
+        </div>
+      )}
+
+      {hasModelsPane && (
+        <div className="absolute right-4 bottom-24 z-30 w-[22rem] max-h-[60vh] overflow-auto rounded-2xl border border-slate-700 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-md">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[11px] font-black uppercase tracking-wider text-cyan-300">Models</div>
+            <div className={`rounded-md border px-2 py-0.5 text-[10px] font-bold ${activeModel.status==='READY_NOW' ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : activeModel.status==='RESTRICTED' ? 'border-red-500/40 bg-red-500/10 text-red-300' : 'border-amber-500/40 bg-amber-500/10 text-amber-300'}`}>
+              {activeModel.status.replace('_',' ')}
+            </div>
+          </div>
+          <input
+            value={modelSearch}
+            onChange={(e)=>setModelSearch(e.target.value)}
+            placeholder="Search models..."
+            className="mt-2 w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] text-slate-200 outline-none placeholder:text-slate-500"
+          />
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <label className="text-[10px] text-slate-400">
+              <div className="mb-1 font-bold uppercase tracking-wider">Model</div>
+              <select value={modelId} onChange={(e)=>{ setModelId(e.target.value); const m=getModelById(e.target.value); if(m && !m.fields.find(f=>f.id===modelField)) setModelField(m.fields[0]?.id||'temp'); }} className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none">
+                {MODEL_CATALOG.filter(m=>{ const q=modelSearch.toLowerCase().trim(); return !q || m.name.toLowerCase().includes(q) || m.category.toLowerCase().includes(q) || m.id.includes(q); }).map(m=> (
+                  <option key={m.id} value={m.id}>{m.status==='READY_NOW'?'':'⛔ '}{m.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-[10px] text-slate-400">
+              <div className="mb-1 font-bold uppercase tracking-wider">Field</div>
+              <select value={modelField} onChange={(e)=>setModelField(e.target.value)} className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none">
+                {activeModel.fields.map(f=> <option key={f.id} value={f.id}>{f.status==='READY_NOW'?'':'⛔ '}{f.label}</option>)}
+              </select>
+            </label>
+            <label className="text-[10px] text-slate-400">
+              <div className="mb-1 font-bold uppercase tracking-wider">Run</div>
+              <select value={modelRun} onChange={(e)=>setModelRun(e.target.value)} className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none">
+                <option value="latest">Latest (available)</option>
+              </select>
+            </label>
+            <label className="text-[10px] text-slate-400">
+              <div className="mb-1 font-bold uppercase tracking-wider">Forecast Hour</div>
+              <select value={modelForecastHour} onChange={(e)=>setModelForecastHour(Number(e.target.value))} className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none">
+                {[0,1,3,6,12,24,48].map(h=> <option key={h} value={h}>F{String(h).padStart(3,'0')}</option>)}
+              </select>
+            </label>
+          </div>
+
+          <div className="mt-2 rounded-lg border border-slate-800 bg-slate-900/60 p-2 text-[10px] text-slate-300 space-y-1">
+            <div><span className="text-slate-500">Category:</span> {activeModel.category}</div>
+            <div><span className="text-slate-500">Source:</span> {activeModel.source}</div>
+            <div><span className="text-slate-500">Run time:</span> {modelRun === 'latest' ? 'Latest available (source-dependent)' : modelRun}</div>
+            <div><span className="text-slate-500">Forecast hour:</span> F{String(modelForecastHour).padStart(3,'0')}</div>
+            <div><span className="text-slate-500">Update frequency:</span> {activeModel.updateFrequency || 'Unknown'}</div>
+            <div><span className="text-slate-500">Availability:</span> {activeModelField.status === 'READY_NOW' ? 'Available (verified source)' : `DATA UNAVAILABLE — ${activeModelField.note || activeModel.status}`}</div>
+            <div><span className="text-slate-500">License:</span> {activeModel.license}</div>
+          </div>
+
+          {activeModelField.status !== 'READY_NOW' && (
+            <div className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-300">
+              DATA UNAVAILABLE — {activeModelField.note || 'No verified real source integrated for this model/field.'}
+            </div>
+          )}
+          {activeModel.notes && <div className="mt-2 text-[10px] text-slate-500">{activeModel.notes}</div>}
+          <div className="mt-2 text-[10px] text-slate-500">Foundation only: Ensembles/AI/Meteograms/Soundings/Time-height/Cross sections are architecture targets; no synthetic data.</div>
         </div>
       )}
 
