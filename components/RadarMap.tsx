@@ -880,23 +880,33 @@ export function RadarMap({
           const row = (label: string, value: string) => `<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid rgba(255,255,255,0.08);font-size:11px;"><span style="color:#94a3b8;font-weight:600;">${label}</span><span style="color:#e2e8f0;font-weight:600;text-align:right;word-break:break-word;">${value}</span></div>`;
           const link = safeUrl ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:10px;font-size:11px;font-weight:700;color:#38bdf8;">View on Spotter Network ↗</a>` : '';
 
+          const headerLabel = isReport ? 'SPOTTER REPORT' : 'SPOTTER POSITION';
+          const headerTitle = isReport ? reportType : name;
+          const headerSub = isReport ? name : 'Live position';
           new maplibregl.Popup({ closeButton: true, offset: 12, maxWidth: '360px', className: 'mv-spotter-popup' })
             .setLngLat(e.lngLat)
             .setHTML(`
               <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:rgba(8,14,24,0.96);color:#f8fafc;padding:0;border-radius:14px;min-width:300px;max-width:350px;box-shadow:0 20px 35px -5px rgba(0,0,0,0.85);border:1px solid rgba(239,68,68,0.35);overflow:hidden;backdrop-filter:blur(10px);">
                 <div style="background:linear-gradient(90deg,#7f1d1d,#b91c1c);padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.08);">
-                  <div style="font-size:10px;font-weight:900;letter-spacing:0.08em;color:#fecaca;text-transform:uppercase;">Spotter / Chaser Report</div>
-                  <div style="font-size:16px;font-weight:800;color:#fff;margin-top:2px;">${name}</div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                    <div style="font-size:10px;font-weight:900;letter-spacing:0.08em;color:#fecaca;text-transform:uppercase;">${headerLabel}</div>
+                    <div style="font-size:9px;font-weight:800;background:rgba(0,0,0,0.25);color:#fff;padding:2px 7px;border-radius:999px;text-transform:uppercase;">${escapeHtml(source)}</div>
+                  </div>
+                  <div style="font-size:18px;font-weight:800;color:#fff;margin-top:4px;line-height:1.2;">${headerTitle}</div>
+                  <div style="font-size:11px;color:#fee2e2;margin-top:2px;">${escapeHtml(headerSub)}</div>
                 </div>
-                <div style="padding:12px 14px;max-height:320px;overflow-y:auto;">
+                <div style="padding:12px 14px;max-height:340px;overflow-y:auto;">
                   <div style="background:#0f172a;border-radius:10px;padding:10px;margin-bottom:10px;border:1px solid rgba(255,255,255,0.08);">
+                    <div style="font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Location</div>
                     ${row('Position', escapeHtml(posText))}
                     ${row('Reported', escapeHtml(when))}
                     ${row('Age', escapeHtml(age))}
+                    ${row('Distance From Radar', escapeHtml(distanceText))}
                   </div>
                   <div style="margin-bottom:10px;">
-                    <div style="font-size:10px;font-weight:800;color:#f87171;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Report</div>
+                    <div style="font-size:10px;font-weight:800;color:#f87171;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Report Details</div>
                     ${row('Report Type', reportType)}
+                    ${row('Reporter', name)}
                     ${locationText ? row('Location', locationText) : ''}
                     ${row('Source', escapeHtml(source))}
                   </div>
