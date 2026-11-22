@@ -338,9 +338,11 @@ export function RadarMap({
   const [scanIngestDismissed, setScanIngestDismissed] = useState(false);
   const [inspectionResult, setInspectionResult] = useState<{ lat: number; lon: number; product: string; site: string; tilt: string; time: string; value: string; note?: string } | null>(null);
   const lastFrameRef = useRef<{ time: string; product: string; site: string; tilt: string }>({ time: '', product: '', site: '', tilt: '' });
-  const fastScanEnabled = fastScanProp ?? showFastScan;
-  const sweepEnabled = (sweepAnimationProp ?? showSweepAnimation) || fastScanEnabled;
-  const flashEnabled = flashReflectivityProp ?? showFlashReflectivity;
+  const isRadarMode = mode === 'Radar' || mode === '3D Radar';
+  const radarVisualsEnabled = isRadarMode; // beam/sweep/towers/pills/range rings/scan-ingest visuals
+  const fastScanEnabled = radarVisualsEnabled && (fastScanProp ?? showFastScan);
+  const sweepEnabled = radarVisualsEnabled && ((sweepAnimationProp ?? showSweepAnimation) || fastScanEnabled);
+  const flashEnabled = radarVisualsEnabled && (flashReflectivityProp ?? showFlashReflectivity);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -479,8 +481,8 @@ export function RadarMap({
       if (showWarningsRef.current) updateWarnings(map);
       if (showMCDRef.current) updateMCD(map);
       updateRadar(map);
-      updateRangeRings(map, site.lat, site.lon);
-      if (showRadarPillsRef.current) renderTowerPills(map);
+      if (radarVisualsEnabled && showRangeRings) updateRangeRings(map, site.lat, site.lon);
+      if (showRadarPillsRef.current && radarVisualsEnabled) renderTowerPills(map);
       if (showSpottersRef.current || showSpotterReportsRef.current) updateSpotters(map);
     });
 
@@ -1088,7 +1090,7 @@ export function RadarMap({
           setLiveOnly(false);
           return;
         }
-      } else if (mode === 'Models') {
+      } else if (mode === 'Models' || mode === 'Outlooks') {
         if (map.getLayer(RADAR_LAYER_ID)) map.removeLayer(RADAR_LAYER_ID);
         if (map.getSource(RADAR_SOURCE_ID)) map.removeSource(RADAR_SOURCE_ID);
         setLiveOnly(false);
@@ -1292,6 +1294,12 @@ export function RadarMap({
   const clearTowerPills = useCallback(() => {
     towerPillMarkersRef.current.forEach((marker) => marker.remove());
     towerPillMarkersRef.current = [];
+  }, []);
+
+  const removeRangeRings = useCallback((map: MapLibreMap) => {
+    if (map.getLayer(RINGS_LABEL_ID)) map.removeLayer(RINGS_LABEL_ID);
+    if (map.getLayer(RINGS_LAYER_ID)) map.removeLayer(RINGS_LAYER_ID);
+    if (map.getSource(RINGS_SOURCE_ID)) map.removeSource(RINGS_SOURCE_ID);
   }, []);
 
   const renderTowerPills = useCallback(
@@ -1773,11 +1781,17 @@ export function RadarMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
+    if (!radarVisualsEnabled || !showRangeRings) {
+      removeRangeRings(map);
+      return;
+    }
     if (radarSite !== 'US') {
       map.flyTo({ center: [site.lon, site.lat], zoom: 7.5, duration: 1100 });
       updateRangeRings(map, site.lat, site.lon);
+    } else {
+      removeRangeRings(map);
     }
-  }, [site.lon, site.lat, radarSite, mapReady, updateRangeRings]);
+  }, [site.lon, site.lat, radarSite, mapReady, updateRangeRings, removeRangeRings, radarVisualsEnabled, showRangeRings]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1799,15 +1813,15 @@ export function RadarMap({
   }, [onSelectWarningFromMap]);
 
   useEffect(() => {
-    showRadarPillsRef.current = showRadarPills;
+    showRadarPillsRef.current = showRadarPills && radarVisualsEnabled;
     selectedRadarSiteRef.current = radarSite;
 
     const map = mapRef.current;
     if (!map || !mapReady) return;
 
-    if (showRadarPills) renderTowerPills(map);
+    if (showRadarPills && radarVisualsEnabled) renderTowerPills(map);
     else clearTowerPills();
-  }, [showRadarPills, radarSite, mapReady, renderTowerPills, clearTowerPills]);
+  }, [showRadarPills, radarSite, mapReady, renderTowerPills, clearTowerPills, radarVisualsEnabled]);
 
   useEffect(() => {
     const map = mapRef.current;

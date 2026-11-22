@@ -27,6 +27,7 @@ type Props = {
   loading: boolean;
   onRefresh: () => void;
   onClose: () => void;
+  onOpenSettings?: () => void;
   onSelectAlert: (alert: WeatherAlert) => void;
 };
 
@@ -54,6 +55,7 @@ export function WeatherWiseAlertsPanel({
   loading,
   onRefresh,
   onClose,
+  onOpenSettings,
   onSelectAlert,
 }: Props) {
   const total = alerts.length;
@@ -69,6 +71,16 @@ export function WeatherWiseAlertsPanel({
           {loading && <span className="text-[10px] font-semibold text-slate-400">syncing…</span>}
         </div>
         <div className="flex items-center gap-1">
+          {onOpenSettings && (
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              title="Alert settings"
+              className="rounded-full px-2 py-1 text-[11px] font-bold text-slate-300 transition hover:bg-slate-800 hover:text-white"
+            >
+              ⚙ Settings
+            </button>
+          )}
           <button
             type="button"
             onClick={onRefresh}

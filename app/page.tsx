@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { RadarMap, BasemapType, ModeTab } from '../components/RadarMap';
 import { WeatherWiseRadarCard } from '../components/WeatherWiseRadarCard';
 import { WeatherWiseAlertsPanel } from '../components/WeatherWiseAlertsPanel';
+import { AlertSettingsPanel } from '../components/AlertSettingsPanel';
 import { RADAR_SITES } from '../lib/radar-config';
 import { useFastAlerts } from '../lib/alerts/use-fast-alerts';
 import {
@@ -23,6 +24,7 @@ import {
 } from '../lib/satellite';
 import { MODEL_CATALOG, getModelById } from '../lib/model-registry';
 import { parsePal, type PalTable } from '../lib/pal';
+import { DEFAULT_ALERT_SETTINGS, loadAlertSettings, saveAlertSettings, applyAlertSettingsToAlert, shouldSpeakAlert, formatAlertSpeech, alertSoundForEvent, profileAllowsTone, type AlertSettings } from '../lib/alerts/settings';
 
 type RadarProduct =
   | 'ref'
@@ -144,9 +146,15 @@ export default function MesoVortexWorkstation() {
   const [flashRange, setFlashRange] = useState<[number, number]>([60, 80]);
   const [inspectionMode, setInspectionMode] = useState(false);
   const spokenBannerIdRef = useRef<string | null>(null);
+  const playedSoundBannerIdRef = useRef<string | null>(null);
 
   const [alertsOpen, setAlertsOpen] = useState(false);
+  const [alertSettingsOpen, setAlertSettingsOpen] = useState(false);
+  const [alertSettings, setAlertSettings] = useState<AlertSettings>(DEFAULT_ALERT_SETTINGS);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => { setAlertSettings(loadAlertSettings()); }, []);
+  useEffect(() => { saveAlertSettings(alertSettings); }, [alertSettings]);
 
   const {
     alerts,
@@ -170,21 +178,42 @@ export default function MesoVortexWorkstation() {
   } = useFastAlerts();
 
   useEffect(() => {
-    if (!warningVoiceEnabled || !banner) return;
+    if (!banner) return;
+    const speakEnabled = alertSettings.speech.enabled || warningVoiceEnabled;
+    if (!speakEnabled) return;
     if (spokenBannerIdRef.current === banner.id) return;
+    if (!shouldSpeakAlert(banner.event, banner.category, { ...alertSettings, speech: { ...alertSettings.speech, enabled: true } }) && !(warningVoiceEnabled && !alertSettings.speech.enabled)) return;
+    // If using legacy toggle only, allow warning categories as before; prefer alertSettings rules.
+    const allow = alertSettings.speech.enabled
+      ? shouldSpeakAlert(banner.event, banner.category, alertSettings)
+      : warningVoiceEnabled;
+    if (!allow) return;
     spokenBannerIdRef.current = banner.id;
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-    const text = warningVoicePack === 'short'
-      ? `${banner.event}.`
-      : `The National Weather Service has issued a ${banner.event}${banner.areaDesc ? ` for ${banner.areaDesc}` : ''}.`;
+    const text = alertSettings.speech.enabled
+      ? formatAlertSpeech(banner.event, banner.areaDesc, banner.senderName)
+      : (warningVoicePack === 'short' ? `${banner.event}.` : `The National Weather Service has issued a ${banner.event}${banner.areaDesc ? ` for ${banner.areaDesc}` : ''}.`);
     try {
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
-      u.rate = 1;
-      u.pitch = 1;
+      u.rate = 1; u.pitch = 1;
       window.speechSynthesis.speak(u);
     } catch {}
-  }, [banner, warningVoiceEnabled, warningVoicePack]);
+  }, [banner, warningVoiceEnabled, warningVoicePack, alertSettings]);
+
+  useEffect(() => {
+    if (!banner) return;
+    if (playedSoundBannerIdRef.current === banner.id) return;
+    if (!profileAllowsTone(alertSettings.soundProfile)) return;
+    const custom = alertSoundForEvent(banner.event, alertSettings);
+    if (!custom) return;
+    playedSoundBannerIdRef.current = banner.id;
+    try {
+      const audio = new Audio(custom);
+      audio.volume = 0.9;
+      void audio.play().catch(() => {});
+    } catch {}
+  }, [banner, alertSettings]);
 
   const currentSite =
     RADAR_SITES.find((s) => s.id === radarSite) || RADAR_SITES[0];
@@ -267,15 +296,18 @@ export default function MesoVortexWorkstation() {
     }
   };
 
+  const styledFilteredAlerts = useMemo(() => filteredAlerts.map((a) => applyAlertSettingsToAlert(a, alertSettings)), [filteredAlerts, alertSettings]);
+  const styledBanner = useMemo(() => (banner ? applyAlertSettingsToAlert(banner, alertSettings) : null), [banner, alertSettings]);
+
   // Alerts rendered on the map honor the category filters and visibility toggles.
   const mapAlertFeatures = useMemo(() => {
-    const visible = filteredAlerts.filter((alert) => {
+    const visible = styledFilteredAlerts.filter((alert) => {
       if (alert.category === 'warning') return showWarnings;
       if (alert.category === 'watch') return showWatches;
       return true;
     });
     return alertsToFeatureCollection(visible);
-  }, [filteredAlerts, showWarnings, showWatches]);
+  }, [styledFilteredAlerts, showWarnings, showWatches]);
 
   const paneProps = {
     radarSite,
@@ -687,14 +719,24 @@ export default function MesoVortexWorkstation() {
           ) : null}
         </div>
 
-        <button
-          onClick={() => setAlertsOpen((v) => !v)}
-          className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-amber-400 hover:bg-amber-300 px-3 py-1.5 text-slate-950 font-black text-xs shadow-xl border border-amber-300 transition cursor-pointer"
-          title="Open Fast Alerts"
-        >
-          <span>{alerts.length || 0}</span>
-          <span>alerts</span>
-        </button>
+        <div className="pointer-events-auto flex items-center gap-1 rounded-full bg-amber-400 px-1.5 py-1 shadow-xl border border-amber-300">
+          <button
+            onClick={() => setAlertsOpen((v) => !v)}
+            className="flex items-center gap-1.5 rounded-full px-2 py-0.5 text-slate-950 font-black text-xs hover:bg-amber-300 transition cursor-pointer"
+            title="Open Fast Alerts"
+          >
+            <span>{alerts.length || 0}</span>
+            <span>alerts</span>
+          </button>
+          <button
+            onClick={() => setAlertSettingsOpen(true)}
+            className="rounded-full px-2 py-0.5 text-[11px] font-black text-slate-900 hover:bg-amber-300 transition cursor-pointer"
+            title="Alert settings"
+            aria-label="Alert settings"
+          >
+            ⚙
+          </button>
+        </div>
       </div>
 
       <div className="absolute inset-0 pt-[22px]">
@@ -803,23 +845,23 @@ export default function MesoVortexWorkstation() {
         <button type="button" onClick={() => setBottomBarOpen(true)} className="absolute bottom-3 left-3 z-30 rounded-2xl border border-slate-700 bg-slate-950/94 px-3 py-2 text-[11px] font-bold text-slate-200 shadow-xl backdrop-blur hover:bg-slate-900">Controls ▴</button>
       )}
 
-      {banner && warningPopup && (
+      {styledBanner && warningPopup && (
         <div
           className={`absolute left-1/2 top-24 z-50 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border bg-slate-950/95 p-4 shadow-2xl backdrop-blur ${warningFlash ? 'animate-pulse' : ''}`}
-          style={{ borderColor: banner.color }}
+          style={{ borderColor: styledBanner.color }}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white" style={{ backgroundColor: banner.color }}>
-                  {ALERT_CATEGORY_META[banner.category].singular}
+                <span className="rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white" style={{ backgroundColor: styledBanner.color }}>
+                  {ALERT_CATEGORY_META[styledBanner.category].singular}
                 </span>
-                <span className="text-[11px] font-semibold text-slate-400">{banner.severity}</span>
-                {banner.wfo && <span className="text-[11px] font-semibold text-slate-500">{banner.wfo}</span>}
+                <span className="text-[11px] font-semibold text-slate-400">{styledBanner.severity}</span>
+                {styledBanner.wfo && <span className="text-[11px] font-semibold text-slate-500">{styledBanner.wfo}</span>}
               </div>
-              <div className="mt-1 text-sm font-black text-white">{banner.event}</div>
-              <div className="mt-1 line-clamp-2 text-xs text-slate-300">{banner.headline}</div>
-              <div className="mt-1 truncate text-[11px] text-slate-500">{banner.areaDesc}</div>
+              <div className="mt-1 text-sm font-black text-white">{styledBanner.event}</div>
+              <div className="mt-1 line-clamp-2 text-xs text-slate-300">{styledBanner.headline}</div>
+              <div className="mt-1 truncate text-[11px] text-slate-500">{styledBanner.areaDesc}</div>
             </div>
             <button
               type="button"
@@ -835,7 +877,7 @@ export default function MesoVortexWorkstation() {
 
       {alertsOpen && (
         <WeatherWiseAlertsPanel
-          alerts={filteredAlerts}
+          alerts={styledFilteredAlerts}
           counts={alertCounts}
           filters={alertFilters}
           onToggleFilter={toggleAlertFilter}
@@ -851,9 +893,18 @@ export default function MesoVortexWorkstation() {
           loading={alertsLoading}
           onRefresh={refreshAlerts}
           onClose={() => setAlertsOpen(false)}
+          onOpenSettings={() => setAlertSettingsOpen(true)}
           onSelectAlert={() => {
             setAlertsOpen(true);
           }}
+        />
+      )}
+
+      {alertSettingsOpen && (
+        <AlertSettingsPanel
+          settings={alertSettings}
+          onChange={setAlertSettings}
+          onClose={() => setAlertSettingsOpen(false)}
         />
       )}
 
@@ -926,6 +977,7 @@ export default function MesoVortexWorkstation() {
                 <button type="button" onClick={audioEnabled ? disableAudio : enableAudio} className={`flex-1 rounded-lg px-2 py-1.5 text-[11px] font-black ${audioEnabled ? 'bg-slate-800 text-white' : 'bg-emerald-500 text-slate-950'}`}>{audioEnabled ? 'Mute Tones' : 'Enable Tones'}</button>
                 <button type="button" onClick={() => setAlertsOpen(true)} className="flex-1 rounded-lg bg-amber-400 px-2 py-1.5 text-[11px] font-black text-slate-950">Alert Panel</button>
               </div>
+              <button type="button" onClick={() => setAlertSettingsOpen(true)} className="w-full rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-black text-slate-200 hover:bg-slate-800">⚙ Alert Settings</button>
             </div>
           )}
 
