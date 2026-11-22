@@ -77,6 +77,10 @@ export interface RadarMapProps {
   playbackActive?: boolean;
   /** GOES satellite selection when mode is Satellite. */
   satelliteSelection?: SatelliteSelection;
+  /** Flat mercator or globe projection. */
+  projectionMode?: 'mercator' | 'globe';
+  /** Show official NHC/CPHC active tropical cyclones. */
+  showHurricanes?: boolean;
   onNewScan?: (info: { latencySec: number; timestamp: string; site: string }) => void;
   onSelectSite?: (siteId: string) => void;
   onSelectWarningFromMap?: (w: any) => void;
@@ -118,6 +122,21 @@ const SPOTTER_SOURCE_ID = 'mv-spotters-source';
 const SPOTTER_TRAIL_SOURCE_ID = 'mv-spotters-trail-source';
 const SPOTTER_TRAIL_LAYER_ID = 'mv-spotters-trail';
 const SPOTTER_HALO_LAYER_ID = 'mv-spotters-halo';
+const HURRICANE_CONE_SOURCE_ID = 'mv-hurricane-cone-source';
+const HURRICANE_CONE_FILL_ID = 'mv-hurricane-cone-fill';
+const HURRICANE_CONE_LINE_ID = 'mv-hurricane-cone-line';
+const HURRICANE_TRACK_SOURCE_ID = 'mv-hurricane-track-source';
+const HURRICANE_TRACK_LINE_ID = 'mv-hurricane-track-line';
+const HURRICANE_RADII_SOURCE_ID = 'mv-hurricane-radii-source';
+const HURRICANE_RADII_FILL_ID = 'mv-hurricane-radii-fill';
+const HURRICANE_RADII_LINE_ID = 'mv-hurricane-radii-line';
+const HURRICANE_POINTS_SOURCE_ID = 'mv-hurricane-points-source';
+const HURRICANE_POINTS_CIRCLE_ID = 'mv-hurricane-points-circle';
+const HURRICANE_POINTS_LABEL_ID = 'mv-hurricane-points-label';
+const HURRICANE_CURRENT_SOURCE_ID = 'mv-hurricane-current-source';
+const HURRICANE_CURRENT_HALO_ID = 'mv-hurricane-current-halo';
+const HURRICANE_CURRENT_CIRCLE_ID = 'mv-hurricane-current-circle';
+const HURRICANE_CURRENT_LABEL_ID = 'mv-hurricane-current-label';
 const SPOTTER_PULSE_LAYER_ID = 'mv-spotters-pulse';
 const SPOTTER_POSITION_LAYER_ID = 'mv-spotters-position';
 const SPOTTER_REPORT_LAYER_ID = 'mv-spotters-report';
@@ -286,6 +305,8 @@ export function RadarMap({
   playbackIndex = 0,
   playbackActive = false,
   satelliteSelection = DEFAULT_SATELLITE_SELECTION,
+  projectionMode = 'mercator',
+  showHurricanes = false,
   onNewScan,
   onSelectSite,
   onSelectWarningFromMap,
@@ -305,6 +326,18 @@ export function RadarMap({
   const [tileError, setTileError] = useState<string | null>(null);
   const [sweepAngle, setSweepAngle] = useState(0);
   const [liveOnly, setLiveOnly] = useState(false);
+  const [hurricaneStatus, setHurricaneStatus] = useState<{ state: 'idle' | 'loading' | 'ready' | 'unavailable'; count: number; message?: string }>({ state: 'idle', count: 0 });
+  const hurricaneHandlersBoundRef = useRef(false);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    try {
+      (map as any).setProjection({ type: projectionMode === 'globe' ? 'globe' : 'mercator' });
+    } catch {
+      // Older style/runtime may reject projection changes; keep mercator safely.
+    }
+  }, [mapReady, projectionMode]);
 
   useEffect(() => {
     if (!sweepEnabled) return;
@@ -334,6 +367,7 @@ export function RadarMap({
   const warningHandlersBoundRef = useRef(false);
   const mcdHandlersBoundRef = useRef(false);
   const showMCDRef = useRef(showMCD);
+  const showHurricanesRef = useRef(showHurricanes);
   const showWarningsRef = useRef(showWarnings);
   const alertFeaturesRef = useRef<any>(alertFeatures);
   const onSelectWarningRef = useRef(onSelectWarningFromMap);
@@ -710,6 +744,173 @@ export function RadarMap({
       });
     }
   }, [removeMCDLayers]);
+
+  const removeHurricaneLayers = useCallback((map: MapLibreMap) => {
+    [
+      HURRICANE_CURRENT_LABEL_ID, HURRICANE_CURRENT_CIRCLE_ID, HURRICANE_CURRENT_HALO_ID,
+      HURRICANE_POINTS_LABEL_ID, HURRICANE_POINTS_CIRCLE_ID,
+      HURRICANE_RADII_LINE_ID, HURRICANE_RADII_FILL_ID,
+      HURRICANE_TRACK_LINE_ID,
+      HURRICANE_CONE_LINE_ID, HURRICANE_CONE_FILL_ID,
+    ].forEach((id) => { if (map.getLayer(id)) map.removeLayer(id); });
+    [
+      HURRICANE_CURRENT_SOURCE_ID, HURRICANE_POINTS_SOURCE_ID, HURRICANE_RADII_SOURCE_ID,
+      HURRICANE_TRACK_SOURCE_ID, HURRICANE_CONE_SOURCE_ID,
+    ].forEach((id) => { if (map.getSource(id)) map.removeSource(id); });
+    hurricaneHandlersBoundRef.current = false;
+  }, []);
+
+  const updateHurricanes = useCallback(async (map: MapLibreMap) => {
+    try {
+      setHurricaneStatus({ state: 'loading', count: 0 });
+      const res = await fetch('/api/tropical/cyclones', { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (!data?.available) {
+        removeHurricaneLayers(map);
+        setHurricaneStatus({ state: 'unavailable', count: 0, message: data?.error || 'Tropical cyclone data unavailable' });
+        return;
+      }
+      const storms = Array.isArray(data.storms) ? data.storms : [];
+      if (storms.length === 0) {
+        removeHurricaneLayers(map);
+        setHurricaneStatus({ state: 'ready', count: 0 });
+        return;
+      }
+
+      const coneFeatures: any[] = [];
+      const trackFeatures: any[] = [];
+      const radiiFeatures: any[] = [];
+      const pointFeatures: any[] = [];
+      const currentFeatures: any[] = [];
+      for (const storm of storms) {
+        const propsBase = {
+          stormId: storm.id,
+          stormName: storm.name,
+          basin: storm.basin,
+          intensity: storm.intensity,
+          maxWindKt: storm.maxWindKt ?? '',
+          pressureMb: storm.pressureMb ?? '',
+          movement: storm.movement,
+          advisoryNumber: storm.advisory?.number ?? 'Unavailable',
+          advisoryDate: storm.advisory?.date ?? 'Unavailable',
+          advisoryHeadline: storm.advisory?.headline ?? '',
+          advisoryUrl: storm.advisory?.url ?? 'https://www.nhc.noaa.gov/',
+          advisorySource: storm.advisory?.source ?? 'NHC',
+          lat: storm.position?.lat ?? '',
+          lon: storm.position?.lon ?? '',
+        };
+        for (const f of (storm.forecastCone?.features || [])) coneFeatures.push({ ...f, properties: { ...(f.properties||{}), ...propsBase } });
+        for (const f of (storm.forecastTrack?.features || [])) trackFeatures.push({ ...f, properties: { ...(f.properties||{}), ...propsBase } });
+        for (const f of (storm.windRadii?.features || [])) radiiFeatures.push({ ...f, properties: { ...(f.properties||{}), ...propsBase } });
+        for (const f of (storm.forecastPoints?.features || [])) pointFeatures.push({ ...f, properties: { ...(f.properties||{}), ...propsBase } });
+        if (storm.position && Number.isFinite(storm.position.lat) && Number.isFinite(storm.position.lon)) {
+          currentFeatures.push({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [storm.position.lon, storm.position.lat] },
+            properties: propsBase,
+          });
+        }
+      }
+
+      const coneData = { type: 'FeatureCollection', features: coneFeatures };
+      const trackData = { type: 'FeatureCollection', features: trackFeatures };
+      const radiiData = { type: 'FeatureCollection', features: radiiFeatures };
+      const pointsData = { type: 'FeatureCollection', features: pointFeatures };
+      const currentData = { type: 'FeatureCollection', features: currentFeatures };
+
+      const beforeId = map.getLayer(MCD_FILL_ID) ? MCD_FILL_ID : map.getLayer(WARNINGS_FILL_ID) ? WARNINGS_FILL_ID : undefined;
+      const setOrAdd = (sourceId: string, layerId: string, layer: any) => {
+        const src = map.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
+        if (src) src.setData((layer as any).__data || ({} as any));
+      };
+      // Simpler: set or add for each source
+      const upsert = (sourceId: string, data: any) => {
+        const src = map.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
+        if (src) src.setData(data as any);
+        else map.addSource(sourceId, { type: 'geojson', data: data as any });
+      };
+      upsert(HURRICANE_CONE_SOURCE_ID, coneData);
+      upsert(HURRICANE_TRACK_SOURCE_ID, trackData);
+      upsert(HURRICANE_RADII_SOURCE_ID, radiiData);
+      upsert(HURRICANE_POINTS_SOURCE_ID, pointsData);
+      upsert(HURRICANE_CURRENT_SOURCE_ID, currentData);
+
+      if (!map.getLayer(HURRICANE_CONE_FILL_ID)) map.addLayer({ id: HURRICANE_CONE_FILL_ID, type: 'fill', source: HURRICANE_CONE_SOURCE_ID, paint: { 'fill-color': '#f97316', 'fill-opacity': 0.12 } }, beforeId);
+      if (!map.getLayer(HURRICANE_CONE_LINE_ID)) map.addLayer({ id: HURRICANE_CONE_LINE_ID, type: 'line', source: HURRICANE_CONE_SOURCE_ID, paint: { 'line-color': '#fb923c', 'line-width': 1.5, 'line-dasharray': [2, 2], 'line-opacity': 0.8 } }, beforeId);
+      if (!map.getLayer(HURRICANE_TRACK_LINE_ID)) map.addLayer({ id: HURRICANE_TRACK_LINE_ID, type: 'line', source: HURRICANE_TRACK_SOURCE_ID, paint: { 'line-color': '#f8fafc', 'line-width': 2.5, 'line-opacity': 0.95 } }, beforeId);
+      if (!map.getLayer(HURRICANE_RADII_FILL_ID)) map.addLayer({ id: HURRICANE_RADII_FILL_ID, type: 'fill', source: HURRICANE_RADII_SOURCE_ID, paint: { 'fill-color': ['match', ['to-string', ['get', 'radval']], '34', '#f59e0b', '50', '#f97316', '64', '#ef4444', '#fb7185'], 'fill-opacity': 0.10 } }, beforeId);
+      if (!map.getLayer(HURRICANE_RADII_LINE_ID)) map.addLayer({ id: HURRICANE_RADII_LINE_ID, type: 'line', source: HURRICANE_RADII_SOURCE_ID, paint: { 'line-color': ['match', ['to-string', ['get', 'radval']], '34', '#f59e0b', '50', '#f97316', '64', '#ef4444', '#fb7185'], 'line-width': 1.2, 'line-opacity': 0.7 } }, beforeId);
+      if (!map.getLayer(HURRICANE_POINTS_CIRCLE_ID)) map.addLayer({ id: HURRICANE_POINTS_CIRCLE_ID, type: 'circle', source: HURRICANE_POINTS_SOURCE_ID, paint: { 'circle-radius': 4, 'circle-color': '#f8fafc', 'circle-stroke-color': '#0f172a', 'circle-stroke-width': 1 } }, beforeId);
+      if (!map.getLayer(HURRICANE_POINTS_LABEL_ID)) map.addLayer({ id: HURRICANE_POINTS_LABEL_ID, type: 'symbol', source: HURRICANE_POINTS_SOURCE_ID, layout: { 'text-field': ['coalesce', ['get', 'dvlabel'], ['get', 'fltlbl'], ''], 'text-size': 9, 'text-offset': [0, 1.2], 'text-anchor': 'top', 'text-allow-overlap': false }, paint: { 'text-color': '#e2e8f0', 'text-halo-color': '#020617', 'text-halo-width': 1 } }, beforeId);
+      if (!map.getLayer(HURRICANE_CURRENT_HALO_ID)) map.addLayer({ id: HURRICANE_CURRENT_HALO_ID, type: 'circle', source: HURRICANE_CURRENT_SOURCE_ID, paint: { 'circle-radius': 12, 'circle-color': '#ef4444', 'circle-opacity': 0.18, 'circle-blur': 0.4 } }, beforeId);
+      if (!map.getLayer(HURRICANE_CURRENT_CIRCLE_ID)) map.addLayer({ id: HURRICANE_CURRENT_CIRCLE_ID, type: 'circle', source: HURRICANE_CURRENT_SOURCE_ID, paint: { 'circle-radius': 7, 'circle-color': '#ef4444', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2 } }, beforeId);
+      if (!map.getLayer(HURRICANE_CURRENT_LABEL_ID)) map.addLayer({ id: HURRICANE_CURRENT_LABEL_ID, type: 'symbol', source: HURRICANE_CURRENT_SOURCE_ID, layout: { 'text-field': ['coalesce', ['get', 'stormName'], 'Storm'], 'text-size': 11, 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-offset': [0, 1.4], 'text-anchor': 'top' }, paint: { 'text-color': '#ffffff', 'text-halo-color': '#020617', 'text-halo-width': 1.4 } }, beforeId);
+
+      if (!hurricaneHandlersBoundRef.current) {
+        hurricaneHandlersBoundRef.current = true;
+        const openStormPopup = (e: any) => {
+          const props = e.features?.[0]?.properties || {};
+          const name = escapeHtml(props.stormName || 'Tropical Cyclone');
+          const intensity = escapeHtml(props.intensity || 'Unknown');
+          const lat = props.lat;
+          const lon = props.lon;
+          const pos = (lat !== '' && lon !== '' && lat != null && lon != null) ? `${Number(lat).toFixed(2)}°, ${Number(lon).toFixed(2)}°` : 'Unavailable';
+          const movement = escapeHtml(props.movement || 'Unavailable');
+          const advNum = escapeHtml(props.advisoryNumber || 'Unavailable');
+          const advDate = escapeHtml(props.advisoryDate || 'Unavailable');
+          const headline = escapeHtml(props.advisoryHeadline || '');
+          const advUrl = typeof props.advisoryUrl === 'string' && /^https?:\/\/(www\.)?nhc\.noaa\.gov\//i.test(props.advisoryUrl) ? props.advisoryUrl : 'https://www.nhc.noaa.gov/';
+          const source = escapeHtml(props.advisorySource || 'NHC');
+          const wind = props.maxWindKt !== '' && props.maxWindKt != null ? `${escapeHtml(String(props.maxWindKt))} kt` : 'Unavailable';
+          const pres = props.pressureMb !== '' && props.pressureMb != null ? `${escapeHtml(String(props.pressureMb))} mb` : 'Unavailable';
+          new maplibregl.Popup({ closeButton: true, offset: 12, maxWidth: '340px' })
+            .setLngLat(e.lngLat)
+            .setHTML(`<div style="font-family:system-ui;padding:10px;color:#0f172a;max-width:320px;">
+              <div style="display:inline-block;background:#dc2626;color:#fff;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:900;letter-spacing:0.04em;">ACTIVE TROPICAL CYCLONE</div>
+              <div style="font-size:15px;font-weight:900;margin-top:6px;color:#111827;">${name}</div>
+              <div style="font-size:11px;color:#334155;margin-top:6px;line-height:1.55;">
+                <div><strong>Intensity:</strong> ${intensity}</div>
+                <div><strong>Max Wind:</strong> ${wind} &nbsp; <strong>Pressure:</strong> ${pres}</div>
+                <div><strong>Position:</strong> ${escapeHtml(pos)}</div>
+                <div><strong>Movement:</strong> ${movement}</div>
+                <div><strong>Advisory:</strong> ${advNum} (${advDate})</div>
+                <div><strong>Source:</strong> ${source}</div>
+              </div>
+              ${headline ? `<div style="font-size:11px;color:#475569;margin-top:6px;line-height:1.4;">${headline}</div>` : ''}
+              <a href="${escapeHtml(advUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:8px;font-size:11px;font-weight:700;color:#2563eb;">Official advisory ↗</a>
+            </div>`)
+            .addTo(map);
+        };
+        [HURRICANE_CURRENT_CIRCLE_ID, HURRICANE_CURRENT_HALO_ID, HURRICANE_POINTS_CIRCLE_ID, HURRICANE_CONE_FILL_ID, HURRICANE_TRACK_LINE_ID].forEach((layerId) => {
+          map.on('click', layerId, openStormPopup);
+          map.on('mouseenter', layerId, () => { map.getCanvas().style.cursor = 'pointer'; });
+          map.on('mouseleave', layerId, () => { map.getCanvas().style.cursor = ''; });
+        });
+      }
+
+      setHurricaneStatus({ state: 'ready', count: storms.length });
+    } catch (err: any) {
+      removeHurricaneLayers(map);
+      setHurricaneStatus({ state: 'unavailable', count: 0, message: String(err?.message || err) });
+    }
+  }, [removeHurricaneLayers]);
+
+  useEffect(() => {
+    showHurricanesRef.current = showHurricanes;
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    if (!showHurricanes) {
+      removeHurricaneLayers(map);
+      setHurricaneStatus({ state: 'idle', count: 0 });
+      return;
+    }
+    updateHurricanes(map);
+    const timer = setInterval(() => {
+      if (showHurricanesRef.current) updateHurricanes(map);
+    }, 300000);
+    return () => clearInterval(timer);
+  }, [mapReady, showHurricanes, updateHurricanes, removeHurricaneLayers]);
 
   const updateRadar = useCallback(
     async (map: MapLibreMap) => {
@@ -1592,8 +1793,29 @@ export function RadarMap({
         </div>
       )}
 
+      {showHurricanes && hurricaneStatus.state !== 'idle' && (
+        <div className="absolute right-4 top-[17rem] z-40 max-w-[230px] rounded-xl border border-red-500/40 bg-slate-950/95 px-3 py-2 font-mono text-[10px] text-slate-200 shadow-2xl backdrop-blur-md">
+          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-red-300">
+            <span>🌀</span> Tropical Cyclones
+          </div>
+          {hurricaneStatus.state === 'loading' ? (
+            <div className="mt-1 text-slate-400">Loading official NHC/CPHC data…</div>
+          ) : hurricaneStatus.state === 'unavailable' ? (
+            <div className="mt-1 leading-snug text-amber-300">DATA UNAVAILABLE{hurricaneStatus.message ? ` — ${hurricaneStatus.message}` : ''}</div>
+          ) : hurricaneStatus.count === 0 ? (
+            <div className="mt-1 text-slate-400">No active tropical cyclones.</div>
+          ) : (
+            <div className="mt-1 flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
+              <span>{hurricaneStatus.count} active storm{hurricaneStatus.count === 1 ? '' : 's'} (NHC/CPHC)</span>
+            </div>
+          )}
+          <div className="mt-1 text-[9px] text-slate-500">Official NOAA/NWS feeds only. No placeholder storms.</div>
+        </div>
+      )}
+
       {fastScanEnabled && (
-        <div className="absolute right-4 top-[17rem] z-40 max-w-[230px] rounded-xl border border-amber-500/40 bg-slate-950/95 px-3 py-2 font-mono text-[10px] text-slate-200 shadow-2xl backdrop-blur-md">
+        <div className="absolute right-4 top-[22.5rem] z-40 max-w-[230px] rounded-xl border border-amber-500/40 bg-slate-950/95 px-3 py-2 font-mono text-[10px] text-slate-200 shadow-2xl backdrop-blur-md">
           <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-amber-300">
             <span>⚡</span> FastScan
           </div>

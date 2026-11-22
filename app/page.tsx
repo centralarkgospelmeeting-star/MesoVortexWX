@@ -88,6 +88,8 @@ export default function MesoVortexWorkstation() {
   const [showWarnings, setShowWarnings] = useState(true);
   const [showMCD, setShowMCD] = useState(true);
   const [showSpotters, setShowSpotters] = useState(true);
+  const [showHurricanes, setShowHurricanes] = useState(true);
+  const [projectionMode, setProjectionMode] = useState<'mercator' | 'globe'>('mercator');
   const [showSpotterReports, setShowSpotterReports] = useState(true);
   const [spotterFilters, setSpotterFilters] = useState({
     tornado: true,
@@ -233,6 +235,8 @@ export default function MesoVortexWorkstation() {
     showMCD,
     showSpotters,
     showSpotterReports,
+    showHurricanes,
+    projectionMode,
     spotterFilters,
     showSweepAnimation,
     showFastScan,
@@ -798,6 +802,27 @@ export default function MesoVortexWorkstation() {
                 </button>
               </div>
 
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                <div className="mb-1 text-[10px] font-black uppercase tracking-wider text-slate-500">Map Projection</div>
+                <div className="grid grid-cols-2 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setProjectionMode('mercator')}
+                    className={`rounded-lg px-2 py-1.5 text-[11px] font-black transition ${projectionMode === 'mercator' ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'}`}
+                  >
+                    Flat Map
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProjectionMode('globe')}
+                    className={`rounded-lg px-2 py-1.5 text-[11px] font-black transition ${projectionMode === 'globe' ? 'bg-cyan-600 text-white' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'}`}
+                  >
+                    Globe
+                  </button>
+                </div>
+                <div className="mt-1 text-[10px] font-semibold text-slate-500">MapLibre globe projection. Layers and overlays preserved.</div>
+              </div>
+
               <button
                 type="button"
                 onClick={() => {
@@ -860,6 +885,15 @@ export default function MesoVortexWorkstation() {
                     Alert Panel
                   </button>
                 </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 space-y-2">
+                <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">Hurricanes</div>
+                <label className="flex items-center gap-2 font-bold cursor-pointer">
+                  <input type="checkbox" checked={showHurricanes} onChange={(e) => setShowHurricanes(e.target.checked)} />
+                  <span>Active Tropical Cyclones</span>
+                </label>
+                <div className="text-[10px] font-semibold text-slate-500">Official NHC/CPHC: position, cone, track, wind radii, advisories. No placeholder storms.</div>
               </div>
 
               <button
