@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { getRadarCapability, type RadarProductCapability } from '../lib/radar/capability-matrix';
+import { getSatelliteCapability } from '../lib/satellite/capability-matrix';
 
 export type ModeTab = 'Radar' | '3D Radar' | 'Composite' | 'Satellite' | 'Models' | 'Outlooks';
 
@@ -199,19 +200,67 @@ export function WeatherWiseRadarCard({
             {isSatellite && (
               <>
                 <div>
-                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Satellite</div>
-                  <div className="flex gap-1">
+                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Satellite Platform</div>
+                  <div className="flex flex-wrap gap-1">
                     {['goes-east', 'goes-west'].map((b) => <button key={b} type="button" onClick={() => onSelectSatelliteBird?.(b)} className={`rounded-md px-2 py-1 text-[11px] font-bold ${satelliteBird === b ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300'}`}>{b === 'goes-east' ? 'GOES-East' : 'GOES-West'}</button>)}
                   </div>
                 </div>
                 <div>
-                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Product</div>
+                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Live Product (verified tile source)</div>
                   <div className="space-y-1">
                     {(satelliteProducts.length ? satelliteProducts : [{ id: 'visible', label: 'Visible', available: true }, { id: 'ir', label: 'Infrared', available: true }, { id: 'wv-mid', label: 'Water Vapor', available: true }]).map((p) => (
                       <button key={p.id} type="button" disabled={!p.available} onClick={() => p.available && onSelectSatelliteProduct?.(p.id)} className={`flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-[11px] ${satelliteProductId === p.id ? 'bg-cyan-500/15 text-cyan-200' : 'text-slate-200 hover:bg-slate-800'} ${!p.available ? 'opacity-50 cursor-not-allowed' : ''}`}>
                         <span>{!p.available ? '⛔ ' : ''}{p.label}</span>{satelliteProductId === p.id && <span className="text-cyan-400">●</span>}
                       </button>
                     ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Requested Satellite Catalog (honest status)</div>
+                  <div className="max-h-56 overflow-auto space-y-1 pr-1">
+                    {[
+                      { id: 'goes_east', label: 'GOES-East' },
+                      { id: 'goes_west', label: 'GOES-West' },
+                      { id: 'abi_channels', label: 'GOES ABI Channels' },
+                      { id: 'visible', label: 'Visible Satellite Imagery' },
+                      { id: 'infrared', label: 'Infrared Satellite Imagery' },
+                      { id: 'water_vapor', label: 'Water Vapor Imagery' },
+                      { id: 'wv_upper', label: 'Upper-Level Water Vapor' },
+                      { id: 'wv_mid', label: 'Mid-Level Water Vapor' },
+                      { id: 'wv_lower', label: 'Lower-Level Water Vapor' },
+                      { id: 'enhanced_ir', label: 'Enhanced Infrared Imagery' },
+                      { id: 'geocolor', label: 'GeoColor' },
+                      { id: 'airmass_rgb', label: 'Air Mass RGB' },
+                      { id: 'dust_rgb', label: 'Dust RGB' },
+                      { id: 'fire_smoke', label: 'Fire and Smoke Imagery' },
+                      { id: 'cloud_phase', label: 'Cloud-Phase Products' },
+                      { id: 'day_night', label: 'Day/Night Satellite Imagery' },
+                      { id: 'glm_lightning', label: 'Satellite Lightning Imagery (GLM)' },
+                      { id: 'sector_fulldisk', label: 'Full-Disk Imagery' },
+                      { id: 'sector_conus', label: 'CONUS Imagery' },
+                      { id: 'sector_mesoscale', label: 'Mesoscale Sector Imagery' },
+                      { id: 'rapid_scan', label: 'One-Minute Rapid-Scan Imagery' },
+                      { id: 'himawari', label: 'Himawari Coverage' },
+                      { id: 'meteosat', label: 'Meteosat Coverage' },
+                      { id: 'viirs', label: 'VIIRS Polar-Orbiting Satellite Imagery' },
+                      { id: 'sat_history', label: 'Satellite History and Playback' },
+                      { id: 'sat_smoothing', label: 'Satellite Smoothing and Enhancement' },
+                      { id: 'sat_custom_color', label: 'Custom Satellite Color Enhancements' },
+                      { id: 'sat_cross_section', label: 'Satellite Cross Sections' },
+                      { id: 'sat_3d', label: 'Three-Dimensional Satellite Visualization' },
+                      { id: 'sat_radar_compare', label: 'Satellite and Radar Comparison' },
+                      { id: 'sat_atmo_overlays', label: 'Satellite and Atmospheric-Analysis Overlays' },
+                    ].map((item) => {
+                      const cap = getSatelliteCapability(item.id);
+                      const available = cap?.availability === 'WORKING' || cap?.availability === 'PARTIAL';
+                      const reason = !available ? (cap?.unavailableReason || 'DATA UNAVAILABLE') : (cap?.availability === 'PARTIAL' ? cap.notes : undefined);
+                      return (
+                        <div key={item.id} title={reason} className={`flex items-center justify-between rounded-md px-2.5 py-1.5 text-[11px] ${available ? 'bg-slate-800/60 text-slate-200' : 'bg-slate-900/40 text-slate-500'}`}>
+                          <span>{!available ? '⛔ ' : cap?.availability === 'PARTIAL' ? '⚠ ' : '✓ '}{item.label}</span>
+                          <span className={`text-[10px] font-bold ${available ? 'text-amber-300' : 'text-slate-500'}`}>{cap?.availability || 'UNAVAILABLE'}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </>

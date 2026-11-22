@@ -829,7 +829,7 @@ export default function MesoVortexWorkstation() {
             setSatelliteSelection(next);
             if (quadMode) setQuadPanes((prev)=>prev.map((p)=>p.mode==='Satellite'?{...p,satelliteSelection:next}:p));
           }}
-          satelliteProducts={SATELLITE_PRODUCTS.filter(p => ['visible','ir','wv-mid','wv-upper','wv-lower'].includes(p.id)).map(p => ({ id: p.id, label: p.shortLabel, available: p.available }))}
+          satelliteProducts={SATELLITE_PRODUCTS.map(p => ({ id: p.id, label: p.shortLabel, available: p.available }))}
           modelId={modelId}
           modelField={modelField}
           modelOptions={MODEL_CATALOG.map(m => ({ id: m.id, label: m.name.split('(')[0].trim(), status: m.status }))}

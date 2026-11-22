@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { getRadarCapability } from '../lib/radar/capability-matrix';
+import { getSatelliteCapability } from '../lib/satellite/capability-matrix';
 import { MainNavTab, SpcDay } from './MainNavbar';
 import { RADAR_SITES } from '../lib/radar-config';
 
@@ -105,10 +106,37 @@ const COMPOSITE_PRODUCTS = [
 ];
 
 const SATELLITE_PRODUCTS = [
-  { key: 'geocolor', label: 'GeoColor (Visible & Day/Night)' },
-  { key: 'clean_ir', label: 'Clean Infrared (Ch 13 - 10.3µm)' },
-  { key: 'water_vapor', label: 'Mid-Level Water Vapor (Ch 9 - 6.9µm)' },
-  { key: 'sandwich', label: 'RGB Sandwich Convective' },
+  { key: 'goes_east', capId: 'goes_east', label: 'GOES-East' },
+  { key: 'goes_west', capId: 'goes_west', label: 'GOES-West' },
+  { key: 'abi_channels', capId: 'abi_channels', label: 'GOES ABI Channels' },
+  { key: 'visible', capId: 'visible', label: 'Visible Satellite Imagery' },
+  { key: 'clean_ir', capId: 'infrared', label: 'Infrared Satellite Imagery' },
+  { key: 'water_vapor', capId: 'water_vapor', label: 'Water Vapor Imagery' },
+  { key: 'wv_upper', capId: 'wv_upper', label: 'Upper-Level Water Vapor' },
+  { key: 'wv_mid', capId: 'wv_mid', label: 'Mid-Level Water Vapor' },
+  { key: 'wv_lower', capId: 'wv_lower', label: 'Lower-Level Water Vapor' },
+  { key: 'enhanced_ir', capId: 'enhanced_ir', label: 'Enhanced Infrared Imagery' },
+  { key: 'geocolor', capId: 'geocolor', label: 'GeoColor' },
+  { key: 'airmass', capId: 'airmass_rgb', label: 'Air Mass RGB' },
+  { key: 'dust', capId: 'dust_rgb', label: 'Dust RGB' },
+  { key: 'fire_smoke', capId: 'fire_smoke', label: 'Fire and Smoke Imagery' },
+  { key: 'cloud_phase', capId: 'cloud_phase', label: 'Cloud-Phase Products' },
+  { key: 'day_night', capId: 'day_night', label: 'Day/Night Satellite Imagery' },
+  { key: 'glm', capId: 'glm_lightning', label: 'Satellite Lightning Imagery (GLM)' },
+  { key: 'fulldisk', capId: 'sector_fulldisk', label: 'Full-Disk Imagery' },
+  { key: 'conus', capId: 'sector_conus', label: 'CONUS Imagery' },
+  { key: 'mesoscale', capId: 'sector_mesoscale', label: 'Mesoscale Sector Imagery' },
+  { key: 'rapid_scan', capId: 'rapid_scan', label: 'One-Minute Rapid-Scan Imagery' },
+  { key: 'himawari', capId: 'himawari', label: 'Himawari Coverage' },
+  { key: 'meteosat', capId: 'meteosat', label: 'Meteosat Coverage' },
+  { key: 'viirs', capId: 'viirs', label: 'VIIRS Polar-Orbiting Satellite Imagery' },
+  { key: 'sat_history', capId: 'sat_history', label: 'Satellite History and Playback' },
+  { key: 'sat_smoothing', capId: 'sat_smoothing', label: 'Satellite Smoothing and Enhancement' },
+  { key: 'sat_custom_color', capId: 'sat_custom_color', label: 'Custom Satellite Color Enhancements' },
+  { key: 'sat_cross_section', capId: 'sat_cross_section', label: 'Satellite Cross Sections' },
+  { key: 'sat_3d', capId: 'sat_3d', label: 'Three-Dimensional Satellite Visualization' },
+  { key: 'sat_radar_compare', capId: 'sat_radar_compare', label: 'Satellite and Radar Comparison' },
+  { key: 'sat_atmo_overlays', capId: 'sat_atmo_overlays', label: 'Satellite and Atmospheric-Analysis Overlays' },
 ];
 
 const FORECAST_MODELS = [
@@ -390,11 +418,15 @@ export function FloatingProductPanel({
                   onChange={(e) => onSelectProduct(e.target.value)}
                   className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none"
                 >
-                  {SATELLITE_PRODUCTS.map((s) => (
-                    <option key={s.key} value={s.key}>
-                      {s.label}
-                    </option>
-                  ))}
+                  {SATELLITE_PRODUCTS.map((s) => {
+                    const cap = getSatelliteCapability(s.capId);
+                    const available = cap?.availability === 'WORKING' || cap?.availability === 'PARTIAL';
+                    return (
+                      <option key={s.key} value={s.key} disabled={!available}>
+                        {!available ? '⛔ ' : cap?.availability === 'PARTIAL' ? '⚠ ' : ''}{s.label}{!available ? ' (DATA UNAVAILABLE)' : ''}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
             </div>
