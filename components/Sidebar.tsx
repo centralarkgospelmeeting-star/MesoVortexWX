@@ -49,18 +49,24 @@ export function Sidebar({
       <div className="grid grid-cols-2 gap-1 p-1.5 border-b border-slate-800">
         {RADAR_PRODUCTS.map((item) => {
           const active = product === item.key;
+          const unavailable = (item as any).availability === 'UNAVAILABLE' || (item as any).availability === 'RESTRICTED';
+          const partial = (item as any).availability === 'PARTIAL';
+          const reason = (item as any).unavailableReason || item.sourceNote || item.description;
           return (
             <button
               key={item.key}
-              onClick={() => setProduct(item.key)}
-              title={item.sourceNote ? `${item.description} — ${item.sourceNote}` : item.description}
+              onClick={() => !unavailable && setProduct(item.key)}
+              disabled={unavailable}
+              title={unavailable ? reason : partial ? `PARTIAL - ${reason}` : item.description}
               className={`rounded border px-1.5 py-1 text-left transition ${
                 active
                   ? 'border-cyan-500/70 bg-cyan-900/50 text-cyan-100'
+                  : unavailable
+                  ? 'border-slate-800 bg-slate-950/40 text-slate-600 cursor-not-allowed'
                   : 'border-slate-700 bg-slate-900/60 text-slate-300 hover:border-slate-500 hover:text-white'
               }`}
             >
-              <div className="text-[11px] font-extrabold leading-none">{item.short}</div>
+              <div className="text-[11px] font-extrabold leading-none">{unavailable ? '⛔ ' : partial ? '⚠ ' : ''}{item.short}</div>
               <div className="mt-0.5 text-[9px] leading-tight opacity-80 line-clamp-1">{item.label}</div>
             </button>
           );

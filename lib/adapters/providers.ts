@@ -1,84 +1,100 @@
-import { RadarFeedResponse, ActiveAlert, SurfaceObservation, GroundReport } from './types';
+import { RadarFeedResponse, ActiveAlert, SurfaceObservation } from './types';
 import { RADAR_SITES } from '../radar-config';
+import { getRadarCapability, isRadarProductAvailable } from '../radar/capability-matrix';
 
 const IEM_BASE = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0';
 const NWS_BASE = 'https://api.weather.gov';
 const OPEN_METEO_BASE = 'https://api.open-meteo.com/v1';
 
 // ============================================================================
-// 1. RADAR PROVIDER ADAPTER (IEM / NOAA Unidata Level III & MRMS)
+// 1. RADAR PROVIDER ADAPTER (IEM / NOAA NEXRAD Level III)
+// DATA HONESTY: capability matrix is authoritative. No fake playback. No substitutes.
 // ============================================================================
 export class NoaaRadarAdapter {
-  static getRadarFeed(stationId: string, product: string, tilt = '0.5'): RadarFeedResponse {
+  static getRadarFeed(stationId: string, product: string, tilt = '0.5'): RadarFeedResponse & { available: boolean; notes?: string[]; capabilityId?: string } {
     const site = RADAR_SITES.find((s) => s.id === stationId || s.radarId === stationId) || RADAR_SITES[0];
-    
+    const key = product.toLowerCase();
+    const capId = (key === 'ref' || key === 'max_ref' || key === 'ref_x') ? 'ref'
+      : key === 'vel' ? 'vel'
+      : key === 'srvel' ? 'srvel'
+      : key;
+    const cap = getRadarCapability(capId);
+
+    if (!cap || !isRadarProductAvailable(capId)) {
+      return {
+        available: false,
+        provider: 'DATA UNAVAILABLE',
+        station: site.radarId,
+        product: capId.toUpperCase(),
+        tilt,
+        frames: [],
+        latestTileUrl: '',
+        capabilityId: capId,
+        notes: [cap?.unavailableReason || `DATA UNAVAILABLE - ${capId} is not available. No silent substitution.`],
+      };
+    }
+
+    const isTdwr = site.network === 'TDWR';
+    const sector = isTdwr ? `T${site.radarId}` : site.radarId;
     let productCode = 'N0B';
-    let tileUrl = '';
+    let archiveSupported = false;
 
-    if (product === 'mesh') {
-      productCode = 'MESH';
-      tileUrl = `${IEM_BASE}/mrms::MESH_Max60min/{z}/{x}/{y}.png`;
-    } else if (product === 'azshear') {
-      productCode = 'AZSHEAR';
-      tileUrl = `${IEM_BASE}/mrms::AzShear_0-2km/{z}/{x}/{y}.png`;
-    } else if (product === 'vel') {
-      productCode = tilt === '0.9' ? 'N1U' : tilt === '1.3' ? 'N2U' : tilt === '1.8' ? 'N3U' : 'N0U';
-      tileUrl = `${IEM_BASE}/ridge::${site.radarId}-${productCode}-0/{z}/{x}/{y}.png`;
-    } else if (product === 'srvel') {
-      productCode = 'N0S';
-      tileUrl = `${IEM_BASE}/ridge::${site.radarId}-N0S-0/{z}/{x}/{y}.png`;
-    } else if (product === 'cc') {
-      productCode = 'N0C';
-      tileUrl = `${IEM_BASE}/mrms::PrecipClass/{z}/{x}/{y}.png`;
-    } else if (product === 'zdr') {
-      productCode = 'N0X';
-      tileUrl = `${IEM_BASE}/mrms::ReflectivityAtLowestAltitude/{z}/{x}/{y}.png`;
-    } else if (product === 'kdp') {
-      productCode = 'N0K';
-      tileUrl = `${IEM_BASE}/mrms::MultiSensorQPE01H/{z}/{x}/{y}.png`;
-    } else if (product === 'tops') {
-      productCode = 'EET';
-      tileUrl = `${IEM_BASE}/ridge::${site.radarId}-EET-0/{z}/{x}/{y}.png`;
-    } else if (product === 'vil') {
-      productCode = 'DVL';
-      tileUrl = `${IEM_BASE}/ridge::${site.radarId}-DVL-0/{z}/{x}/{y}.png`;
+    if (isTdwr) {
+      if (capId === 'ref') { productCode = 'TZL'; archiveSupported = false; }
+      else if (capId === 'vel') { productCode = 'TV0'; archiveSupported = false; }
+      else {
+        return {
+          available: false, provider: 'DATA UNAVAILABLE', station: site.radarId, product: capId.toUpperCase(), tilt, frames: [], latestTileUrl: '',
+          capabilityId: capId, notes: [`DATA UNAVAILABLE - ${cap.name} is not supported for TDWR.`],
+        };
+      }
     } else {
-      productCode = tilt === '0.9' ? 'N1B' : tilt === '1.3' ? 'N2B' : tilt === '1.8' ? 'N3B' : 'N0B';
-      tileUrl = `${IEM_BASE}/ridge::${site.radarId}-${productCode}-0/{z}/{x}/{y}.png`;
+      if (capId === 'ref') { productCode = tilt === '0.9' ? 'N1B' : tilt === '1.3' ? 'N2B' : tilt === '1.8' ? 'N3B' : 'N0B'; archiveSupported = productCode === 'N0B'; }
+      else if (capId === 'vel') { productCode = tilt === '0.9' ? 'N1U' : tilt === '1.3' ? 'N2U' : tilt === '1.8' ? 'N3U' : 'N0U'; archiveSupported = false; }
+      else if (capId === 'srvel') { productCode = 'N0S'; archiveSupported = true; }
+      else {
+        return {
+          available: false, provider: 'DATA UNAVAILABLE', station: site.radarId, product: capId.toUpperCase(), tilt, frames: [], latestTileUrl: '',
+          capabilityId: capId, notes: [cap.unavailableReason || `DATA UNAVAILABLE - ${cap.name} is not available.`],
+        };
+      }
     }
 
+    const latestTileUrl = `${IEM_BASE}/ridge::${sector}-${productCode}-0/{z}/{x}/{y}.png`;
     const now = new Date();
-    const frames = [];
+    const frames: { time: string; label: string; tileUrl: string; ageMinutes: number }[] = [];
 
-    for (let i = 8; i >= 1; i--) {
-      const d = new Date(now.getTime() - i * 5 * 60 * 1000);
-      d.setUTCMinutes(Math.floor(d.getUTCMinutes() / 5) * 5, 0, 0);
-      const stamp = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}${String(d.getUTCHours()).padStart(2, '0')}${String(d.getUTCMinutes()).padStart(2, '0')}`;
-      
-      frames.push({
-        time: d.toISOString(),
-        label: `-${i * 5}m`,
-        tileUrl: (product === 'mesh' || product === 'azshear' || product === 'cc' || product === 'zdr' || product === 'kdp')
-          ? tileUrl
-          : `${IEM_BASE}/ridge::${site.radarId}-${productCode}-${stamp}/{z}/{x}/{y}.png`,
-        ageMinutes: i * 5,
-      });
+    // DATA HONESTY: only real archived frames when archive is verified. No synthetic timestamps.
+    if (archiveSupported) {
+      for (let i = 8; i >= 1; i--) {
+        const d = new Date(now.getTime() - i * 5 * 60 * 1000);
+        d.setUTCMinutes(Math.floor(d.getUTCMinutes() / 5) * 5, 0, 0);
+        const stamp = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}${String(d.getUTCHours()).padStart(2, '0')}${String(d.getUTCMinutes()).padStart(2, '0')}`;
+        const ageMinutes = Math.round((now.getTime() - d.getTime()) / 60000);
+        frames.push({
+          time: d.toISOString(),
+          label: `-${ageMinutes}m`,
+          tileUrl: `${IEM_BASE}/ridge::${sector}-${productCode}-${stamp}/{z}/{x}/{y}.png`,
+          ageMinutes,
+        });
+      }
     }
 
-    frames.push({
-      time: now.toISOString(),
-      label: 'LIVE',
-      tileUrl,
-      ageMinutes: 0,
-    });
+    frames.push({ time: now.toISOString(), label: 'LIVE', tileUrl: latestTileUrl, ageMinutes: 0 });
+
+    const notes: string[] = [];
+    if (!archiveSupported) notes.push(`LIVE ONLY - Historical loop not verified for ${cap.name}. No fake historical frames generated.`);
 
     return {
-      provider: 'NOAA NEXRAD / IEM Level III',
+      available: true,
+      provider: isTdwr ? 'FAA TDWR / IEM RIDGE' : 'NOAA NEXRAD / IEM Level III',
       station: site.radarId,
       product: productCode,
       tilt,
       frames,
-      latestTileUrl: tileUrl,
+      latestTileUrl,
+      capabilityId: capId,
+      notes: notes.length ? notes : undefined,
     };
   }
 }
@@ -151,20 +167,21 @@ export class HyperlocalWeatherAdapter {
         timestamp: new Date().toISOString(),
       };
     } catch {
+      // Data honesty: never fabricate telemetry as real. Caller must handle unavailable state.
       return {
-        tempF: 72,
-        feelsLikeF: 72,
-        dewPointF: 55,
-        wetBulbF: 62,
-        humidityPct: 50,
-        pressureMb: 1013,
-        pressureInHg: 29.92,
-        windSpeedKt: 8,
-        windGustKt: 14,
-        windDirDeg: 180,
-        visibilityMi: 10,
-        conditionText: 'Baseline Mode',
-        provider: 'Offline Cache',
+        tempF: NaN,
+        feelsLikeF: NaN,
+        dewPointF: NaN,
+        wetBulbF: NaN,
+        humidityPct: NaN,
+        pressureMb: NaN,
+        pressureInHg: NaN,
+        windSpeedKt: NaN,
+        windGustKt: NaN,
+        windDirDeg: NaN,
+        visibilityMi: NaN,
+        conditionText: 'DATA UNAVAILABLE',
+        provider: 'DATA UNAVAILABLE',
         timestamp: new Date().toISOString(),
       };
     }

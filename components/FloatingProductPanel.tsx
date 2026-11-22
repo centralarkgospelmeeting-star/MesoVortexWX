@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { getRadarCapability } from '../lib/radar/capability-matrix';
 import { MainNavTab, SpcDay } from './MainNavbar';
 import { RADAR_SITES } from '../lib/radar-config';
 
@@ -54,26 +55,37 @@ type Props = {
   onSelectSpcDay?: (day: SpcDay) => void;
 };
 
-const RADAR_PRODUCTS = [
-  { key: 'ref', label: 'Base Reflectivity (0.5°)' },
-  { key: 'super_res', label: 'Super-Res Reflectivity' },
-  { key: 'max_ref', label: 'Composite Max Reflectivity Swath' },
-  { key: 'ref_x', label: 'Reflectivity X (Lerp Smoothed)' },
-  { key: 'vel', label: 'Base Velocity' },
-  { key: 'srvel', label: 'Storm-Relative Velocity (SRV)' },
-  { key: 'norm_vel', label: 'Normalized Velocity' },
-  { key: 'cc', label: 'Correlation Coefficient (CC)' },
-  { key: 'min_cc', label: 'Minimum CC Track' },
-  { key: 'zdr', label: 'Differential Reflectivity (ZDR)' },
-  { key: 'kdp', label: 'Specific Diff Phase (KDP)' },
-  { key: 'sw', label: 'Spectrum Width' },
-  { key: 'tops', label: 'Echo Tops (kft)' },
-  { key: 'vil', label: 'Vertically Integrated Liquid (VIL)' },
-  { key: 'hhc', label: 'Hydrometeor Classification' },
-  { key: 'qpe', label: 'Digital Precip Rate (QPE)' },
-  { key: 'mesh', label: 'MESH Hail Swath' },
-  { key: 'azshear', label: 'AzShear Rotation Track' },
+const RADAR_PRODUCT_KEYS = [
+  { key: 'ref', label: 'Base Reflectivity (0.5°)', capId: 'ref' },
+  { key: 'super_res', label: 'Super-Res Reflectivity', capId: '__super_res__' },
+  { key: 'max_ref', label: 'Composite Max Reflectivity Swath', capId: 'ref' },
+  { key: 'ref_x', label: 'Reflectivity X (Lerp Smoothed)', capId: 'ref' },
+  { key: 'vel', label: 'Base Velocity', capId: 'vel' },
+  { key: 'srvel', label: 'Storm-Relative Velocity (SRV)', capId: 'srvel' },
+  { key: 'norm_vel', label: 'Normalized Velocity', capId: 'nrot' },
+  { key: 'cc', label: 'Correlation Coefficient (CC)', capId: 'cc' },
+  { key: 'min_cc', label: 'Minimum CC Track', capId: 'min_cc' },
+  { key: 'zdr', label: 'Differential Reflectivity (ZDR)', capId: 'zdr' },
+  { key: 'kdp', label: 'Specific Diff Phase (KDP)', capId: 'kdp' },
+  { key: 'sw', label: 'Spectrum Width', capId: 'sw' },
+  { key: 'tops', label: 'Echo Tops (kft)', capId: 'tops' },
+  { key: 'vil', label: 'Vertically Integrated Liquid (VIL)', capId: 'vil' },
+  { key: 'hhc', label: 'Hydrometeor Classification', capId: 'hhc' },
+  { key: 'qpe', label: 'Digital Precip Rate (QPE)', capId: 'qpe' },
+  { key: 'mesh', label: 'MESH Hail Swath', capId: 'mesh' },
+  { key: 'azshear', label: 'AzShear Rotation Track', capId: 'azshear' },
 ];
+
+function radarProductsWithAvailability() {
+  return RADAR_PRODUCT_KEYS.map((p) => {
+    const cap = getRadarCapability(p.capId);
+    const available = cap?.availability === 'WORKING' || cap?.availability === 'PARTIAL';
+    const reason = !available ? (cap?.unavailableReason || 'DATA UNAVAILABLE - No verified source.') : undefined;
+    const warning = cap?.availability === 'PARTIAL' ? 'PARTIAL - Limited verification' : undefined;
+    return { ...p, available, reason, warning };
+  });
+}
+const RADAR_PRODUCTS = radarProductsWithAvailability();
 
 const COMPOSITE_PRODUCTS = [
   { key: 'comp_ref', label: 'Composite Reflectivity (CONUS N0Q)' },
@@ -279,8 +291,8 @@ export function FloatingProductPanel({
                   className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none"
                 >
                   {RADAR_PRODUCTS.map((p) => (
-                    <option key={p.key} value={p.key}>
-                      {p.label}
+                    <option key={p.key} value={p.key} disabled={!p.available} title={p.reason || p.warning || p.label}>
+                      {!p.available ? '⛔ ' : p.warning ? '⚠ ' : ''}{p.label}
                     </option>
                   ))}
                 </select>

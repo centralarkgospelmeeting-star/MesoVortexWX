@@ -225,11 +225,11 @@ export const TDWR_SITE_LIST = RADAR_SITES.filter((s) => s.network === 'TDWR');
 export type { RadarProductKey, RadarProductDef, FrameProvenance } from './product-registry';
 export { RADAR_PRODUCTS, getProductDef } from './product-registry';
 
+// LEGACY COMPATIBILITY ONLY - do not use for product availability decisions.
+// Capability matrix (lib/radar/capability-matrix.ts) is the authoritative source.
+// Codes here reflect currently verified IEM RIDGE mappings; unavailable products omitted.
 export const NEXRAD_PRODUCT_CODES: Record<string, string> = {
-  ref: 'N0Q',
+  ref: 'N0B',
   vel: 'N0U',
   srvel: 'N0S',
-  cc: 'N0C',
-  zdr: 'N0X',
-  kdp: 'N0K',
 };

@@ -1,4 +1,5 @@
 import { RADAR_SITES } from '../radar-config';
+import { getRadarCapability, isRadarProductAvailable } from './capability-matrix';
 
 export type RadarNetwork = 'nexrad' | 'tdwr' | 'mrms' | 'research' | 'private' | 'mobile' | 'spotter';
 export type RadarNetworkType = RadarNetwork;
@@ -35,22 +36,27 @@ class NoaaWsR88DDriver implements RadarDriver {
   networkType = 'nexrad';
   private baseUrl = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0';
 
-  private mapProductCode(product: string, network: RadarNetwork): string | null {
+  private resolveProduct(product: string, network: RadarNetwork): { code: string; capabilityId: string; archiveSupported: boolean } | null {
     const p = product.toLowerCase();
+    const capId = (p === 'ref' || p === 'max_ref' || p === 'ref_x') ? 'ref'
+      : p === 'vel' ? 'vel'
+      : p === 'srvel' ? 'srvel'
+      : p;
+    const cap = getRadarCapability(capId);
+    if (!cap || !isRadarProductAvailable(capId)) return null;
+    if (network === 'tdwr' && !cap.networks.includes('TDWR')) return null;
+    if (network !== 'tdwr' && !cap.networks.includes('NEXRAD')) return null;
+
     if (network === 'tdwr') {
-      if (p === 'vel' || p === 'n0u' || p === 'n0v') return 'TV0';
-      if (p === 'ref' || p === 'n0q' || p === 'n0r') return 'TZL';
+      if (capId === 'ref') return { code: 'TZL', capabilityId: capId, archiveSupported: false };
+      if (capId === 'vel') return { code: 'TV0', capabilityId: capId, archiveSupported: false };
       return null;
     }
-    if (p === 'cc' || p === 'zdr' || p === 'kdp' || p === 'n0c' || p === 'n0x' || p === 'n0k') {
-      return null;
-    }
-    if (product === 'tops') return 'NET';
-    if (product === 'vil') return 'N0Z';
-    if (p === 'srvel' || p === 'n0s') return 'N0S';
-    if (p === 'tops') return 'NET';
-    if (p === 'vil') return 'NVL';
-    return 'N0Q';
+
+    if (capId === 'ref') return { code: 'N0B', capabilityId: capId, archiveSupported: true };
+    if (capId === 'vel') return { code: 'N0U', capabilityId: capId, archiveSupported: false };
+    if (capId === 'srvel') return { code: 'N0S', capabilityId: capId, archiveSupported: true };
+    return null;
   }
 
   getTileUrl(req: RadarTileRequest): string {
@@ -59,41 +65,43 @@ class NoaaWsR88DDriver implements RadarDriver {
       req.station.id === 'US' ||
       req.station.callsign === 'US' ||
       req.station.callsign.length < 3;
+    if (national) return `${this.baseUrl}/nexrad-n0q-900913/{z}/{x}/{y}.png`;
 
-    if (national) {
-      return `${this.baseUrl}/nexrad-n0q-900913/{z}/{x}/{y}.png`;
+    const resolved = this.resolveProduct(req.product, req.station.network);
+    if (!resolved) {
+      // Data honesty: do not silently fall back to unrelated product.
+      return '';
     }
-
-    const code = this.mapProductCode(req.product, req.station.network);
-    if (!code) {
-      return this.getTileUrl({ ...req, product: 'ref' });
-    }
-
     const id = req.station.network === 'tdwr' ? req.station.id : req.station.callsign;
-    return `${this.baseUrl}/ridge::${id}-${code}-0/{z}/{x}/{y}.png`;
+    return `${this.baseUrl}/ridge::${id}-${resolved.code}-0/{z}/{x}/{y}.png`;
   }
 
   getFrameLoop(req: RadarTileRequest, count = 12): { time: string; label: string; tileUrl: string }[] {
     const live = this.getTileUrl(req);
+    if (!live) return [];
+    const resolved = this.resolveProduct(req.product, req.station.network);
     const now = Date.now();
-    const frames: { time: string; label: string; tileUrl: string }[] = [];
 
-    for (let i = count; i >= 1; i--) {
-      const d = new Date(now - i * 5 * 60 * 1000);
-      frames.push({
-        time: d.toISOString(),
-        label: `-${i * 5}m`,
-        tileUrl: live,
-      });
+    // DATA HONESTY: no fake historical frames. Only real archive when verified.
+    if (resolved?.archiveSupported) {
+      const frames: { time: string; label: string; tileUrl: string }[] = [];
+      const id = req.station.network === 'tdwr' ? req.station.id : req.station.callsign;
+      for (let i = Math.min(count, 12); i >= 1; i--) {
+        const d = new Date(now - i * 5 * 60 * 1000);
+        d.setUTCMinutes(Math.floor(d.getUTCMinutes() / 5) * 5, 0, 0);
+        const stamp = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}${String(d.getUTCHours()).padStart(2, '0')}${String(d.getUTCMinutes()).padStart(2, '0')}`;
+        frames.push({
+          time: d.toISOString(),
+          label: `-${i * 5}m`,
+          tileUrl: `${this.baseUrl}/ridge::${id}-${resolved.code}-${stamp}/{z}/{x}/{y}.png`,
+        });
+      }
+      frames.push({ time: new Date(now).toISOString(), label: 'LIVE', tileUrl: live });
+      return frames;
     }
 
-    frames.push({
-      time: new Date(now).toISOString(),
-      label: 'LIVE',
-      tileUrl: live,
-    });
-
-    return frames;
+    // LIVE_ONLY: single real frame, no synthetic timestamps.
+    return [{ time: new Date(now).toISOString(), label: 'LIVE', tileUrl: live }];
   }
 }
 
@@ -133,12 +141,12 @@ export class RadarSiteRegistry {
       network: 'nexrad',
       country: 'US',
       isOnline: false,
-      supportedProducts: ['ref', 'vel'],
+      supportedProducts: ['ref', 'vel', 'srvel'],
       supportedTilts: ['0.5'],
     };
   }
 
-  static getDriverForStation(station: RadarStation): RadarDriver {
+  static getDriverForStation(_station: RadarStation): RadarDriver {
     return defaultDriver;
   }
 
@@ -169,7 +177,7 @@ export class RadarSiteRegistry {
         country: 'US',
         state: stateMatch?.[1],
         isOnline: true,
-        supportedProducts: ['ref', 'vel', 'srvel', 'cc', 'zdr', 'kdp'],
+        supportedProducts: ['ref', 'vel', 'srvel'],
         supportedTilts: ['0.5', '0.9', '1.3', '1.8'],
         vcpMode: 'VCP 212 Convective',
       });

@@ -1,7 +1,38 @@
+import { getRadarCapability } from '../../../../lib/radar/capability-matrix';
+
 export const dynamic = 'force-dynamic';
 
-// 2.0-inspired resilient radar tile proxy (adapted for Next.js Route Handler)
-// DATA HONESTY: do not return transparent/synthetic tiles on failure.
+// Radar tile proxy. Capability matrix is authoritative.
+// DATA HONESTY: no silent substitutes, no fallback to unrelated products, no synthetic tiles.
+const IEM = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0';
+
+function normalizeProduct(productKey: string): string | null {
+  const key = productKey.toLowerCase();
+  if (key === 'ref' || key === 'max_ref' || key === 'ref_x') return 'ref';
+  if (key === 'vel') return 'vel';
+  if (key === 'srvel') return 'srvel';
+  if (key === 'norm_vel' || key === 'nrot') return 'nrot';
+  if (key === 'min_cc') return 'min_cc';
+  if (key === 'cc') return 'cc';
+  if (key === 'zdr') return 'zdr';
+  if (key === 'kdp') return 'kdp';
+  if (key === 'sw') return 'sw';
+  if (key === 'hhc') return 'hhc';
+  if (key === 'qpe') return 'qpe';
+  if (key === 'azshear') return 'azshear';
+  if (key === 'mesh') return 'mesh';
+  if (key === 'tops') return 'tops';
+  if (key === 'vil') return 'vil';
+  return null;
+}
+
+function unavailableResponse(reason: string) {
+  return new Response(JSON.stringify({ error: reason }), {
+    status: 404,
+    headers: { 'Cache-Control': 'no-store', 'Content-Type': 'application/json', 'X-MesoVortex-Data': 'unavailable' },
+  });
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const product = String(searchParams.get('product') || 'ref');
@@ -11,44 +42,36 @@ export async function GET(request: Request) {
   const x = searchParams.get('x');
   const y = searchParams.get('y');
 
-  if (!z || !x || !y) {
-    return new Response(null, { status: 404, headers: { 'Cache-Control': 'no-store' } });
+  if (!z || !x || !y) return unavailableResponse('DATA UNAVAILABLE - Missing tile coordinates.');
+
+  const normalized = normalizeProduct(product);
+  if (!normalized) return unavailableResponse(`DATA UNAVAILABLE - Unknown radar product "${product}".`);
+
+  const cap = getRadarCapability(normalized);
+  if (!cap) return unavailableResponse(`DATA UNAVAILABLE - Unknown radar product "${product}".`);
+  if (cap.availability === 'UNAVAILABLE' || cap.availability === 'RESTRICTED') {
+    return unavailableResponse(cap.unavailableReason || `DATA UNAVAILABLE - ${cap.name} is not available.`);
   }
 
+  // Only verified, honest mappings. No substitutes, no unrelated fallbacks.
   const candidates: string[] = [];
-  const IEM = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0';
-
-  if (product === 'azshear') {
-    candidates.push(`${IEM}/mrms::AzShear_0-2km/${z}/${x}/${y}.png`);
-    candidates.push(`${IEM}/ridge::${site}-N0S-0/${z}/${x}/${y}.png`);
-  } else if (product === 'mesh') {
-    candidates.push(`${IEM}/mrms::MESH_Max60min/${z}/${x}/${y}.png`);
-  } else if (product === 'cc' || product === 'zdr' || product === 'kdp') {
-    // Keep current project mappings (substitutes noted in registry) as fallbacks
-    if (product === 'cc') candidates.push(`${IEM}/mrms::PrecipClass/${z}/${x}/${y}.png`);
-    if (product === 'zdr') candidates.push(`${IEM}/mrms::ReflectivityAtLowestAltitude/${z}/${x}/${y}.png`);
-    if (product === 'kdp') candidates.push(`${IEM}/mrms::MultiSensorQPE01H/${z}/${x}/${y}.png`);
-  } else if (product === 'tops') {
-    candidates.push(`${IEM}/ridge::${site}-EET-0/${z}/${x}/${y}.png`);
-  } else if (product === 'vil') {
-    candidates.push(`${IEM}/ridge::${site}-DVL-0/${z}/${x}/${y}.png`);
-  } else if (product === 'srvel') {
-    candidates.push(`${IEM}/ridge::${site}-N0S-0/${z}/${x}/${y}.png`);
-  } else if (product === 'vel') {
-    let code = 'N0U';
-    if (tilt === '0.9') code = 'N1U';
-    if (tilt === '1.3') code = 'N2U';
-    if (tilt === '1.8') code = 'N3U';
-    candidates.push(`${IEM}/ridge::${site}-${code}-0/${z}/${x}/${y}.png`);
-  } else {
+  if (normalized === 'ref') {
     let code = 'N0B';
     if (tilt === '0.9') code = 'N1B';
     if (tilt === '1.3') code = 'N2B';
     if (tilt === '1.8') code = 'N3B';
     candidates.push(`${IEM}/ridge::${site}-${code}-0/${z}/${x}/${y}.png`);
+  } else if (normalized === 'vel') {
+    let code = 'N0U';
+    if (tilt === '0.9') code = 'N1U';
+    if (tilt === '1.3') code = 'N2U';
+    if (tilt === '1.8') code = 'N3U';
+    candidates.push(`${IEM}/ridge::${site}-${code}-0/${z}/${x}/${y}.png`);
+  } else if (normalized === 'srvel') {
+    candidates.push(`${IEM}/ridge::${site}-N0S-0/${z}/${x}/${y}.png`);
+  } else {
+    return unavailableResponse(cap.unavailableReason || `DATA UNAVAILABLE - ${cap.name} is not available.`);
   }
-
-  candidates.push(`${IEM}/ridge::${site}-N0B-0/${z}/${x}/${y}.png`);
 
   for (const url of candidates) {
     try {
@@ -63,11 +86,12 @@ export async function GET(request: Request) {
           headers: {
             'Content-Type': upstream.headers.get('Content-Type') || 'image/png',
             'Cache-Control': 'public, max-age=120',
+            'X-MesoVortex-Product': normalized,
           },
         });
       }
     } catch {
-      // try next
+      // try next candidate
     }
   }
 

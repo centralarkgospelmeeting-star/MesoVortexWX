@@ -32,8 +32,12 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 }
 
 /**
- * Computes a vertical cross-section through the atmosphere along a line from Point A to Point B.
- * Uses real elevation beam tilts (0.5°, 0.9°, 1.3°, 1.8°) to reconstruct vertical storm structure.
+ * SYNTHETIC/DEMO CROSS-SECTION - NOT REAL VOLUMETRIC DATA.
+ *
+ * Computes a visual cross-section approximation along a line from Point A to Point B.
+ * This uses simplified interpolation/model-derived shaping and MUST NOT be presented
+ * as a real volumetric reconstruction. Real cross-sections require a verified 3D
+ * volume data pipeline.
  */
 export async function computeVerticalCrossSection(
   pointA: [number, number],

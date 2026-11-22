@@ -1,6 +1,8 @@
+import { RADAR_CAPABILITY_MATRIX, type RadarCapabilityStatus } from './radar/capability-matrix';
+
 export type RadarProductKey =
   | 'ref'
-  | 'maxref'
+  | 'max_ref'
   | 'vel'
   | 'srvel'
   | 'cc'
@@ -11,7 +13,7 @@ export type RadarProductKey =
   | 'mesh'
   | 'azshear';
 
-export type ProductSourceKind = 'nexrad-level3' | 'mrms' | 'derived' | 'unknown';
+export type ProductSourceKind = 'nexrad-level3' | 'mrms' | 'derived' | 'unknown' | 'none';
 
 export type RadarProductDef = {
   key: RadarProductKey;
@@ -21,24 +23,49 @@ export type RadarProductDef = {
   sourceKind: ProductSourceKind;
   substitute: boolean;
   loopExpected: boolean;
+  availability: RadarCapabilityStatus;
+  unavailableReason?: string;
   sourceNote?: string;
   attribution?: string;
 };
 
 export const PRODUCT_ATTRIBUTION_IEM = 'Iowa Environmental Mesonet (IEM) / NOAA NEXRAD & MRMS tile services';
 
+function cap(id: string) {
+  return RADAR_CAPABILITY_MATRIX.find((p) => p.id === id);
+}
+
+function toDef(key: RadarProductKey, id: string, description: string, short?: string): RadarProductDef {
+  const c = cap(id);
+  return {
+    key,
+    label: c?.name || key,
+    short: short || c?.shortLabel || key.toUpperCase(),
+    description,
+    sourceKind: c?.source.type === 'IEM_RIDGE' ? 'nexrad-level3'
+      : c?.source.type === 'IEM_MRMS_TMS' || c?.source.type === 'NOAA_AWS_MRMS' ? 'mrms'
+      : c?.source.type === 'NONE' ? 'none' : 'unknown',
+    substitute: c?.dataHonesty.substitute ?? false,
+    loopExpected: c?.playbackSupport === 'REAL_ARCHIVE',
+    availability: c?.availability || 'UNAVAILABLE',
+    unavailableReason: c?.unavailableReason,
+    sourceNote: c?.unavailableReason || c?.source.notes,
+    attribution: c?.source.provider || PRODUCT_ATTRIBUTION_IEM,
+  };
+}
+
 export const RADAR_PRODUCTS: readonly RadarProductDef[] = [
-  { key: 'ref', label: 'Reflectivity', short: 'REF', description: 'Base reflectivity', sourceKind: 'nexrad-level3', substitute: false, loopExpected: true, attribution: PRODUCT_ATTRIBUTION_IEM },
-  { key: 'maxref', label: 'Max Reflectivity', short: 'MAX', description: 'Per-pixel maximum reflectivity composite over selected scan history', sourceKind: 'derived', substitute: false, loopExpected: true, sourceNote: 'Client-composited max dBZ from recent reflectivity scans (rolling window).', attribution: PRODUCT_ATTRIBUTION_IEM },
-  { key: 'vel', label: 'Velocity', short: 'VEL', description: 'Base velocity', sourceKind: 'nexrad-level3', substitute: false, loopExpected: true, attribution: PRODUCT_ATTRIBUTION_IEM },
-  { key: 'srvel', label: 'Storm Relative Velocity', short: 'SRV', description: 'Storm-relative motion', sourceKind: 'nexrad-level3', substitute: false, loopExpected: true, attribution: PRODUCT_ATTRIBUTION_IEM },
-  { key: 'cc', label: 'Correlation Coefficient (Proxy)', short: 'CC', description: 'MRMS proxy layer shown in place of single-site NEXRAD Level 3 CC (verify semantics/legend before operational use)', sourceKind: 'mrms', substitute: true, loopExpected: false, sourceNote: 'IEM ridge GIS does not list N0C dual-pol CC in processed products; CC currently uses an MRMS proxy tile (mrms::RhoHV candidate). Not single-site NEXRAD Level 3 CC, not tilt-specific, and historical stepping is not authoritative.', attribution: PRODUCT_ATTRIBUTION_IEM },
-  { key: 'zdr', label: 'Differential Reflectivity', short: 'ZDR', description: 'Displayed as a differential-reflectivity style layer', sourceKind: 'mrms', substitute: true, loopExpected: false, sourceNote: 'Frames API currently maps ZDR to an MRMS tile (not single-site NEXRAD Level 3 ZDR). Verify semantics before operational use.', attribution: PRODUCT_ATTRIBUTION_IEM },
-  { key: 'kdp', label: 'Specific Differential Phase', short: 'KDP', description: 'Displayed as a KDP-style layer', sourceKind: 'mrms', substitute: true, loopExpected: false, sourceNote: 'Frames API currently maps KDP to an MRMS tile (not single-site NEXRAD Level 3 KDP). Verify semantics before operational use.', attribution: PRODUCT_ATTRIBUTION_IEM },
-  { key: 'tops', label: 'Echo Tops', short: 'TOPS', description: 'Echo tops estimate', sourceKind: 'nexrad-level3', substitute: false, loopExpected: true, attribution: PRODUCT_ATTRIBUTION_IEM },
-  { key: 'vil', label: 'Vertically Integrated Liquid', short: 'VIL', description: 'VIL estimate', sourceKind: 'nexrad-level3', substitute: false, loopExpected: true, attribution: PRODUCT_ATTRIBUTION_IEM },
-  { key: 'mesh', label: 'MESH', short: 'MESH', description: 'Maximum Estimated Size of Hail (MRMS-derived)', sourceKind: 'mrms', substitute: false, loopExpected: false, sourceNote: 'MRMS-derived hail estimate; current tile path may not provide true per-frame historical stepping.', attribution: PRODUCT_ATTRIBUTION_IEM },
-  { key: 'azshear', label: 'AzShear / Rotation Tracks', short: 'ROT', description: 'Low-level azimuthal shear (MRMS-derived)', sourceKind: 'mrms', substitute: false, loopExpected: false, sourceNote: 'MRMS-derived rotation/shear; current tile path may not provide true per-frame historical stepping.', attribution: PRODUCT_ATTRIBUTION_IEM },
+  toDef('ref', 'ref', 'Base reflectivity', 'REF'),
+  { ...toDef('ref', 'ref', 'Per-pixel maximum reflectivity composite over selected scan history', 'MAX'), key: 'max_ref' as any, label: 'Max Reflectivity', sourceKind: 'derived', loopExpected: true, substitute: false, sourceNote: 'Client-composited max dBZ from recent reflectivity scans. Depends on real reflectivity frames; no synthetic data.' },
+  toDef('vel', 'vel', 'Base velocity', 'VEL'),
+  toDef('srvel', 'srvel', 'Storm-relative motion', 'SRV'),
+  toDef('cc', 'cc', 'Correlation coefficient', 'CC'),
+  toDef('zdr', 'zdr', 'Differential reflectivity', 'ZDR'),
+  toDef('kdp', 'kdp', 'Specific differential phase', 'KDP'),
+  toDef('tops', 'tops', 'Echo tops estimate', 'TOPS'),
+  toDef('vil', 'vil', 'VIL estimate', 'VIL'),
+  toDef('mesh', 'mesh', 'Maximum Estimated Size of Hail', 'MESH'),
+  toDef('azshear', 'azshear', 'Low-level azimuthal shear / rotation tracks', 'ROT'),
 ] as const;
 
 export function getProductDef(key: string): RadarProductDef | undefined {

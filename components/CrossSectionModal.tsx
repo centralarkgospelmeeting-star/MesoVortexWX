@@ -47,13 +47,13 @@ export function CrossSectionModal({ data, onClose }: Props) {
             </span>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-sm sm:text-base font-extrabold text-white">Live 3D Vertical Cross-Section (RHI Slicer)</h2>
+                <h2 className="text-sm sm:text-base font-extrabold text-white">Vertical Cross-Section (SYNTHETIC / DEMO)</h2>
                 <span className="rounded-full bg-cyan-500/20 px-2 py-0.5 text-[9px] font-black uppercase text-cyan-300">
-                  Real Atmospheric Slice
+                  SYNTHETIC - NOT REAL VOLUMETRIC
                 </span>
               </div>
               <p className="text-xs text-slate-400 font-sans">
-                Cut Length: <b className="text-white">{data.lengthNm} nm</b> ({data.lengthMi} mi) · 0 to 60,000 ft AGL
+                Cut Length: <b className="text-white">{data.lengthNm} nm</b> ({data.lengthMi} mi) · 0 to 60,000 ft AGL · <span className="text-amber-300 font-bold">SYNTHETIC</span>
               </p>
             </div>
           </div>
@@ -102,6 +102,11 @@ export function CrossSectionModal({ data, onClose }: Props) {
               Displacement: <b className="text-cyan-300">{data.stormLeanDisplacementNm} nm</b> downshear
             </p>
           </div>
+        </div>
+
+        {/* Data honesty warning */}
+        <div className="px-4 py-2 bg-amber-950/40 border-b border-amber-500/30 text-[11px] text-amber-200 font-sans">
+          ⚠ {data.dataHonestyNote || 'SYNTHETIC/MODEL-DERIVED visualization. Not a real volumetric reconstruction. Do not use for operational decisions.'}
         </div>
 
         {/* Main RHI Vertical Atmospheric Slicing Grid */}

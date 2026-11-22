@@ -2,13 +2,23 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-const WEATHERPOWER_API_KEY = 'wp_E7UKb-rFoWxOTit4PV2O-3PAbxu7jtF1';
-
 /**
  * GET /api/sounding?lat=35.22&lon=-97.44&hours=6
  * Fetches atmospheric sounding data from WeatherPower for any point in the US.
+ * Requires WEATHERPOWER_API_KEY to be configured server-side.
  */
 export async function GET(request: NextRequest) {
+  const apiKey = process.env.WEATHERPOWER_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json(
+      {
+        error: 'DATA UNAVAILABLE - WEATHERPOWER_API_KEY is not configured on the server.',
+        _meta: { ok: false, source: 'WeatherPower', reason: 'MISSING_ENV' },
+      },
+      { status: 503, headers: { 'Cache-Control': 'no-store' } }
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const lat = searchParams.get('lat');
   const lon = searchParams.get('lon');
@@ -17,7 +27,7 @@ export async function GET(request: NextRequest) {
   if (!lat || !lon) {
     return NextResponse.json(
       { error: 'lat and lon query parameters are required' },
-      { status: 400 }
+      { status: 400, headers: { 'Cache-Control': 'no-store' } }
     );
   }
 
@@ -27,7 +37,7 @@ export async function GET(request: NextRequest) {
   if (Number.isNaN(latNum) || Number.isNaN(lonNum)) {
     return NextResponse.json(
       { error: 'lat and lon must be valid numbers' },
-      { status: 400 }
+      { status: 400, headers: { 'Cache-Control': 'no-store' } }
     );
   }
 
@@ -36,18 +46,17 @@ export async function GET(request: NextRequest) {
 
     const res = await fetch(url, {
       headers: {
-        'X-API-Key': WEATHERPOWER_API_KEY,
+        'X-API-Key': apiKey,
       },
-      // Do not cache so we always get fresh soundings
       cache: 'no-store',
     });
 
     if (!res.ok) {
       const text = await res.text();
-      console.error('[sounding] WeatherPower error:', res.status, text);
+      console.error('[sounding] WeatherPower error:', res.status, text.slice(0, 500));
       return NextResponse.json(
         { error: 'Failed to fetch sounding from WeatherPower', status: res.status },
-        { status: 502 }
+        { status: 502, headers: { 'Cache-Control': 'no-store' } }
       );
     }
 
@@ -63,7 +72,7 @@ export async function GET(request: NextRequest) {
     console.error('[sounding] Unexpected error:', err);
     return NextResponse.json(
       { error: 'Internal server error while fetching sounding' },
-      { status: 500 }
+      { status: 500, headers: { 'Cache-Control': 'no-store' } }
     );
   }
 }

@@ -1,16 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { RADAR_SITES } from '../../../lib/radar-config';
+import { getRadarCapability } from '../../../lib/radar/capability-matrix';
 
 export const dynamic = 'force-dynamic';
 
 const IEM_TILE = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0';
 
+type ProductAlias = { id: string };
+
+function normalizeProduct(productKey: string): ProductAlias | null {
+  const key = productKey.toLowerCase();
+  if (key === 'ref' || key === 'max_ref' || key === 'ref_x') return { id: 'ref' };
+  if (key === 'vel') return { id: 'vel' };
+  if (key === 'srvel') return { id: 'srvel' };
+  if (key === 'norm_vel' || key === 'nrot') return { id: 'nrot' };
+  if (key === 'min_cc') return { id: 'min_cc' };
+  if (key === 'cc') return { id: 'cc' };
+  if (key === 'zdr') return { id: 'zdr' };
+  if (key === 'kdp') return { id: 'kdp' };
+  if (key === 'sw') return { id: 'sw' };
+  if (key === 'hhc') return { id: 'hhc' };
+  if (key === 'qpe') return { id: 'qpe' };
+  if (key === 'azshear') return { id: 'azshear' };
+  if (key === 'mesh') return { id: 'mesh' };
+  if (key === 'tops') return { id: 'tops' };
+  if (key === 'vil') return { id: 'vil' };
+  return null;
+}
+
+function unavailable(reason: string, extra: Record<string, unknown> = {}) {
+  return NextResponse.json(
+    { available: false, error: reason, reason, ...extra },
+    { status: 404, headers: { 'Cache-Control': 'no-store' } }
+  );
+}
+
 /**
  * GET /api/radar?site=KLZK&product=ref&tilt=0.5
  *
- * Real single-station (terminal) radar frames.
- * Primary: IEM RIDGE NEXRAD Level III tiles (US).
- * Secondary metadata: RainViewer single-radar archive listing when available.
+ * Real single-station radar frames. Capability matrix is authoritative.
+ * No silent substitutions. No fake playback.
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -23,134 +52,87 @@ export async function GET(request: NextRequest) {
     RADAR_SITES.find((s) => s.radarId === siteId.replace(/^K/, '')) ||
     RADAR_SITES[0];
 
-  // NWS Level III product codes
+  const isTdwr = site.network === 'TDWR';
+  const sector = isTdwr ? `T${site.radarId}` : site.radarId;
+
+  const normalized = normalizeProduct(productKey);
+  if (!normalized) return unavailable(`DATA UNAVAILABLE - Unknown radar product "${productKey}".`, { productKey });
+  const cap = getRadarCapability(normalized.id);
+  if (!cap) return unavailable(`DATA UNAVAILABLE - Unknown radar product "${productKey}".`, { productKey });
+
+  if (cap.availability === 'UNAVAILABLE' || cap.availability === 'RESTRICTED') {
+    return unavailable(cap.unavailableReason || `DATA UNAVAILABLE - ${cap.name} is not available.`, {
+      productKey, capabilityId: cap.id, availability: cap.availability,
+    });
+  }
+  if (isTdwr && !cap.networks.includes('TDWR')) {
+    return unavailable(`DATA UNAVAILABLE - ${cap.name} is not supported for TDWR site ${site.id}.`, { productKey, capabilityId: cap.id });
+  }
+
   let productCode = 'N0B';
-  switch (productKey) {
-    case 'vel':
-      productCode = tilt === '0.9' ? 'N1U' : tilt === '1.3' ? 'N2U' : tilt === '1.8' ? 'N3U' : 'N0U';
-      break;
-    case 'srvel':
-      productCode = 'N0S';
-      break;
-    case 'sw':
-      productCode = 'N0W';
-      break;
-    case 'cc':
-    case 'min_cc':
-      productCode = 'N0C';
-      break;
-    case 'zdr':
-      productCode = 'N0X';
-      break;
-    case 'kdp':
-      productCode = 'N0K';
-      break;
-    case 'tops':
-      productCode = 'EET';
-      break;
-    case 'vil':
-      productCode = 'DVL';
-      break;
-    case 'hhc':
-      productCode = 'HHC';
-      break;
-    case 'qpe':
-      productCode = 'DPR';
-      break;
-    case 'ref':
-    case 'max_ref':
-    case 'ref_x':
-    default:
-      productCode = tilt === '0.9' ? 'N1B' : tilt === '1.3' ? 'N2B' : tilt === '1.8' ? 'N3B' : 'N0B';
-      break;
+  let archiveSupported = false;
+  if (isTdwr) {
+    if (normalized.id === 'ref') { productCode = 'TZL'; archiveSupported = false; }
+    else if (normalized.id === 'vel') { productCode = 'TV0'; archiveSupported = false; }
+    else return unavailable(`DATA UNAVAILABLE - ${cap.name} is not supported for TDWR site ${site.id}.`, { productKey, capabilityId: cap.id });
+  } else {
+    switch (normalized.id) {
+      case 'ref':
+        productCode = tilt === '0.9' ? 'N1B' : tilt === '1.3' ? 'N2B' : tilt === '1.8' ? 'N3B' : 'N0B';
+        archiveSupported = productCode === 'N0B';
+        break;
+      case 'vel':
+        productCode = tilt === '0.9' ? 'N1U' : tilt === '1.3' ? 'N2U' : tilt === '1.8' ? 'N3U' : 'N0U';
+        archiveSupported = false;
+        break;
+      case 'srvel':
+        productCode = 'N0S';
+        archiveSupported = true;
+        break;
+      default:
+        return unavailable(cap.unavailableReason || `DATA UNAVAILABLE - ${cap.name} is not available.`, { productKey, capabilityId: cap.id });
+    }
   }
 
-  const radarId = site.radarId; // e.g. LZK (without K) or full ICAO depending on config
-  const ridgeId = radarId.startsWith('K') ? radarId : `K${radarId}`;
-  // IEM RIDGE uses short form without leading K in many cases; try both patterns
-  const ridgeKey = ridgeId.replace(/^K/, '');
-
-  const latestTileUrl = `${IEM_TILE}/ridge::${ridgeKey}-${productCode}-0/{z}/{x}/{y}.png`;
+  const latestTileUrl = `${IEM_TILE}/ridge::${sector}-${productCode}-0/{z}/{x}/{y}.png`;
   const compositeTileUrl = `${IEM_TILE}/nexrad-n0q-900913/{z}/{x}/{y}.png`;
-
   const now = new Date();
-  const frames: {
-    time: string;
-    label: string;
-    tileUrl: string;
-    ageMinutes: number;
-    source: string;
-  }[] = [];
+  const frames: { time: string; label: string; tileUrl: string; ageMinutes: number; source: string }[] = [];
 
-  // Build ~50 min of 5-minute frames from IEM (same pattern as /api/nexrad/frames)
-  for (let i = 10; i >= 1; i--) {
-    const d = new Date(now.getTime() - i * 5 * 60 * 1000);
-    d.setUTCMinutes(Math.floor(d.getUTCMinutes() / 5) * 5, 0, 0);
-    const stamp = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(
-      d.getUTCDate()
-    ).padStart(2, '0')}${String(d.getUTCHours()).padStart(2, '0')}${String(d.getUTCMinutes()).padStart(2, '0')}`;
-    const ageMinutes = Math.round((now.getTime() - d.getTime()) / 60000);
-
-    frames.push({
-      time: d.toISOString(),
-      label: `-${ageMinutes}m`,
-      tileUrl: `${IEM_TILE}/ridge::${ridgeKey}-${productCode}-${stamp}/{z}/{x}/{y}.png`,
-      ageMinutes,
-      source: 'IEM RIDGE',
-    });
+  if (archiveSupported) {
+    for (let i = 10; i >= 1; i--) {
+      const d = new Date(now.getTime() - i * 5 * 60 * 1000);
+      d.setUTCMinutes(Math.floor(d.getUTCMinutes() / 5) * 5, 0, 0);
+      const stamp = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}${String(d.getUTCHours()).padStart(2, '0')}${String(d.getUTCMinutes()).padStart(2, '0')}`;
+      const ageMinutes = Math.round((now.getTime() - d.getTime()) / 60000);
+      frames.push({ time: d.toISOString(), label: `-${ageMinutes}m`, tileUrl: `${IEM_TILE}/ridge::${sector}-${productCode}-${stamp}/{z}/{x}/{y}.png`, ageMinutes, source: 'IEM RIDGE' });
+    }
   }
+  frames.push({ time: now.toISOString(), label: 'LIVE', tileUrl: latestTileUrl, ageMinutes: 0, source: 'IEM RIDGE' });
 
-  frames.push({
-    time: now.toISOString(),
-    label: 'LIVE',
-    tileUrl: latestTileUrl,
-    ageMinutes: 0,
-    source: 'IEM RIDGE',
-  });
-
-  // Optional: probe RainViewer single-radar archive for this station (source images only).
-  // RainViewer uses radar identifiers like KLZK; listing is HTML directory, so we only expose the base URL.
-  const rainviewerBase = `https://data.rainviewer.com/images/${ridgeId}/`;
-  let rainviewer: { available: boolean; baseUrl: string; note: string } = {
-    available: false,
-    baseUrl: rainviewerBase,
-    note: 'Source images only (last 6, ≤48h). Processed frames discontinued by RainViewer.',
-  };
-
-  try {
-    const rv = await fetch(rainviewerBase, {
-      method: 'HEAD',
-      signal: AbortSignal.timeout(4000),
-    });
-    rainviewer.available = rv.ok;
-  } catch {
-    // leave available: false
-  }
+  const notes: string[] = [];
+  if (!archiveSupported) notes.push(`LIVE ONLY - Historical loop not verified for ${cap.name} (${productCode}). No fake historical frames generated.`);
+  if (cap.availability === 'PARTIAL') notes.push(`PARTIAL - ${cap.name} is available with limited verification.`);
 
   return NextResponse.json(
     {
       status: 'LIVE',
-      provider: 'NOAA NEXRAD Level III via IEM RIDGE',
-      station: ridgeId,
+      available: true,
+      provider: isTdwr ? 'FAA TDWR / IEM RIDGE' : 'NOAA NEXRAD Level III via IEM RIDGE',
+      station: site.radarId,
       siteId: site.id,
       product: productCode,
       productKey,
+      capabilityId: cap.id,
       tilt,
       frames,
       latestTileUrl,
       compositeTileUrl,
-      rainviewer,
-      _meta: {
-        fetchedAt: new Date().toISOString(),
-        ok: true,
-        note: 'Terminal (single-station) radar. Map tiles come from IEM; RainViewer single-radar is source-image archive only.',
-      },
+      loopAvailable: archiveSupported,
+      playbackSupport: archiveSupported ? 'REAL_ARCHIVE' : 'LIVE_ONLY',
+      notes: notes.length ? notes : undefined,
+      _meta: { fetchedAt: now.toISOString(), ok: true, dataHonesty: 'capability-matrix' },
     },
-    {
-      headers: {
-        'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30',
-        'Access-Control-Allow-Origin': '*',
-      },
-    }
+    { headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30', 'Access-Control-Allow-Origin': '*' } }
   );
 }

@@ -1,3 +1,10 @@
+/**
+ * SYNTHETIC/DEMO FORECAST ENGINE - NOT REAL FORECAST DATA.
+ *
+ * This module contains synthetic/model-shaped demo outputs. It MUST NOT be used
+ * as a production source of real weather forecasts, precipitation timing, or
+ * multi-model comparisons. Real products require verified upstream data pipelines.
+ */
 export type HyperlocalTelemetry = {
   tempF: number;
   feelsLikeF: number;
@@ -27,6 +34,7 @@ export type MinutePrecipitation = {
   intensityMmHr: number;
   probability: number;
   type: 'none' | 'light_rain' | 'moderate_rain' | 'heavy_rain' | 'hail_mix' | 'snow';
+  dataHonesty: 'SYNTHETIC_DEMO';
 };
 
 export type WeatherModelComparison = {
@@ -38,6 +46,7 @@ export type WeatherModelComparison = {
   precipNext6hIn: number;
   confidenceScore: number; // 0 - 100%
   description: string;
+  dataHonesty: 'SYNTHETIC_DEMO';
 };
 
 export type DecodedMETAR = {
@@ -227,7 +236,7 @@ export function getAqiStatus(aqi: number): HyperlocalTelemetry['aqiStatus'] {
   return 'Very Unhealthy';
 }
 
-// Generate synthetic minute-by-minute precipitation (demo foundation)
+// SYNTHETIC DEMO ONLY - not real precipitation timing. Do not present as real.
 export function generateMinuteByMinutePrecip(params: {
   reflectivityDbz: number;
   probability: number;
@@ -252,19 +261,19 @@ export function generateMinuteByMinutePrecip(params: {
     else if (intensityMmHr >= 10) type = 'moderate_rain';
     else if (intensityMmHr >= 0.5) type = 'light_rain';
 
-    result.push({ minute: i, intensityMmHr, probability: prob, type });
+    result.push({ minute: i, intensityMmHr, probability: prob, type, dataHonesty: 'SYNTHETIC_DEMO' });
   }
 
   return result;
 }
 
-// Mock multi-model comparison (production would pull from HRRR/GFS/ECMWF endpoints)
+// SYNTHETIC DEMO ONLY - not real model output. No real HRRR/GFS/ECMWF/NAM/ICON feeds connected.
 export function getMultiModelComparison(baseTempF: number, baseCape: number): WeatherModelComparison[] {
   return [
-    { name: 'HRRR', tempF: Math.round(baseTempF), dewPointF: Math.round(baseTempF - 12), capeJkg: Math.round(baseCape), windGustKt: 38, precipNext6hIn: 0.45, confidenceScore: 88, description: 'High-res 3km rapid refresh; best for near-term convective timing' },
-    { name: 'NAM 3km', tempF: Math.round(baseTempF - 1), dewPointF: Math.round(baseTempF - 11), capeJkg: Math.round(baseCape * 0.92), windGustKt: 35, precipNext6hIn: 0.38, confidenceScore: 82, description: 'Mesoscale nest; reliable for storm mode and boundaries' },
-    { name: 'GFS', tempF: Math.round(baseTempF + 2), dewPointF: Math.round(baseTempF - 14), capeJkg: Math.round(baseCape * 0.78), windGustKt: 31, precipNext6hIn: 0.28, confidenceScore: 74, description: 'Global model; useful for synoptic pattern and longer range' },
-    { name: 'ECMWF', tempF: Math.round(baseTempF + 1), dewPointF: Math.round(baseTempF - 13), capeJkg: Math.round(baseCape * 0.85), windGustKt: 33, precipNext6hIn: 0.33, confidenceScore: 84, description: 'High-skill global model; strong for system evolution' },
-    { name: 'ICON', tempF: Math.round(baseTempF), dewPointF: Math.round(baseTempF - 12), capeJkg: Math.round(baseCape * 0.88), windGustKt: 34, precipNext6hIn: 0.36, confidenceScore: 79, description: 'DWD global model; additional consensus member' },
+    { name: 'HRRR', tempF: Math.round(baseTempF), dewPointF: Math.round(baseTempF - 12), capeJkg: Math.round(baseCape), windGustKt: 38, precipNext6hIn: 0.45, confidenceScore: 88, description: 'SYNTHETIC DEMO - not real HRRR output', dataHonesty: 'SYNTHETIC_DEMO' },
+    { name: 'NAM 3km', tempF: Math.round(baseTempF - 1), dewPointF: Math.round(baseTempF - 11), capeJkg: Math.round(baseCape * 0.92), windGustKt: 35, precipNext6hIn: 0.38, confidenceScore: 82, description: 'SYNTHETIC DEMO - not real NAM output', dataHonesty: 'SYNTHETIC_DEMO' },
+    { name: 'GFS', tempF: Math.round(baseTempF + 2), dewPointF: Math.round(baseTempF - 14), capeJkg: Math.round(baseCape * 0.78), windGustKt: 31, precipNext6hIn: 0.28, confidenceScore: 74, description: 'SYNTHETIC DEMO - not real GFS output', dataHonesty: 'SYNTHETIC_DEMO' },
+    { name: 'ECMWF', tempF: Math.round(baseTempF + 1), dewPointF: Math.round(baseTempF - 13), capeJkg: Math.round(baseCape * 0.85), windGustKt: 33, precipNext6hIn: 0.33, confidenceScore: 84, description: 'SYNTHETIC DEMO - not real ECMWF output', dataHonesty: 'SYNTHETIC_DEMO' },
+    { name: 'ICON', tempF: Math.round(baseTempF), dewPointF: Math.round(baseTempF - 12), capeJkg: Math.round(baseCape * 0.88), windGustKt: 34, precipNext6hIn: 0.36, confidenceScore: 79, description: 'SYNTHETIC DEMO - not real ICON output', dataHonesty: 'SYNTHETIC_DEMO' },
   ];
 }
