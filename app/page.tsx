@@ -56,7 +56,8 @@ export default function MesoVortexWorkstation() {
   const [showWatches, setShowWatches] = useState(true);
   const [showWarnings, setShowWarnings] = useState(true);
   const [showMCD, setShowMCD] = useState(true);
-  const [showSpotters, setShowSpotters] = useState(true);
+  const [showSpotters, setShowSpotters] = useState(true); // Spotter people/positions
+  const [showSpotterReports, setShowSpotterReports] = useState(true); // Spotter report events
   const [spotterFilters, setSpotterFilters] = useState({
     tornado: true,
     funnel: true,
@@ -64,7 +65,6 @@ export default function MesoVortexWorkstation() {
     hail: true,
     wind: true,
     flooding: true,
-    position: true,
   });
   const [showSweepAnimation, setShowSweepAnimation] = useState(true);
   const [showFastScan, setShowFastScan] = useState(false);
@@ -87,6 +87,8 @@ export default function MesoVortexWorkstation() {
       }
       const spotterSaved = localStorage.getItem('mesovortex_spotters_enabled');
       if (spotterSaved === '0' || spotterSaved === '1') setShowSpotters(spotterSaved === '1');
+      const reportsSaved = localStorage.getItem('mesovortex_spotter_reports_enabled');
+      if (reportsSaved === '0' || reportsSaved === '1') setShowSpotterReports(reportsSaved === '1');
       const filtersSaved = localStorage.getItem('mesovortex_spotter_filters');
       if (filtersSaved) {
         const parsed = JSON.parse(filtersSaved);
@@ -100,6 +102,10 @@ export default function MesoVortexWorkstation() {
   useEffect(() => {
     try { localStorage.setItem('mesovortex_spotters_enabled', showSpotters ? '1' : '0'); } catch {}
   }, [showSpotters]);
+
+  useEffect(() => {
+    try { localStorage.setItem('mesovortex_spotter_reports_enabled', showSpotterReports ? '1' : '0'); } catch {}
+  }, [showSpotterReports]);
 
   useEffect(() => {
     try { localStorage.setItem('mesovortex_spotter_filters', JSON.stringify(spotterFilters)); } catch {}
@@ -283,6 +289,7 @@ export default function MesoVortexWorkstation() {
           showWarnings={showWarnings}
           showMCD={showMCD}
           showSpotters={showSpotters}
+          showSpotterReports={showSpotterReports}
           spotterFilters={spotterFilters}
           showSweepAnimation={showSweepAnimation}
           showFastScan={showFastScan}
@@ -395,12 +402,16 @@ export default function MesoVortexWorkstation() {
                 {showMCD ? 'Hide' : 'Show'} SPC mesoscale discussions
               </button>
 
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 space-y-2">
                 <label className="flex items-center gap-2 font-bold cursor-pointer">
                   <input type="checkbox" checked={showSpotters} onChange={(e) => setShowSpotters(e.target.checked)} />
+                  <span>Spotters</span>
+                </label>
+                <label className="flex items-center gap-2 font-bold cursor-pointer">
+                  <input type="checkbox" checked={showSpotterReports} onChange={(e) => setShowSpotterReports(e.target.checked)} />
                   <span>Spotter Reports</span>
                 </label>
-                <div className="mt-2 grid grid-cols-2 gap-1 text-[11px] font-semibold text-slate-700">
+                <div className="mt-1 grid grid-cols-2 gap-1 text-[11px] font-semibold text-slate-700">
                   {[
                     ['tornado', 'Tornado'],
                     ['funnel', 'Funnel Cloud'],
@@ -408,7 +419,6 @@ export default function MesoVortexWorkstation() {
                     ['hail', 'Hail'],
                     ['wind', 'Wind Damage'],
                     ['flooding', 'Flooding'],
-                    ['position', 'Chaser Position'],
                   ].map(([key, label]) => (
                     <label key={key} className="flex items-center gap-1.5 cursor-pointer">
                       <input
