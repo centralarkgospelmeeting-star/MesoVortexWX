@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { RadarMap, BasemapType, ModeTab } from '../components/RadarMap';
 import { WeatherWiseRadarCard } from '../components/WeatherWiseRadarCard';
@@ -22,6 +22,7 @@ import {
   type SatelliteSelection,
 } from '../lib/satellite';
 import { MODEL_CATALOG, getModelById } from '../lib/model-registry';
+import { parsePal, type PalTable } from '../lib/pal';
 
 type RadarProduct =
   | 'ref'
@@ -105,6 +106,13 @@ export default function MesoVortexWorkstation() {
   const [radarOpacity, setRadarOpacity] = useState(0.88);
   const [smoothing, setSmoothing] = useState(false);
   const [colorTable, setColorTable] = useState('nws');
+  const [velocityUnit, setVelocityUnit] = useState<'mph' | 'knots' | 'kmh'>('mph');
+  const [warningFlash, setWarningFlash] = useState(true);
+  const [warningPopup, setWarningPopup] = useState(true);
+  const [warningVoiceEnabled, setWarningVoiceEnabled] = useState(false);
+  const [warningVoicePack, setWarningVoicePack] = useState<'default' | 'short'>('default');
+  const [importedPal, setImportedPal] = useState<PalTable | null>(null);
+  const [importedPalStatus, setImportedPalStatus] = useState<string>('');
 
   const [showLightning, setShowLightning] = useState(true);
   const [showStormTracks, setShowStormTracks] = useState(true);
@@ -134,6 +142,8 @@ export default function MesoVortexWorkstation() {
   const [showFastScan, setShowFastScan] = useState(false);
   const [showFlashReflectivity, setShowFlashReflectivity] = useState(false);
   const [flashRange, setFlashRange] = useState<[number, number]>([60, 80]);
+  const [inspectionMode, setInspectionMode] = useState(false);
+  const spokenBannerIdRef = useRef<string | null>(null);
 
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -158,6 +168,23 @@ export default function MesoVortexWorkstation() {
     loading: alertsLoading,
     refresh: refreshAlerts,
   } = useFastAlerts();
+
+  useEffect(() => {
+    if (!warningVoiceEnabled || !banner) return;
+    if (spokenBannerIdRef.current === banner.id) return;
+    spokenBannerIdRef.current = banner.id;
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    const text = warningVoicePack === 'short'
+      ? `${banner.event}.`
+      : `The National Weather Service has issued a ${banner.event}${banner.areaDesc ? ` for ${banner.areaDesc}` : ''}.`;
+    try {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 1;
+      u.pitch = 1;
+      window.speechSynthesis.speak(u);
+    } catch {}
+  }, [banner, warningVoiceEnabled, warningVoicePack]);
 
   const currentSite =
     RADAR_SITES.find((s) => s.id === radarSite) || RADAR_SITES[0];
@@ -278,6 +305,7 @@ export default function MesoVortexWorkstation() {
     showFastScan,
     showFlashReflectivity,
     flashRange,
+    inspectionMode,
     alertFeatures: mapAlertFeatures,
     focusTarget,
     onSelectSite: (id: string) => setRadarSite(id),
@@ -739,10 +767,12 @@ export default function MesoVortexWorkstation() {
           onClose={() => setBottomBarOpen(false)}
           colorTable={colorTable}
           onChangeColorTable={(tbl) => setColorTable(tbl)}
-          showSweepAnimation={showSweepAnimation}
-          onToggleSweepAnimation={() => setShowSweepAnimation((v) => !v)}
           showFastScan={showFastScan}
           onToggleFastScan={() => setShowFastScan((v) => !v)}
+          showRadarPills={showRadarPills}
+          onToggleRadarPills={() => { setShowRadarPills((v) => !v); setShowRadarSites((v) => !v); }}
+          inspectionMode={inspectionMode}
+          onToggleInspection={() => setInspectionMode((v) => !v)}
           satelliteBird={activeSatSel.bird}
           satelliteProductId={activeSatSel.productId}
           onSelectSatelliteBird={(bird) => {
@@ -770,12 +800,12 @@ export default function MesoVortexWorkstation() {
           onSelectCompositeProduct={(id) => setProduct(id as RadarProduct)}
         />
       ) : (
-        <button type="button" onClick={() => setBottomBarOpen(true)} className="absolute bottom-3 left-1/2 z-30 -translate-x-1/2 rounded-full border border-slate-700 bg-slate-950/90 px-3 py-1.5 text-[11px] font-bold text-slate-200 shadow-xl backdrop-blur hover:bg-slate-900">Show Controls</button>
+        <button type="button" onClick={() => setBottomBarOpen(true)} className="absolute bottom-3 left-3 z-30 rounded-2xl border border-slate-700 bg-slate-950/94 px-3 py-2 text-[11px] font-bold text-slate-200 shadow-xl backdrop-blur hover:bg-slate-900">Controls ▴</button>
       )}
 
-      {banner && (
+      {banner && warningPopup && (
         <div
-          className="absolute left-1/2 top-24 z-50 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border bg-slate-950/95 p-4 shadow-2xl backdrop-blur"
+          className={`absolute left-1/2 top-24 z-50 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border bg-slate-950/95 p-4 shadow-2xl backdrop-blur ${warningFlash ? 'animate-pulse' : ''}`}
           style={{ borderColor: banner.color }}
         >
           <div className="flex items-start justify-between gap-3">
@@ -1000,7 +1030,52 @@ export default function MesoVortexWorkstation() {
           )}
 
           {openPanel === 'Settings' && (
-            <div className="space-y-3 text-[11px] text-slate-300">
+            <div className="space-y-3 text-[11px] text-slate-300 max-h-[70vh] overflow-auto pr-1">
+              <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-2 space-y-1">
+                <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">Layers</div>
+                <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showLightning} onChange={(e)=>setShowLightning(e.target.checked)} />Lightning</label>
+                <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showRadarPills} onChange={(e)=>{ setShowRadarPills(e.target.checked); setShowRadarSites(e.target.checked); }} />Secondary Towers / Radar Pills</label>
+                <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showRangeRings} onChange={(e)=>setShowRangeRings(e.target.checked)} />Range rings</label>
+                <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showCounties} onChange={(e)=>setShowCounties(e.target.checked)} />County boundaries</label>
+              </div>
+
+              <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-2 space-y-2">
+                <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">Velocity Units</div>
+                <div className="flex gap-1">
+                  {(['mph','knots','kmh'] as const).map(u => (
+                    <button key={u} type="button" onClick={()=>setVelocityUnit(u)} className={`rounded-md px-2 py-1 text-[11px] font-bold ${velocityUnit===u?'bg-cyan-600 text-white':'bg-slate-800 text-slate-200'}`}>{u==='kmh'?'km/h':u}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-2 space-y-2">
+                <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">Color Tables / Palettes</div>
+                <label className="block text-[10px] text-slate-500">Reflectivity Palette</label>
+                <select value={colorTable} onChange={(e)=>setColorTable(e.target.value)} className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] text-slate-200 outline-none">
+                  <option value="nws">NWS</option><option value="br">BR</option><option value="vel">Velocity</option><option value="cc">CC</option>
+                </select>
+                <label className="block text-[10px] text-slate-500">Import .pal (Gibson Ridge / NOAA Weather / WX Tools compatible)</label>
+                <input type="file" accept=".pal,.txt,text/plain" onChange={async (e)=>{
+                  const f=e.target.files?.[0]; if(!f) return;
+                  try { const txt=await f.text(); const pal=parsePal(txt, f.name.replace(/\.(pal|txt)$/i,'')); setImportedPal(pal); setImportedPalStatus(`Imported ${pal.name} (${pal.colors.length} colors). Rendering uses existing verified palette pipeline; custom palette mapping is not yet applied to raster tiles.`); }
+                  catch { setImportedPal(null); setImportedPalStatus('DATA UNAVAILABLE - could not parse palette file.'); }
+                  e.currentTarget.value='';
+                }} className="block w-full text-[10px] text-slate-400 file:mr-2 file:rounded file:border-0 file:bg-slate-800 file:px-2 file:py-1 file:text-[10px] file:font-bold file:text-slate-200" />
+                {importedPalStatus && <div className="text-[10px] text-slate-400">{importedPalStatus}</div>}
+              </div>
+
+              <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-2 space-y-2">
+                <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">Warning Settings</div>
+                <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={warningFlash} onChange={(e)=>setWarningFlash(e.target.checked)} />Flash warning polygons/banners</label>
+                <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={warningPopup} onChange={(e)=>setWarningPopup(e.target.checked)} />Show warning popup details</label>
+                <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={warningVoiceEnabled} onChange={(e)=>setWarningVoiceEnabled(e.target.checked)} />Voice alerts (browser speech)</label>
+                <div className="flex gap-1">
+                  <button type="button" onClick={()=>setWarningVoicePack('default')} className={`rounded-md px-2 py-1 text-[11px] font-bold ${warningVoicePack==='default'?'bg-cyan-600 text-white':'bg-slate-800 text-slate-200'}`}>Default voice</button>
+                  <button type="button" onClick={()=>setWarningVoicePack('short')} className={`rounded-md px-2 py-1 text-[11px] font-bold ${warningVoicePack==='short'?'bg-cyan-600 text-white':'bg-slate-800 text-slate-200'}`}>Short voice</button>
+                </div>
+                <div className="text-[10px] text-slate-500">Default: "The National Weather Service has issued a..." Custom sound files can be added later; no fake audio assets included.</div>
+              </div>
+
               <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-2">
                 <div className="mb-1 text-[10px] font-black uppercase tracking-wider text-slate-500">Map Projection</div>
                 <div className="grid grid-cols-2 gap-1">
@@ -1013,12 +1088,6 @@ export default function MesoVortexWorkstation() {
                 <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">Expert / Quad</div>
                 <button type="button" onClick={()=>{ setExpertMode((v)=>!v); }} className={`w-full rounded-lg px-3 py-2 text-xs font-black ${expertMode?'bg-cyan-600 text-white':'bg-slate-800 text-slate-200'}`}>{expertMode?'Disable Expert Mode':'Enable Expert Mode'}</button>
                 <button type="button" onClick={()=>{ setQuadMode((v)=>!v); }} className={`w-full rounded-lg px-3 py-2 text-xs font-black ${quadMode?'bg-violet-600 text-white':'bg-slate-800 text-slate-200'}`}>{quadMode?'Disable Quad View':'Enable Quad View'}</button>
-              </div>
-              <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-2 space-y-1">
-                <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showRadarPills} onChange={(e)=>{ setShowRadarPills(e.target.checked); setShowRadarSites(e.target.checked); }} />Radar site pills</label>
-                <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showRangeRings} onChange={(e)=>setShowRangeRings(e.target.checked)} />Range rings</label>
-                <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showCounties} onChange={(e)=>setShowCounties(e.target.checked)} />County boundaries</label>
-                <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showTornadoAnalysis} onChange={(e)=>setShowTornadoAnalysis(e.target.checked)} />Tornado analysis</label>
               </div>
             </div>
           )}

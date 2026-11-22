@@ -2,24 +2,29 @@
 
 import { useMemo, useState } from 'react';
 
-export type ProductKey =
-  | 'ref'
-  | 'max_ref'
-  | 'ref_x'
-  | 'vel'
-  | 'srvel'
-  | 'norm_vel'
-  | 'sw'
-  | 'cc'
-  | 'min_cc'
-  | 'zdr'
-  | 'kdp'
-  | 'tops'
-  | 'vil'
-  | 'hhc'
-  | 'qpe';
-
 export type ModeTab = 'Radar' | '3D Radar' | 'Composite' | 'Satellite' | 'Models' | 'Outlooks';
+
+type ProductItem = { key: string; short: string; label: string; available?: boolean; reason?: string };
+
+const RADAR_PRODUCTS: ProductItem[] = [
+  { key: 'ref', short: 'REF', label: 'Base Reflectivity', available: true },
+  { key: 'max_ref', short: 'MAX', label: 'Max Reflectivity Swath', available: true },
+  { key: 'ref_x', short: 'RFX', label: 'Reflectivity X (Lerp)', available: true },
+  { key: 'vel', short: 'VEL', label: 'Base Velocity', available: true },
+  { key: 'srvel', short: 'SRV', label: 'Storm-Relative Velocity', available: true },
+  { key: 'norm_vel', short: 'NRV', label: 'Normalized Rotation/Shear', available: false, reason: 'DATA UNAVAILABLE - no verified normalized rotation/shear source; duplicates velocity' },
+  { key: 'sw', short: 'SW', label: 'Spectrum Width', available: false, reason: 'DATA UNAVAILABLE - unverified IEM ridge source' },
+  { key: 'cc', short: 'CC', label: 'Correlation Coefficient', available: false, reason: 'DATA UNAVAILABLE - unverified IEM ridge source' },
+  { key: 'min_cc', short: 'MCC', label: 'Min CC', available: false, reason: 'DATA UNAVAILABLE - no verified real source' },
+  { key: 'zdr', short: 'ZDR', label: 'Differential Reflectivity', available: false, reason: 'DATA UNAVAILABLE - unverified IEM ridge source' },
+  { key: 'kdp', short: 'KDP', label: 'Specific Diff Phase', available: false, reason: 'DATA UNAVAILABLE - unverified IEM ridge source' },
+  { key: 'tops', short: 'TOP', label: 'Digital Echo Tops', available: true },
+  { key: 'vil', short: 'VIL', label: 'Digital VIL', available: true },
+  { key: 'hhc', short: 'HHC', label: 'Hydrometeor Class', available: false, reason: 'DATA UNAVAILABLE - no verified real endpoint' },
+  { key: 'qpe', short: 'QPE', label: '1-Hour Precipitation (DPR)', available: false, reason: 'DATA UNAVAILABLE - no verified real endpoint' },
+];
+
+const TILTS = ['0.5','0.9','1.3','1.8','2.4','3.1'];
 
 export type Props = {
   mode?: ModeTab | string;
@@ -32,53 +37,22 @@ export type Props = {
   onSelectTilt: (t: string) => void;
   onTogglePlay: () => void;
   onClose?: () => void;
-
+  showRadarPills?: boolean;
+  onToggleRadarPills?: () => void;
+  inspectionMode?: boolean;
+  onToggleInspection?: () => void;
   maxRefWindow?: number;
   onSelectMaxRefWindow?: (w: number) => void;
-
-  gateFilter?: number;
-  onChangeGateFilter?: (val: number) => void;
-  opacity?: number;
-  onChangeOpacity?: (val: number) => void;
-  smoothing?: boolean;
-  onToggleSmoothing?: () => void;
   colorTable?: string;
   onChangeColorTable?: (table: string) => void;
-
-  showLightning?: boolean;
-  onToggleLightning?: () => void;
-  showStormTracks?: boolean;
-  onToggleStormTracks?: () => void;
-  showRadarSites?: boolean;
-  onToggleRadarSites?: () => void;
-  showRangeRings?: boolean;
-  onToggleRangeRings?: () => void;
-  showCounties?: boolean;
-  onToggleCounties?: () => void;
-  showTornadoAnalysis?: boolean;
-  onToggleTornadoAnalysis?: () => void;
-  showWarnings?: boolean;
-  onToggleWarnings?: () => void;
-  showMCD?: boolean;
-  onToggleMCD?: () => void;
-  showSpotters?: boolean;
-  onToggleSpotters?: () => void;
-  showSpotterReports?: boolean;
-  onToggleSpotterReports?: () => void;
-  showSweepAnimation?: boolean;
-  onToggleSweepAnimation?: () => void;
   showFastScan?: boolean;
   onToggleFastScan?: () => void;
-  showFlashReflectivity?: boolean;
-  onToggleFlashReflectivity?: () => void;
-
   // Satellite
   satelliteBird?: string;
   satelliteProductId?: string;
   onSelectSatelliteBird?: (bird: string) => void;
   onSelectSatelliteProduct?: (id: string) => void;
   satelliteProducts?: Array<{ id: string; label: string; available: boolean }>;
-
   // Models
   modelId?: string;
   modelField?: string;
@@ -86,64 +60,17 @@ export type Props = {
   modelFieldOptions?: Array<{ id: string; label: string; status: string }>;
   onSelectModel?: (id: string) => void;
   onSelectModelField?: (id: string) => void;
-
   // Outlooks/Composite
   spcDay?: string;
   onSelectSpcDay?: (day: string) => void;
   compositeProduct?: string;
   onSelectCompositeProduct?: (id: string) => void;
-
   [key: string]: any;
 };
-
-const PRODUCT_GROUPS: {
-  category: string;
-  items: { key: string; short: string; label: string; iconBg: string; available?: boolean; reason?: string }[];
-}[] = [
-  {
-    category: 'Reflectivity & Swaths',
-    items: [
-      { key: 'ref', short: 'REF', label: 'Base Reflectivity', iconBg: 'from-blue-600 via-green-500 to-red-600', available: true },
-      { key: 'max_ref', short: 'MAX', label: 'Max Reflectivity Swath', iconBg: 'from-amber-400 via-red-600 to-purple-700', available: true },
-      { key: 'ref_x', short: 'RFX', label: 'Reflectivity X (Lerp)', iconBg: 'from-cyan-500 via-yellow-400 to-rose-600', available: true },
-    ],
-  },
-  {
-    category: 'Velocity & Moments',
-    items: [
-      { key: 'vel', short: 'VEL', label: 'Base Velocity', iconBg: 'from-emerald-500 via-slate-800 to-red-600', available: true },
-      { key: 'srvel', short: 'SRV', label: 'Storm-Relative Velocity', iconBg: 'from-teal-500 via-slate-900 to-rose-600', available: true },
-      { key: 'norm_vel', short: 'NRV', label: 'Normalized Rotation/Shear', iconBg: 'from-cyan-600 via-slate-900 to-amber-500', available: false, reason: 'DATA UNAVAILABLE - no verified normalized rotation/shear source; current source duplicates velocity' },
-      { key: 'sw', short: 'SW', label: 'Spectrum Width', iconBg: 'from-slate-600 via-blue-500 to-emerald-400', available: false, reason: 'DATA UNAVAILABLE - IEM ridge N0W not verified/rendering for current source' },
-    ],
-  },
-  {
-    category: 'Dual-Pol Moments',
-    items: [
-      { key: 'cc', short: 'CC', label: 'Correlation Coefficient', iconBg: 'from-rose-500 via-purple-600 to-blue-500', available: false, reason: 'DATA UNAVAILABLE - IEM ridge N0C not verified/rendering for current source' },
-      { key: 'min_cc', short: 'MCC', label: 'Min CC (TDS Focus)', iconBg: 'from-purple-800 via-rose-600 to-blue-400', available: false, reason: 'DATA UNAVAILABLE - no verified real source' },
-      { key: 'zdr', short: 'ZDR', label: 'Differential Reflectivity', iconBg: 'from-purple-500 via-amber-400 to-cyan-400', available: false, reason: 'DATA UNAVAILABLE - IEM ridge N0X not verified/rendering for current source' },
-      { key: 'kdp', short: 'KDP', label: 'Specific Diff Phase', iconBg: 'from-cyan-500 via-blue-600 to-teal-400', available: false, reason: 'DATA UNAVAILABLE - IEM ridge N0K not verified/rendering for current source' },
-    ],
-  },
-  {
-    category: 'Derived & Vertical Structure',
-    items: [
-      { key: 'tops', short: 'TOP', label: 'Digital Echo Tops', iconBg: 'from-indigo-600 via-purple-500 to-pink-500', available: true },
-      { key: 'vil', short: 'VIL', label: 'Digital VIL (Hail Mass)', iconBg: 'from-amber-500 via-red-600 to-rose-700', available: true },
-      { key: 'hhc', short: 'HHC', label: 'Hydrometeor Class', iconBg: 'from-emerald-500 via-yellow-400 to-blue-600', available: false, reason: 'DATA UNAVAILABLE - no verified real IEM ridge tile endpoint for HHC' },
-      { key: 'qpe', short: 'QPE', label: '1-Hour Precipitation (DPR)', iconBg: 'from-blue-500 via-cyan-400 to-emerald-400', available: false, reason: 'DATA UNAVAILABLE - no verified real IEM ridge tile endpoint for DPR/QPE' },
-    ],
-  },
-];
-
-const TILTS = ['0.5', '0.9', '1.3', '1.8', '2.4', '3.1'];
-const MAX_REF_WINDOWS = [5, 10, 20, 30];
 
 export function WeatherWiseRadarCard({
   mode = 'Radar',
   siteId,
-  siteName,
   product,
   tilt,
   isPlaying,
@@ -151,12 +78,14 @@ export function WeatherWiseRadarCard({
   onSelectTilt,
   onTogglePlay,
   onClose,
+  showRadarPills = true,
+  onToggleRadarPills,
+  inspectionMode = false,
+  onToggleInspection,
   maxRefWindow = 10,
   onSelectMaxRefWindow,
   colorTable = 'nws',
   onChangeColorTable,
-  showSweepAnimation = true,
-  onToggleSweepAnimation,
   showFastScan = false,
   onToggleFastScan,
   satelliteBird,
@@ -176,161 +105,152 @@ export function WeatherWiseRadarCard({
   onSelectCompositeProduct,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
-  const [tiltMenuOpen, setTiltMenuOpen] = useState(false);
   const isRadarMode = mode === 'Radar' || mode === '3D Radar';
-  const isComposite = mode === 'Composite';
   const isSatellite = mode === 'Satellite';
   const isModels = mode === 'Models';
+  const isComposite = mode === 'Composite';
   const isOutlooks = mode === 'Outlooks';
 
-  const activeLabel = useMemo(() => {
-    for (const group of PRODUCT_GROUPS) {
-      const item = group.items.find((i) => i.key === product);
-      if (item) return item.label;
-    }
-    return product;
-  }, [product]);
-
-  const isMaxRef = product === 'max_ref';
+  const activeProduct = useMemo(() => RADAR_PRODUCTS.find(p => p.key === product) || { key: product, short: product.toUpperCase(), label: product, available: true }, [product]);
 
   return (
-    <div className="pointer-events-auto absolute bottom-3 left-1/2 z-30 w-[min(72rem,calc(100vw-1.5rem))] -translate-x-1/2 rounded-2xl border border-slate-700/80 bg-slate-950/92 text-slate-100 shadow-2xl backdrop-blur-md font-sans select-none overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-slate-800 px-3 py-2">
-        <div className="min-w-0">
-          <div className="text-[10px] font-black uppercase tracking-wider text-cyan-400">MesoVortexWX • {mode}</div>
-          <div className="truncate text-xs font-bold text-slate-200">
-            {isRadarMode ? `${siteId} · ${activeLabel}` : isSatellite ? 'Satellite Controls' : isModels ? 'Model Controls' : isComposite ? 'Composite Controls' : 'Outlook Controls'}
+    <div className="pointer-events-auto absolute bottom-3 left-3 z-30 font-sans text-slate-100 select-none">
+      {expanded && (
+        <div className="mb-2 w-[min(22rem,calc(100vw-1.5rem))] max-h-[min(60vh,32rem)] overflow-auto rounded-2xl border border-slate-700/80 bg-slate-950/95 shadow-2xl backdrop-blur-md">
+          <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2">
+            <div className="text-[10px] font-black uppercase tracking-wider text-cyan-400">{mode} Controls</div>
+            <button type="button" onClick={() => setExpanded(false)} className="rounded px-1.5 py-0.5 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Close drawer">✕</button>
           </div>
-        </div>
-        <div className="ml-auto flex items-center gap-1.5">
-          {isRadarMode && (
-            <>
-              <div className="relative">
-                <button type="button" onClick={() => setTiltMenuOpen((v) => !v)} className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] font-bold hover:bg-slate-800">Tilt {tilt}°</button>
-                {tiltMenuOpen && (
-                  <div className="absolute right-0 bottom-full mb-1 w-24 rounded-xl bg-slate-950 shadow-2xl border border-slate-700 p-1 space-y-1 z-40">
-                    {TILTS.map((t) => (
-                      <button key={t} type="button" onClick={() => { onSelectTilt(t); setTiltMenuOpen(false); }} className={`w-full rounded-lg py-1 text-center text-xs font-bold transition ${tilt === t ? 'bg-cyan-600 text-white' : 'text-slate-200 hover:bg-slate-800'}`}>{t}°</button>
-                    ))}
+          <div className="p-3 space-y-3 text-xs">
+            {isRadarMode && (
+              <>
+                <div>
+                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Product</div>
+                  <div className="max-h-56 overflow-auto rounded-lg border border-slate-800 bg-slate-900/40">
+                    {RADAR_PRODUCTS.map((p) => {
+                      const active = p.key === product;
+                      const unavailable = p.available === false;
+                      return (
+                        <button key={p.key} type="button" disabled={unavailable} onClick={() => !unavailable && onSelectProduct(p.key)}
+                          title={unavailable ? p.reason : p.label}
+                          className={`flex w-full items-center justify-between px-2.5 py-1.5 text-left text-[11px] border-b border-slate-800/60 last:border-b-0 ${active ? 'bg-cyan-500/15 text-cyan-200' : unavailable ? 'text-slate-500 cursor-not-allowed' : 'text-slate-200 hover:bg-slate-800'}`}>
+                          <span>{unavailable ? '⛔ ' : ''}{p.label}</span>
+                          <span className="text-[10px] text-slate-500">{p.short}</span>
+                        </button>
+                      );
+                    })}
                   </div>
-                )}
-              </div>
-              <select value={colorTable} onChange={(e) => onChangeColorTable?.(e.target.value)} className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] font-bold text-slate-200 outline-none">
-                <option value="nws">NWS</option>
-                <option value="br">BR</option>
-                <option value="vel">VEL</option>
-                <option value="cc">CC</option>
-              </select>
-            </>
-          )}
-          <button type="button" onClick={onTogglePlay} className="rounded-lg bg-cyan-600 px-2.5 py-1 text-[11px] font-black text-white hover:bg-cyan-500">{isPlaying ? 'Pause' : 'Play'}</button>
-          <button type="button" onClick={() => setExpanded((v) => !v)} className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] font-bold hover:bg-slate-800">{expanded ? 'Less' : 'More'}</button>
-          {onClose && <button type="button" onClick={onClose} className="rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Close control bar">✕</button>}
-        </div>
-      </div>
-
-      <div className="px-3 py-2">
-        {isRadarMode && (
-          <div className="space-y-2">
-            <div className="flex flex-wrap gap-1.5">
-              {PRODUCT_GROUPS.flatMap(g => g.items).map((item) => {
-                const active = product === item.key;
-                const unavailable = item.available === false;
-                return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => { if (!unavailable) onSelectProduct(item.key); }}
-                    title={unavailable ? `${item.label} — ${item.reason || 'DATA UNAVAILABLE'}` : item.label}
-                    className={`rounded-lg border px-2 py-1 text-[10px] font-bold transition ${active ? 'border-cyan-500 bg-cyan-500/15 text-cyan-200' : unavailable ? 'border-amber-900/40 bg-slate-900/40 text-slate-500 cursor-not-allowed' : 'border-slate-700 bg-slate-900/70 text-slate-300 hover:bg-slate-800'}`}
-                  >
-                    {unavailable ? '⛔ ' : ''}{item.short}
-                  </button>
-                );
-              })}
-            </div>
-
-            {expanded && (
-              <div className="space-y-2 border-t border-slate-800 pt-2">
-                {isMaxRef && onSelectMaxRefWindow && (
-                  <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                    <span className="text-slate-400 font-bold">Max window:</span>
-                    {MAX_REF_WINDOWS.map((w) => (
-                      <button key={w} type="button" onClick={() => onSelectMaxRefWindow(w)} className={`rounded-md px-2 py-0.5 font-bold ${maxRefWindow===w ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>{w}</button>
-                    ))}
-                  </div>
-                )}
-                <div className="flex flex-wrap gap-1.5 text-[11px]">
-                  <button type="button" onClick={onToggleSweepAnimation} className={`rounded-md px-2 py-1 font-bold border ${showSweepAnimation ? 'border-green-500/60 bg-green-500/10 text-green-300' : 'border-slate-700 bg-slate-900 text-slate-400'}`}>Sweep {showSweepAnimation?'ON':'OFF'}</button>
-                  <button type="button" onClick={onToggleFastScan} className={`rounded-md px-2 py-1 font-bold border ${showFastScan ? 'border-amber-500/60 bg-amber-500/10 text-amber-300' : 'border-slate-700 bg-slate-900 text-slate-400'}`}>Fast Scan {showFastScan?'ON':'OFF'}</button>
-                  <span className="text-[10px] text-slate-500 self-center">Fast Scan is a visual ingest indicator; real scan availability depends on source.</span>
                 </div>
-                <div className="text-[10px] text-slate-500">Map overlays moved to sidebar/drawer panels. Weather data remains primary.</div>
+                <div>
+                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Tilt</div>
+                  <div className="flex flex-wrap gap-1">
+                    {TILTS.map((t) => (
+                      <button key={t} type="button" onClick={() => onSelectTilt(t)} className={`rounded-md px-2 py-1 text-[11px] font-bold ${tilt===t ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>{t}°</button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Palette</div>
+                  <select value={colorTable} onChange={(e)=>onChangeColorTable?.(e.target.value)} className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] text-slate-200 outline-none">
+                    <option value="nws">NWS</option><option value="br">BR</option><option value="vel">Velocity</option><option value="cc">CC</option>
+                  </select>
+                </div>
+                {product === 'max_ref' && onSelectMaxRefWindow && (
+                  <div>
+                    <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Max Ref Window</div>
+                    <div className="flex gap-1">{[5,10,20,30].map(w => <button key={w} type="button" onClick={()=>onSelectMaxRefWindow(w)} className={`rounded-md px-2 py-1 text-[11px] font-bold ${maxRefWindow===w?'bg-purple-600 text-white':'bg-slate-800 text-slate-300'}`}>{w}</button>)}</div>
+                  </div>
+                )}
+                <label className="flex items-center gap-2 text-[11px] text-slate-300"><input type="checkbox" checked={showFastScan} onChange={onToggleFastScan} />Fast Scan (ingest indicator)</label>
+              </>
+            )}
+
+            {isSatellite && (
+              <>
+                <div>
+                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Satellite</div>
+                  <div className="flex gap-1">
+                    {['goes-east','goes-west'].map(b => <button key={b} type="button" onClick={()=>onSelectSatelliteBird?.(b)} className={`rounded-md px-2 py-1 text-[11px] font-bold ${satelliteBird===b?'bg-cyan-600 text-white':'bg-slate-800 text-slate-300'}`}>{b==='goes-east'?'GOES-East':'GOES-West'}</button>)}
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Product</div>
+                  <div className="space-y-1">
+                    {(satelliteProducts.length ? satelliteProducts : [{id:'visible',label:'Visible',available:true},{id:'ir',label:'Infrared',available:true},{id:'wv-mid',label:'Water Vapor',available:true}]).map(p => (
+                      <button key={p.id} type="button" disabled={!p.available} onClick={()=>p.available&&onSelectSatelliteProduct?.(p.id)} className={`flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-[11px] ${satelliteProductId===p.id?'bg-cyan-500/15 text-cyan-200':'text-slate-200 hover:bg-slate-800'} ${!p.available?'opacity-50 cursor-not-allowed':''}`}>
+                        <span>{!p.available?'⛔ ':''}{p.label}</span>{satelliteProductId===p.id && <span className="text-cyan-400">●</span>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {isModels && (
+              <>
+                <div>
+                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Model</div>
+                  <div className="max-h-40 overflow-auto rounded-lg border border-slate-800 bg-slate-900/40">
+                    {modelOptions.map(m => (
+                      <button key={m.id} type="button" onClick={()=>onSelectModel?.(m.id)} className={`flex w-full items-center justify-between px-2.5 py-1.5 text-left text-[11px] border-b border-slate-800/60 last:border-b-0 ${modelId===m.id?'bg-cyan-500/15 text-cyan-200':'text-slate-200 hover:bg-slate-800'}`}>
+                        <span>{m.status!=='READY_NOW'?'⛔ ':''}{m.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Field</div>
+                  <div className="grid grid-cols-2 gap-1">
+                    {modelFieldOptions.map(f => (
+                      <button key={f.id} type="button" onClick={()=>onSelectModelField?.(f.id)} className={`rounded-md px-2 py-1.5 text-[11px] font-bold text-left ${modelField===f.id?'bg-cyan-600 text-white':f.status==='READY_NOW'?'bg-slate-800 text-slate-200 hover:bg-slate-700':'bg-slate-900 text-slate-500'}`}>{f.status!=='READY_NOW'?'⛔ ':''}{f.label}</button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {isComposite && (
+              <div>
+                <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Composite Product</div>
+                {[{id:'ref',label:'Regional/National Reflectivity'},{id:'max_ref',label:'Max Reflectivity Swath'}].map(p => (
+                  <button key={p.id} type="button" onClick={()=>onSelectCompositeProduct?.(p.id)} className={`flex w-full rounded-md px-2.5 py-1.5 text-[11px] mb-1 ${compositeProduct===p.id?'bg-cyan-500/15 text-cyan-200':'bg-slate-800 text-slate-200 hover:bg-slate-700'}`}>{p.label}</button>
+                ))}
+              </div>
+            )}
+
+            {isOutlooks && (
+              <div>
+                <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">SPC Outlook Day</div>
+                <div className="flex gap-1">{['Day 1','Day 2','Day 3'].map(d => <button key={d} type="button" onClick={()=>onSelectSpcDay?.(d)} className={`rounded-md px-2.5 py-1.5 text-[11px] font-bold ${spcDay===d?'bg-cyan-600 text-white':'bg-slate-800 text-slate-200'}`}>{d}</button>)}</div>
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      <div className="flex items-center gap-1.5 rounded-2xl border border-slate-700/80 bg-slate-950/94 px-2.5 py-2 shadow-2xl backdrop-blur-md">
+        <div className="min-w-0 pr-1">
+          <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500">{isRadarMode ? 'Radar Site' : mode}</div>
+          <div className="text-xs font-black text-white leading-tight">{isRadarMode ? siteId : (isSatellite ? 'Satellite' : isModels ? 'Models' : isComposite ? 'Composite' : 'Outlooks')}</div>
+        </div>
+        <div className="min-w-0 border-l border-slate-800 pl-2 pr-1">
+          <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500">{isRadarMode ? 'Product' : 'Selection'}</div>
+          <div className="max-w-[10rem] truncate text-xs font-bold text-slate-200">{isRadarMode ? activeProduct.label : isSatellite ? (satelliteProductId||'') : isModels ? (modelField||'') : isOutlooks ? spcDay : (compositeProduct||'Reflectivity')}</div>
+        </div>
+
+        {isRadarMode && (
+          <button type="button" onClick={onToggleInspection} title="Inspection / Sampling Tool" className={`rounded-lg px-2 py-1.5 text-[11px] font-bold border ${inspectionMode ? 'border-cyan-500 bg-cyan-500/15 text-cyan-200' : 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'}`}>◎</button>
         )}
 
-        {isSatellite && (
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Satellite</span>
-              {['goes-east','goes-west'].map((b) => (
-                <button key={b} type="button" onClick={() => onSelectSatelliteBird?.(b)} className={`rounded-lg px-2.5 py-1 text-[11px] font-bold border ${satelliteBird===b ? 'border-cyan-500 bg-cyan-500/15 text-cyan-200' : 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'}`}>{b === 'goes-east' ? 'GOES-East' : 'GOES-West'}</button>
-              ))}
-            </div>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Product</span>
-              {(satelliteProducts.length ? satelliteProducts : [
-                {id:'visible',label:'Visible',available:true},{id:'ir',label:'Infrared',available:true},{id:'wv-mid',label:'Water Vapor',available:true}
-              ]).filter(p=>['visible','ir','wv-mid','wv-upper','wv-lower','ch13','ch02','ch09'].includes(p.id)).slice(0,5).map((p) => (
-                <button key={p.id} type="button" onClick={() => p.available && onSelectSatelliteProduct?.(p.id)} className={`rounded-lg px-2.5 py-1 text-[11px] font-bold border ${satelliteProductId===p.id ? 'border-cyan-500 bg-cyan-500/15 text-cyan-200' : p.available ? 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800' : 'border-amber-700/50 bg-slate-900 text-amber-400/70 cursor-not-allowed'}`} title={p.available ? p.label : `${p.label} (DATA UNAVAILABLE)`}>{!p.available ? '⛔ ' : ''}{p.label}</button>
-              ))}
-            </div>
-          </div>
+        <button type="button" onClick={onTogglePlay} title={isPlaying ? 'Pause' : 'Play'} className="rounded-lg bg-cyan-600 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-cyan-500">{isPlaying ? '❚❚' : '▶'}</button>
+        <button type="button" onClick={onTogglePlay} title="Loop" className={`rounded-lg border px-2 py-1.5 text-[11px] font-bold ${isPlaying ? 'border-cyan-500/60 bg-cyan-500/10 text-cyan-200' : 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'}`}>↻</button>
+
+        {isRadarMode && (
+          <button type="button" onClick={onToggleRadarPills} title="Radar Tower Pills Toggle" className={`rounded-lg border px-2 py-1.5 text-[11px] font-bold ${showRadarPills ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800'}`}>⌖</button>
         )}
 
-        {isModels && (
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Model</span>
-              <select value={modelId} onChange={(e) => onSelectModel?.(e.target.value)} className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-bold text-slate-200 outline-none min-w-[14rem]">
-                {modelOptions.map((m) => <option key={m.id} value={m.id}>{m.status==='READY_NOW'?'':'⛔ '}{m.label}</option>)}
-              </select>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Field</span>
-              {modelFieldOptions.map((f) => (
-                <button key={f.id} type="button" onClick={() => onSelectModelField?.(f.id)} className={`rounded-lg px-2.5 py-1 text-[11px] font-bold border ${modelField===f.id ? 'border-cyan-500 bg-cyan-500/15 text-cyan-200' : f.status==='READY_NOW' ? 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800' : 'border-amber-700/40 bg-slate-900 text-amber-400/70'}`}>
-                  {f.status!=='READY_NOW' ? '⛔ ' : ''}{f.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {isComposite && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Composite</span>
-            {[
-              {id:'ref', label:'Regional/National Reflectivity'},
-              {id:'max_ref', label:'Max Reflectivity Swath'},
-            ].map((p) => (
-              <button key={p.id} type="button" onClick={() => onSelectCompositeProduct?.(p.id)} className={`rounded-lg px-2.5 py-1 text-[11px] font-bold border ${(compositeProduct||product)===p.id ? 'border-cyan-500 bg-cyan-500/15 text-cyan-200' : 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'}`}>{p.label}</button>
-            ))}
-            <span className="text-[10px] text-slate-500">Composite uses real IEM/NEXRAD mosaic where available.</span>
-          </div>
-        )}
-
-        {isOutlooks && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">SPC Outlook</span>
-            {['Day 1','Day 2','Day 3'].map((d) => (
-              <button key={d} type="button" onClick={() => onSelectSpcDay?.(d)} className={`rounded-lg px-2.5 py-1 text-[11px] font-bold border ${spcDay===d ? 'border-cyan-500 bg-cyan-500/15 text-cyan-200' : 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'}`}>{d}</button>
-            ))}
-            <span className="text-[10px] text-slate-500">Categorical outlook displayed on map from real SPC/NWS source.</span>
-          </div>
-        )}
+        <button type="button" onClick={() => setExpanded(v=>!v)} title={expanded ? 'Collapse' : 'Expand'} className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-bold text-slate-200 hover:bg-slate-800">{expanded ? '▾' : '▴'}</button>
+        {onClose && <button type="button" onClick={onClose} className="rounded-lg px-1.5 py-1.5 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Close controls">✕</button>}
       </div>
     </div>
   );

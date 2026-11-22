@@ -42,6 +42,7 @@ export interface RadarMapProps {
   spcDay?: 'Day 1' | 'Day 2' | 'Day 3' | string;
   radarOpacity?: number;
   crossSectionMode?: boolean;
+  inspectionMode?: boolean;
   showRangeRings?: boolean;
   showRadarPills?: boolean;
   showLightning?: boolean;
@@ -291,6 +292,7 @@ export function RadarMap({
   basemap = 'satellite-streets',
   radarOpacity = 0.88,
   crossSectionMode = false,
+  inspectionMode = false,
   showRangeRings = true,
   showRadarPills = true,
   showWarnings = true,
@@ -334,6 +336,8 @@ export function RadarMap({
 }: RadarMapProps) {
   const [scanIngesting, setScanIngesting] = useState(false);
   const [scanIngestDismissed, setScanIngestDismissed] = useState(false);
+  const [inspectionResult, setInspectionResult] = useState<{ lat: number; lon: number; product: string; site: string; tilt: string; time: string; value: string; note?: string } | null>(null);
+  const lastFrameRef = useRef<{ time: string; product: string; site: string; tilt: string }>({ time: '', product: '', site: '', tilt: '' });
   const fastScanEnabled = fastScanProp ?? showFastScan;
   const sweepEnabled = (sweepAnimationProp ?? showSweepAnimation) || fastScanEnabled;
   const flashEnabled = flashReflectivityProp ?? showFlashReflectivity;
@@ -1145,8 +1149,11 @@ export function RadarMap({
           if (playbackActive && archiveAvailable && frames.length > 0) {
             const idx = Math.max(0, Math.min(playbackIndex, frames.length - 1));
             tileUrl = String(frames[idx]?.tileUrl || data.latestTileUrl);
+            lastFrameRef.current = { time: String(frames[idx]?.time || frames[idx]?.label || ''), product, site: site.radarId, tilt };
           } else {
             tileUrl = data.latestTileUrl;
+            const last = frames[frames.length - 1];
+            lastFrameRef.current = { time: String(last?.time || last?.label || ''), product, site: site.radarId, tilt };
           }
         } catch {
           if (map.getLayer(RADAR_LAYER_ID)) map.removeLayer(RADAR_LAYER_ID);
@@ -1886,8 +1893,33 @@ export function RadarMap({
     else container.classList.remove('radar-flash-active');
   }, [flashEnabled]);
 
+  useEffect(() => {
+    if (!inspectionMode) { setInspectionResult(null); return; }
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const handler = (e: any) => {
+      const lng = Number(e?.lngLat?.lng);
+      const lat = Number(e?.lngLat?.lat);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      const frame = lastFrameRef.current;
+      // Honest: no verified raster-to-value sampling pipeline. Do not fake values.
+      setInspectionResult({
+        lat,
+        lon: lng,
+        product: frame.product || product,
+        site: frame.site || site.radarId,
+        tilt: frame.tilt || tilt,
+        time: frame.time || (playbackActive ? 'Playback frame' : 'Live/Current frame'),
+        value: 'DATA UNAVAILABLE',
+        note: 'Raster tile value sampling not verified for this source/palette. No fake values shown.',
+      });
+    };
+    map.on('click', handler);
+    return () => { map.off('click', handler); };
+  }, [inspectionMode, mapReady, product, site.radarId, tilt, playbackActive]);
+
   return (
-    <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'hidden', cursor: crossSectionMode ? 'crosshair' : 'default' }}>
+    <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'hidden', cursor: (crossSectionMode || inspectionMode) ? 'crosshair' : 'default' }}>
       <div ref={containerRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
       <canvas ref={sweepCanvasRef} className="radar-sweep-canvas" />
 
@@ -1922,6 +1954,27 @@ export function RadarMap({
           <span>SCAN INGEST FRONTIER</span>
           <span className="font-normal text-slate-400">New scan detected; sweep indicates ingest window</span>
           <button type="button" onClick={() => setScanIngestDismissed(true)} className="ml-1 text-slate-400 hover:text-white" aria-label="Dismiss scan ingest">×</button>
+        </div>
+      )}
+
+      {inspectionMode && (
+        <div className="absolute left-3 top-20 z-40 w-[min(22rem,calc(100vw-1.5rem))] rounded-xl border border-cyan-500/40 bg-slate-950/95 p-3 text-xs text-slate-200 shadow-2xl backdrop-blur-md">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[10px] font-black uppercase tracking-wider text-cyan-300">Inspection / Sampling</div>
+            <button type="button" onClick={() => setInspectionResult(null)} className="text-slate-400 hover:text-white" aria-label="Clear inspection">×</button>
+          </div>
+          {!inspectionResult ? (
+            <div className="mt-2 text-slate-400">Click the map to sample a point. Values shown only when verified; no fake values.</div>
+          ) : (
+            <div className="mt-2 space-y-1 font-mono text-[11px]">
+              <div><span className="text-slate-500">Lat/Lon:</span> {inspectionResult.lat.toFixed(4)}, {inspectionResult.lon.toFixed(4)}</div>
+              <div><span className="text-slate-500">Site:</span> {inspectionResult.site} <span className="text-slate-500">Tilt:</span> {inspectionResult.tilt}°</div>
+              <div><span className="text-slate-500">Product:</span> {inspectionResult.product.toUpperCase()}</div>
+              <div><span className="text-slate-500">Frame:</span> {inspectionResult.time || 'Unknown'}</div>
+              <div className="pt-1 border-t border-slate-800"><span className="text-slate-500">Value:</span> <span className="text-amber-300 font-bold">{inspectionResult.value}</span></div>
+              {inspectionResult.note && <div className="text-[10px] text-slate-500 leading-snug">{inspectionResult.note}</div>}
+            </div>
+          )}
         </div>
       )}
     </div>
