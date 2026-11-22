@@ -881,8 +881,8 @@ export function RadarMap({
           const link = safeUrl ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:10px;font-size:11px;font-weight:700;color:#38bdf8;">View on Spotter Network ↗</a>` : '';
 
           const headerLabel = isReport ? 'SPOTTER REPORT' : 'SPOTTER POSITION';
-          const headerTitle = isReport ? reportType : name;
-          const headerSub = isReport ? name : 'Live position';
+          const headerTitle = name;
+          const headerSub = isReport ? reportType : 'Live position';
           new maplibregl.Popup({ closeButton: true, offset: 12, maxWidth: '360px', className: 'mv-spotter-popup' })
             .setLngLat(e.lngLat)
             .setHTML(`
@@ -918,12 +918,8 @@ export function RadarMap({
                     <div style="font-size:10px;font-weight:800;color:#f87171;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Storm Context</div>
                     ${row('Nearest Radar', escapeHtml(site?.radarId || 'Unavailable'))}
                     ${row('Distance From Radar', escapeHtml(distanceText))}
-                    ${row('Reflectivity', 'Unavailable')}
-                    ${row('VIL', 'Unavailable')}
-                    ${row('Echo Tops', 'Unavailable')}
                   </div>
                   ${link}
-                  <div style="margin-top:8px;font-size:10px;color:#64748b;line-height:1.4;">Storm context values shown as Unavailable when not sampled from real product data.</div>
                 </div>
               </div>`)
             .addTo(map);
