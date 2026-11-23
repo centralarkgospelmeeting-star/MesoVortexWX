@@ -7,7 +7,7 @@
  */
 
 export type RadarCapabilityStatus = 'WORKING' | 'PARTIAL' | 'UNAVAILABLE' | 'RESTRICTED';
-export type RadarSourceType = 'IEM_RIDGE' | 'IEM_MRMS_TMS' | 'NOAA_AWS_MRMS' | 'NOAA_NEXRAD_LEVEL2' | 'DERIVED' | 'NONE';
+export type RadarSourceType = 'IEM_RIDGE' | 'IEM_MRMS_TMS' | 'NOAA_AWS_MRMS' | 'NOAA_NEXRAD_LEVEL2' | 'NOAA_NCEP_WMS' | 'DERIVED' | 'NONE';
 export type ArchiveSupport = 'FULL' | 'PARTIAL' | 'PARTIAL_ARCHIVE' | 'NONE' | 'UNKNOWN';
 export type SuperResolutionSupport = 'YES' | 'NO' | 'N/A' | 'UNKNOWN';
 export type PlaybackSupport = 'REAL_ARCHIVE' | 'PARTIAL_ARCHIVE' | 'LIVE_ONLY' | 'NONE' | 'UNKNOWN';
@@ -225,16 +225,30 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
     id: 'hhc',
     name: 'Hydrometeor Classification',
     shortLabel: 'HHC',
-    source: { type: 'NONE', provider: 'Unverified', notes: 'No verified end-to-end source in current pipeline.' },
-    availability: 'UNAVAILABLE',
-    archiveSupport: 'UNKNOWN',
+    source: {
+      type: 'NOAA_NCEP_WMS',
+      provider: 'NOAA NCEP opengeo WMS (RIDGEII BDHC)',
+      endpointTemplate: '/api/radar/ncep-wms?product=hhc&site={{SITE}}&bbox={bbox-epsg-3857}&width=256&height=256',
+      productCode: 'BDHC',
+      notes: 'NCEP opengeo per-radar WMS layer k<SITE>_bdhc (Digital Hydrometeor Classification). Live verified; TIME dimension advertised but archive/playback not yet end-to-end verified in MesoVortexWX.',
+    },
+    availability: 'PARTIAL',
+    archiveSupport: 'PARTIAL_ARCHIVE',
     superResolutionSupport: 'N/A',
-    playbackSupport: 'NONE',
+    playbackSupport: 'LIVE_ONLY',
     networks: ['NEXRAD'],
-    tiltSupport: [],
-    dataHonesty: { realData: false, substitute: false, synthetic: false, reason: 'No verified source.' },
-    unavailableReason: 'DATA UNAVAILABLE - No verified HHC source in current pipeline.',
-    verification: { level: 'UNVERIFIED', lastCheckedAt: CHECKED_AT, evidence: ['nexrad/frames returns 404', 'Sprint 2: IEM ridge DHC/HHC/N0H 503 on LZK/LWX/TLX/MHX'] },
+    tiltSupport: ['0.5'],
+    dataHonesty: { realData: true, substitute: false, synthetic: false },
+    verification: {
+      level: 'TESTED_LIVE',
+      lastCheckedAt: '2026-11-23',
+      evidence: [
+        'NCEP opengeo GetCapabilities lists klzk_bdhc with time dimension and default recent timestamp',
+        'GetMap returns image/png for klzk/ktlx/kdmx/kfws BDHC layers',
+        'IEM RIDGE N0H/HHC 503 on sampled sites; unidata L3 N0H files exist but not yet decoded/rendered in-app',
+        'Archive TIME advertised by NCEP but not yet wired into MesoVortexWX playback - LIVE_ONLY until verified',
+      ],
+    },
   },
   {
     id: 'qpe',

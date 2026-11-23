@@ -48,7 +48,8 @@ export function getRadarRasterRenderConfig(params: {
   const product = (params.product || '').toLowerCase();
   // Current verified/partial radar products are rasterized gate/value tiles where
   // nearest-neighbor preserves crisp edges at overzoom. Keep conservative defaults.
-  if (product === 'ref' || product === 'vel' || product === 'srvel' || product === 'max_ref' || product === 'ref_x') {
+  if (product === 'ref' || product === 'vel' || product === 'srvel' || product === 'max_ref' || product === 'ref_x' || product === 'hhc') {
+    // HHC is categorical raster from verified NCEP opengeo BDHC WMS.
     return { ...DEFAULT_RADAR_RASTER_RENDER_CONFIG };
   }
 

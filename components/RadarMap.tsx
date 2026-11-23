@@ -1197,6 +1197,7 @@ export function RadarMap({
 
       const isSatelliteMode = mode === 'Satellite';
       const renderConfig = getRadarRasterRenderConfig({ mode, product });
+      const usesWmsBbox = tileUrl.includes('{bbox-epsg-3857}');
       const rasterPaint: any = {
         'raster-opacity': radarOpacity,
         'raster-fade-duration': renderConfig.rasterFadeDuration,
@@ -1209,7 +1210,10 @@ export function RadarMap({
         'raster-brightness-max': isSatelliteMode ? 1 : 1,
       };
 
-      if (existingSource && typeof existingSource.setTiles === 'function') {
+      const currentScheme = (existingSource as any)?.scheme || (existingSource as any)?.tileScheme;
+      const needsRebuild = !existingSource || typeof existingSource.setTiles !== 'function' || (usesWmsBbox && currentScheme !== 'tms');
+
+      if (!needsRebuild && existingSource && typeof existingSource.setTiles === 'function') {
         // Switch raster tiles without rebuilding the map or tearing down layers.
         existingSource.setTiles([tileUrl]);
         if (!map.getLayer(RADAR_LAYER_ID)) {
@@ -1239,8 +1243,9 @@ export function RadarMap({
           type: 'raster',
           tiles: [tileUrl],
           tileSize: renderConfig.tileSize,
-          scheme: 'xyz',
         };
+        // NCEP opengeo proxy uses WMS 1.1.1 EPSG:3857 {bbox-epsg-3857}.
+        if (!usesWmsBbox) source.scheme = 'xyz';
         if (typeof renderConfig.maxzoom === 'number') source.maxzoom = renderConfig.maxzoom;
 
         map.addSource(RADAR_SOURCE_ID, source);

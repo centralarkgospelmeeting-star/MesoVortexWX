@@ -130,6 +130,12 @@ export async function GET(request: Request) {
         productCode = 'N0S';
         archiveSupported = true;
         break;
+      case 'hhc':
+        // Verified live NCEP opengeo BDHC WMS via internal proxy. Archive TIME exists upstream but
+        // is not yet wired into MesoVortexWX playback; expose LIVE_ONLY honestly.
+        productCode = 'BDHC';
+        archiveSupported = false;
+        break;
       default:
         return unavailable(cap.unavailableReason || `DATA UNAVAILABLE - ${cap.name} is not available.`, {
           productKey,
@@ -140,7 +146,9 @@ export async function GET(request: Request) {
 
   // Capability matrix playback rule: if archive not supported, LIVE_ONLY single frame.
   const playbackSupport = archiveSupported ? (cap.archiveSupport === 'PARTIAL' || cap.archiveSupport === 'PARTIAL_ARCHIVE' ? 'PARTIAL_ARCHIVE' : 'REAL_ARCHIVE') : 'LIVE_ONLY';
-  const latestTileUrl = `${IEM_TILE}/ridge::${sector}-${productCode}-0/{z}/{x}/{y}.png`;
+  const latestTileUrl = normalized.id === 'hhc'
+    ? `/api/radar/ncep-wms?product=hhc&site=${encodeURIComponent(sector)}&bbox={bbox-epsg-3857}&width=256&height=256`
+    : `${IEM_TILE}/ridge::${sector}-${productCode}-0/{z}/{x}/{y}.png`;
   const compositeTileUrl = `${IEM_TILE}/nexrad-n0q-900913/{z}/{x}/{y}.png`;
 
   const now = new Date();
@@ -173,6 +181,10 @@ export async function GET(request: Request) {
     notes.push(`PARTIAL - ${cap.name} is available with limited verification.`);
   }
 
+  const provider = normalized.id === 'hhc'
+    ? 'NOAA NCEP opengeo WMS (RIDGEII BDHC)'
+    : isTdwr ? 'FAA TDWR / IEM RIDGE' : 'NOAA NEXRAD Level III / IEM RIDGE';
+
   return NextResponse.json(
     {
       data: frames,
@@ -181,7 +193,7 @@ export async function GET(request: Request) {
       playbackSupport,
       archiveSupport: cap.archiveSupport,
       verificationLevel: cap.verification.level,
-      provider: isTdwr ? 'FAA TDWR / IEM RIDGE' : 'NOAA NEXRAD Level III / IEM RIDGE',
+      provider,
       station: site.radarId,
       sector,
       network: site.network,
