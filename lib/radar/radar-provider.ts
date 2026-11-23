@@ -41,6 +41,9 @@ class NoaaWsR88DDriver implements RadarDriver {
     const capId = (p === 'ref' || p === 'max_ref' || p === 'ref_x') ? 'ref'
       : p === 'vel' ? 'vel'
       : p === 'srvel' ? 'srvel'
+      : (p === 'cc' || p === 'correlation' || p === 'correlation_coefficient') ? 'cc'
+      : (p === 'zdr' || p === 'differential_reflectivity') ? 'zdr'
+      : (p === 'kdp' || p === 'specific_differential_phase') ? 'kdp'
       : p;
     const cap = getRadarCapability(capId);
     if (!cap || !isRadarProductAvailable(capId)) return null;
@@ -56,6 +59,9 @@ class NoaaWsR88DDriver implements RadarDriver {
     if (capId === 'ref') return { code: 'N0B', capabilityId: capId, archiveSupported: true };
     if (capId === 'vel') return { code: 'N0U', capabilityId: capId, archiveSupported: false };
     if (capId === 'srvel') return { code: 'N0S', capabilityId: capId, archiveSupported: true };
+    if (capId === 'cc') return { code: 'N0C', capabilityId: capId, archiveSupported: true };
+    if (capId === 'zdr') return { code: 'N0X', capabilityId: capId, archiveSupported: true };
+    if (capId === 'kdp') return { code: 'N0K', capabilityId: capId, archiveSupported: true };
     return null;
   }
 
@@ -141,7 +147,7 @@ export class RadarSiteRegistry {
       network: 'nexrad',
       country: 'US',
       isOnline: false,
-      supportedProducts: ['ref', 'vel', 'srvel'],
+      supportedProducts: ['ref', 'vel', 'srvel', 'cc', 'zdr', 'kdp'],
       supportedTilts: ['0.5'],
     };
   }
@@ -177,7 +183,7 @@ export class RadarSiteRegistry {
         country: 'US',
         state: stateMatch?.[1],
         isOnline: true,
-        supportedProducts: ['ref', 'vel', 'srvel'],
+        supportedProducts: ['ref', 'vel', 'srvel', 'cc', 'zdr', 'kdp'],
         supportedTilts: ['0.5', '0.9', '1.3', '1.8'],
         vcpMode: 'VCP 212 Convective',
       });
