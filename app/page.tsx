@@ -1180,16 +1180,13 @@ export default function MesoVortexWorkstation() {
       )}
 
       <footer
-        className="shrink-0 border-t border-slate-800/60 bg-[#050a12] px-3 py-1.5 text-center text-[10px] leading-relaxed text-slate-500"
+        className="shrink-0 border-t border-slate-800/60 bg-[#050a12] px-3 py-1.5 text-center text-[10px] text-slate-500"
         aria-label="Footer"
       >
-        <div className="mx-auto max-w-3xl">
-          <div className="font-semibold tracking-wide text-slate-400/80">MesoVortexWX</div>
-          <div className="mt-0.5 text-slate-500">
-            <span className="block sm:inline">&ldquo;He sends the lightning with the rain</span>{' '}
-            <span className="block sm:inline">and brings out the wind from his storehouses.&rdquo;</span>
-          </div>
-          <div className="text-slate-500">— Psalm 135:7</div>
+        <div className="mx-auto max-w-5xl px-2">
+          <span className="font-semibold tracking-wide text-slate-400/80">MesoVortexWX</span>
+          <span className="mx-1.5 text-slate-600">&middot;</span>
+          <span>&ldquo;He sends the lightning with the rain and brings out the wind from his storehouses.&rdquo; &mdash; Psalm 135:7</span>
         </div>
       </footer>
     </div>
