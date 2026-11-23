@@ -38,6 +38,9 @@ jobs:
       - name: Platform capability matrix regression / metadata completeness
         run: node scripts/test-platform-capabilities.mjs
 
+      - name: Sounding capability matrix regression / metadata completeness
+        run: node scripts/test-sounding-capabilities.mjs
+
       - name: Fake-data guard tests
         run: node scripts/test-fake-data-guards.mjs
 
