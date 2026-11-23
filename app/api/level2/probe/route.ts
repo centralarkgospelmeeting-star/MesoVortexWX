@@ -7,7 +7,7 @@ const BUCKET =
 
 export async function GET() {
   try {
-    const prefix = 'KLZK/';
+    const prefix = '';
 
     const url =
       `${BUCKET}/?list-type=2&prefix=${prefix}&max-keys=5`;
