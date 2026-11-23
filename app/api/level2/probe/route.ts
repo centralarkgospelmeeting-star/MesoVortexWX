@@ -18,9 +18,10 @@ export async function GET() {
 
     const text = await response.text();
 
-    const keys =
-      [...text.matchAll(/<Key>(.*?)<\/Key>/g)]
-        .map(m => m[1]);
+    const keys = Array.from(
+      text.matchAll(/<Key>(.*?)<\/Key>/g),
+      match => match[1]
+    );
 
     return NextResponse.json({
       available: response.ok,
@@ -28,7 +29,6 @@ export async function GET() {
       count: keys.length,
       files: keys,
     });
-
   } catch (error: any) {
     return NextResponse.json({
       available: false,
