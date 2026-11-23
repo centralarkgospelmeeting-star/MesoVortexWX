@@ -44,6 +44,15 @@ class NoaaWsR88DDriver implements RadarDriver {
       : (p === 'cc' || p === 'correlation' || p === 'correlation_coefficient') ? 'cc'
       : (p === 'zdr' || p === 'differential_reflectivity') ? 'zdr'
       : (p === 'kdp' || p === 'specific_differential_phase') ? 'kdp'
+      : (p === 'sw' || p === 'spectrum_width') ? 'sw'
+      : p === 'hhc' ? 'hhc'
+      : (p === 'trk' || p === 'storm_track' || p === 'storm_tracking') ? 'trk'
+      : (p === 'mcc' || p === 'mesocyclone') ? 'mcc'
+      : (p === 'et' || p === 'echo_tops' || p === 'enhanced_echo_tops') ? 'et'
+      : p === 'vil' ? 'vil'
+      : (p === 'hail' || p === 'hail_index') ? 'hail'
+      : (p === 'qpe' || p === 'precipitation_array') ? 'qpe'
+      : (p === 'rate' || p === 'precipitation_rate') ? 'rate'
       : p;
     const cap = getRadarCapability(capId);
     if (!cap || !isRadarProductAvailable(capId)) return null;
@@ -62,6 +71,15 @@ class NoaaWsR88DDriver implements RadarDriver {
     if (capId === 'cc') return { code: 'N0C', capabilityId: capId, archiveSupported: true };
     if (capId === 'zdr') return { code: 'N0X', capabilityId: capId, archiveSupported: true };
     if (capId === 'kdp') return { code: 'N0K', capabilityId: capId, archiveSupported: true };
+    if (capId === 'sw') return { code: 'NSP', capabilityId: capId, archiveSupported: true };
+    if (capId === 'hhc') return { code: 'HHC', capabilityId: capId, archiveSupported: true };
+    if (capId === 'trk') return { code: 'NST', capabilityId: capId, archiveSupported: true };
+    if (capId === 'mcc') return { code: 'NMD', capabilityId: capId, archiveSupported: true };
+    if (capId === 'et') return { code: 'EET', capabilityId: capId, archiveSupported: true };
+    if (capId === 'vil') return { code: 'NVL', capabilityId: capId, archiveSupported: true };
+    if (capId === 'hail') return { code: 'NHI', capabilityId: capId, archiveSupported: true };
+    if (capId === 'qpe') return { code: 'DPA', capabilityId: capId, archiveSupported: true };
+    if (capId === 'rate') return { code: 'DPR', capabilityId: capId, archiveSupported: true };
     return null;
   }
 
@@ -147,7 +165,7 @@ export class RadarSiteRegistry {
       network: 'nexrad',
       country: 'US',
       isOnline: false,
-      supportedProducts: ['ref', 'vel', 'srvel', 'cc', 'zdr', 'kdp'],
+      supportedProducts: ['ref', 'vel', 'srvel', 'cc', 'zdr', 'kdp', 'sw', 'hhc', 'trk', 'mcc', 'et', 'vil', 'hail', 'qpe', 'rate'],
       supportedTilts: ['0.5'],
     };
   }
@@ -183,7 +201,7 @@ export class RadarSiteRegistry {
         country: 'US',
         state: stateMatch?.[1],
         isOnline: true,
-        supportedProducts: ['ref', 'vel', 'srvel', 'cc', 'zdr', 'kdp'],
+        supportedProducts: ['ref', 'vel', 'srvel', 'cc', 'zdr', 'kdp', 'sw', 'hhc', 'trk', 'mcc', 'et', 'vil', 'hail', 'qpe', 'rate'],
         supportedTilts: ['0.5', '0.9', '1.3', '1.8'],
         vcpMode: 'VCP 212 Convective',
       });
@@ -256,4 +274,24 @@ export class RadarSiteRegistry {
       });
     }
   }
+}
+/**
+ * Recognized products that need a provider or processing pipeline beyond
+ * this IEM NEXRAD Level III tile driver. Do not advertise them as available
+ * until their upstream source is connected.
+ */
+export const RADAR_PRODUCT_SOURCE_REQUIREMENTS: Record<string, string> = {
+  nrot: 'Normalized rotation derived from velocity data',
+  az: 'Azimuthal shear derived from velocity data',
+  gate: 'Gate-to-gate shear derived from velocity data',
+  xsec: 'Cross section generated from radar volume scans',
+  vild: 'VIL density; requires VIL and echo-top processing',
+  mesh: 'MRMS Maximum Expected Size of Hail product',
+  vol: 'Level II radar volume scan source',
+  rms: 'App-specific alias; define its intended product',
+  anlz: 'App-specific alias; define its intended product',
+};
+
+export function getRadarProductSourceRequirement(product: string): string | null {
+  return RADAR_PRODUCT_SOURCE_REQUIREMENTS[product.trim().toLowerCase()] ?? null;
 }
