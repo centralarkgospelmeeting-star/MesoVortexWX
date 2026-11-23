@@ -1,0 +1,557 @@
+{
+  "generatedAt": "2026-11-23T20:03:53.796Z",
+  "note": "Verification-only probe. No products enabled.",
+  "iemProducts": {
+    "LZK": {
+      "status": 200,
+      "products": [
+        {
+          "id": "N0B",
+          "name": "Base Reflectivity (Super Res)"
+        },
+        {
+          "id": "N0S",
+          "name": "Storm Relative Radial Velocity"
+        }
+      ],
+      "url": "https://mesonet.agron.iastate.edu/json/radar.py?operation=products&radar=LZK&start=2026-11-23T20:03Z"
+    },
+    "TLX": {
+      "status": 200,
+      "products": [
+        {
+          "id": "N0B",
+          "name": "Base Reflectivity (Super Res)"
+        },
+        {
+          "id": "N0S",
+          "name": "Storm Relative Radial Velocity"
+        }
+      ],
+      "url": "https://mesonet.agron.iastate.edu/json/radar.py?operation=products&radar=TLX&start=2026-11-23T20:03Z"
+    },
+    "DMX": {
+      "status": 200,
+      "products": [
+        {
+          "id": "N0B",
+          "name": "Base Reflectivity (Super Res)"
+        },
+        {
+          "id": "N0S",
+          "name": "Storm Relative Radial Velocity"
+        }
+      ],
+      "url": "https://mesonet.agron.iastate.edu/json/radar.py?operation=products&radar=DMX&start=2026-11-23T20:03Z"
+    },
+    "LOT": {
+      "status": 200,
+      "products": [
+        {
+          "id": "N0S",
+          "name": "Storm Relative Radial Velocity"
+        },
+        {
+          "id": "N0B",
+          "name": "Base Reflectivity (Super Res)"
+        }
+      ],
+      "url": "https://mesonet.agron.iastate.edu/json/radar.py?operation=products&radar=LOT&start=2026-11-23T20:03Z"
+    },
+    "MHX": {
+      "status": 200,
+      "products": [
+        {
+          "id": "N0S",
+          "name": "Storm Relative Radial Velocity"
+        },
+        {
+          "id": "N0B",
+          "name": "Base Reflectivity (Super Res)"
+        }
+      ],
+      "url": "https://mesonet.agron.iastate.edu/json/radar.py?operation=products&radar=MHX&start=2026-11-23T20:03Z"
+    }
+  },
+  "ridgeTiles": [
+    {
+      "productId": "cc",
+      "label": "Correlation Coefficient",
+      "code": "N0C",
+      "site": "LZK",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::LZK-N0C-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "cc",
+      "label": "Correlation Coefficient",
+      "code": "N0C",
+      "site": "TLX",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::TLX-N0C-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "cc",
+      "label": "Correlation Coefficient",
+      "code": "N0C",
+      "site": "DMX",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::DMX-N0C-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "cc",
+      "label": "Correlation Coefficient",
+      "code": "N0C",
+      "site": "LOT",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::LOT-N0C-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "cc",
+      "label": "Correlation Coefficient",
+      "code": "N0C",
+      "site": "MHX",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::MHX-N0C-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "zdr",
+      "label": "Differential Reflectivity",
+      "code": "N0X",
+      "site": "LZK",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::LZK-N0X-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "zdr",
+      "label": "Differential Reflectivity",
+      "code": "N0X",
+      "site": "TLX",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::TLX-N0X-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "zdr",
+      "label": "Differential Reflectivity",
+      "code": "N0X",
+      "site": "DMX",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::DMX-N0X-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "zdr",
+      "label": "Differential Reflectivity",
+      "code": "N0X",
+      "site": "LOT",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::LOT-N0X-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "zdr",
+      "label": "Differential Reflectivity",
+      "code": "N0X",
+      "site": "MHX",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::MHX-N0X-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "kdp",
+      "label": "Specific Differential Phase",
+      "code": "N0K",
+      "site": "LZK",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::LZK-N0K-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "kdp",
+      "label": "Specific Differential Phase",
+      "code": "N0K",
+      "site": "TLX",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::TLX-N0K-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "kdp",
+      "label": "Specific Differential Phase",
+      "code": "N0K",
+      "site": "DMX",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::DMX-N0K-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "kdp",
+      "label": "Specific Differential Phase",
+      "code": "N0K",
+      "site": "LOT",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::LOT-N0K-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "kdp",
+      "label": "Specific Differential Phase",
+      "code": "N0K",
+      "site": "MHX",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::MHX-N0K-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "sw",
+      "label": "Spectrum Width",
+      "code": "NSW",
+      "site": "LZK",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::LZK-NSW-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "sw",
+      "label": "Spectrum Width",
+      "code": "NSW",
+      "site": "TLX",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::TLX-NSW-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "sw",
+      "label": "Spectrum Width",
+      "code": "NSW",
+      "site": "DMX",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::DMX-NSW-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "sw",
+      "label": "Spectrum Width",
+      "code": "NSW",
+      "site": "LOT",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::LOT-NSW-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "sw",
+      "label": "Spectrum Width",
+      "code": "NSW",
+      "site": "MHX",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::MHX-NSW-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "sw",
+      "label": "Spectrum Width",
+      "code": "NSP",
+      "site": "LZK",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::LZK-NSP-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "sw",
+      "label": "Spectrum Width",
+      "code": "NSP",
+      "site": "TLX",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::TLX-NSP-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "sw",
+      "label": "Spectrum Width",
+      "code": "NSP",
+      "site": "DMX",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::DMX-NSP-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "sw",
+      "label": "Spectrum Width",
+      "code": "NSP",
+      "site": "LOT",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::LOT-NSP-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "sw",
+      "label": "Spectrum Width",
+      "code": "NSP",
+      "site": "MHX",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::MHX-NSP-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "hhc",
+      "label": "Hydrometeor Classification",
+      "code": "N0H",
+      "site": "LZK",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::LZK-N0H-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "hhc",
+      "label": "Hydrometeor Classification",
+      "code": "N0H",
+      "site": "TLX",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::TLX-N0H-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "hhc",
+      "label": "Hydrometeor Classification",
+      "code": "N0H",
+      "site": "DMX",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::DMX-N0H-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "hhc",
+      "label": "Hydrometeor Classification",
+      "code": "N0H",
+      "site": "LOT",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::LOT-N0H-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "hhc",
+      "label": "Hydrometeor Classification",
+      "code": "N0H",
+      "site": "MHX",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::MHX-N0H-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "hhc",
+      "label": "Hydrometeor Classification",
+      "code": "HHC",
+      "site": "LZK",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::LZK-HHC-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "hhc",
+      "label": "Hydrometeor Classification",
+      "code": "HHC",
+      "site": "TLX",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::TLX-HHC-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "hhc",
+      "label": "Hydrometeor Classification",
+      "code": "HHC",
+      "site": "DMX",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::DMX-HHC-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "hhc",
+      "label": "Hydrometeor Classification",
+      "code": "HHC",
+      "site": "LOT",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::LOT-HHC-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    },
+    {
+      "productId": "hhc",
+      "label": "Hydrometeor Classification",
+      "code": "HHC",
+      "site": "MHX",
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::MHX-HHC-0/6/15/25.png",
+      "status": 503,
+      "contentType": "text/plain; charset=UTF-8",
+      "xIemError": null,
+      "bytes": 983,
+      "isPng": false
+    }
+  ],
+  "mrms": {
+    "2D/MergedRhoHV/": {
+      "status": 200,
+      "hasLatest": true,
+      "sampleFiles": [
+        "MRMS_MergedRhoHV.latest.grib2.gz",
+        "MRMS_MergedRhoHV.latest.grib2.gz",
+        "MRMS_MergedRhoHV_00.50_20261122-200039.grib2.gz"
+      ]
+    },
+    "2D/MergedZdr/": {
+      "status": 200,
+      "hasLatest": true,
+      "sampleFiles": [
+        "MRMS_MergedZdr.latest.grib2.gz",
+        "MRMS_MergedZdr.latest.grib2.gz",
+        "MRMS_MergedZdr_00.50_20261122-200040.grib2.gz"
+      ]
+    },
+    "2D/MergedKdp/": {
+      "status": 403,
+      "hasLatest": false,
+      "sampleFiles": []
+    },
+    "2D/MergedHHC/": {
+      "status": 403,
+      "hasLatest": false,
+      "sampleFiles": []
+    },
+    "3DRhoHV/": {
+      "status": 200,
+      "hasLatest": false,
+      "sampleFiles": []
+    },
+    "3DZdr/": {
+      "status": 200,
+      "hasLatest": false,
+      "sampleFiles": []
+    }
+  },
+  "falsePositiveCheck": {
+    "invalidLayer": {
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/hrrr::DOES_NOT_EXIST-0/6/15/25.png",
+      "status": 200,
+      "contentType": "image/png",
+      "xIemError": "InvalidTMSRequest",
+      "bytes": 20229,
+      "isPng": true
+    },
+    "knownGoodN0Q": {
+      "url": "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/6/15/25.png",
+      "status": 200,
+      "contentType": "image/png",
+      "xIemError": null,
+      "bytes": 511,
+      "isPng": true
+    },
+    "warning": "IEM can return 200 PNG with X-IEM-Error for invalid layers; status==200 alone is insufficient."
+  }
+}
