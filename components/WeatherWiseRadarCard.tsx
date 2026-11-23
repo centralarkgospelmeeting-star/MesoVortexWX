@@ -146,7 +146,7 @@ export function WeatherWiseRadarCard({
   );
 
   return (
-    <div className="pointer-events-auto absolute bottom-3 left-3 z-30 font-sans text-slate-100 select-none">
+    <div className="pointer-events-auto absolute bottom-14 left-3 z-30 font-sans text-slate-100 select-none">
       {expanded && (
         <div className="mb-2 w-[min(22rem,calc(100vw-1.5rem))] max-h-[min(60vh,32rem)] overflow-auto rounded-2xl border border-slate-700/80 bg-slate-950/95 shadow-2xl backdrop-blur-md">
           <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2">

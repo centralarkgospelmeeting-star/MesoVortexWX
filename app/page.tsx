@@ -507,7 +507,7 @@ export default function MesoVortexWorkstation() {
   const activeModelField = activeModel.fields.find(f => f.id === modelField) || activeModel.fields[0];
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-[#070c14] select-none font-sans text-slate-100">
+    <div className="relative flex h-screen w-screen flex-col overflow-hidden bg-[#070c14] font-sans text-slate-100 selection:bg-cyan-500/30">
       <aside aria-label="Product legend" className="flex h-[22px] shrink-0 items-center justify-between border-t border-slate-800 bg-slate-950 px-3 text-[9px] font-mono">
         <span className="font-bold text-slate-400 whitespace-nowrap">
           {product === 'max_ref' ? `MAX REF (${maxRefWindow} scans)` :
@@ -741,7 +741,7 @@ export default function MesoVortexWorkstation() {
         </div>
       </div>
 
-      <div className="absolute inset-0 pt-[22px]">
+      <div className="relative min-h-0 flex-1 pt-[22px] pb-10">
         {quadMode ? (
           <>
             <div className="hidden h-full w-full md:grid md:grid-cols-2 md:grid-rows-2">
@@ -844,7 +844,7 @@ export default function MesoVortexWorkstation() {
           onSelectCompositeProduct={(id) => setProduct(id as RadarProduct)}
         />
       ) : (
-        <button type="button" onClick={() => setBottomBarOpen(true)} className="absolute bottom-3 left-3 z-30 rounded-2xl border border-slate-700 bg-slate-950/94 px-3 py-2 text-[11px] font-bold text-slate-200 shadow-xl backdrop-blur hover:bg-slate-900">Controls ▴</button>
+        <button type="button" onClick={() => setBottomBarOpen(true)} className="absolute bottom-14 left-3 z-30 rounded-2xl border border-slate-700 bg-slate-950/94 px-3 py-2 text-[11px] font-bold text-slate-200 shadow-xl backdrop-blur hover:bg-slate-900">Controls ▴</button>
       )}
 
       {styledBanner && warningPopup && (
@@ -947,7 +947,7 @@ export default function MesoVortexWorkstation() {
       )}
 
       {openPanel && (
-        <div className="absolute right-4 top-20 z-40 w-[22rem] max-h-[72vh] overflow-auto rounded-2xl border border-slate-700 bg-slate-950/96 p-4 shadow-2xl backdrop-blur-md text-slate-100">
+        <div className="absolute right-4 top-20 bottom-24 z-40 w-[22rem] max-h-[72vh] overflow-auto rounded-2xl border border-slate-700 bg-slate-950/96 p-4 shadow-2xl backdrop-blur-md text-slate-100">
           <div className="flex items-center justify-between gap-2 mb-3">
             <div className="text-[11px] font-black uppercase tracking-wider text-cyan-300">{openPanel}</div>
             <button type="button" onClick={() => setOpenPanel(null)} className="rounded-md px-2 py-0.5 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Close panel">✕</button>
@@ -1178,6 +1178,20 @@ export default function MesoVortexWorkstation() {
           )}
         </div>
       )}
+
+      <footer
+        className="shrink-0 border-t border-slate-800/60 bg-[#050a12] px-3 py-1.5 text-center text-[10px] leading-relaxed text-slate-500"
+        aria-label="Footer"
+      >
+        <div className="mx-auto max-w-3xl">
+          <div className="font-semibold tracking-wide text-slate-400/80">MesoVortexWX</div>
+          <div className="mt-0.5 text-slate-500">
+            <span className="block sm:inline">&ldquo;He sends the lightning with the rain</span>{' '}
+            <span className="block sm:inline">and brings out the wind from his storehouses.&rdquo;</span>
+          </div>
+          <div className="text-slate-500">— Psalm 135:7</div>
+        </div>
+      </footer>
     </div>
   );
 }
