@@ -26,6 +26,12 @@ jobs:
       - name: Satellite capability matrix regression / metadata completeness
         run: node scripts/test-satellite-capability-matrix.mjs
 
+      - name: Observation capability matrix regression / metadata completeness
+        run: node scripts/test-observation-capabilities.mjs
+
+      - name: Severe capability matrix regression / metadata completeness
+        run: node scripts/test-severe-capabilities.mjs
+
       - name: Fake-data guard tests
         run: node scripts/test-fake-data-guards.mjs
 
