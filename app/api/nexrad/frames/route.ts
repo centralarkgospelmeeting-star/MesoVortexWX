@@ -136,6 +136,13 @@ export async function GET(request: Request) {
         productCode = 'BDHC';
         archiveSupported = false;
         break;
+      case 'cc':
+      case 'zdr':
+        // Verified live MRMS MergedRhoHV/MergedZdr GRIB2 decoded server-side to tiles.
+        // Not single-site Level III N0C/N0X; LIVE_ONLY, no fake archive.
+        productCode = normalized.id === 'cc' ? 'MergedRhoHV' : 'MergedZdr';
+        archiveSupported = false;
+        break;
       default:
         return unavailable(cap.unavailableReason || `DATA UNAVAILABLE - ${cap.name} is not available.`, {
           productKey,
@@ -148,6 +155,8 @@ export async function GET(request: Request) {
   const playbackSupport = archiveSupported ? (cap.archiveSupport === 'PARTIAL' || cap.archiveSupport === 'PARTIAL_ARCHIVE' ? 'PARTIAL_ARCHIVE' : 'REAL_ARCHIVE') : 'LIVE_ONLY';
   const latestTileUrl = normalized.id === 'hhc'
     ? `/api/radar/ncep-wms?product=hhc&site=${encodeURIComponent(sector)}&bbox={bbox-epsg-3857}&width=256&height=256`
+    : (normalized.id === 'cc' || normalized.id === 'zdr')
+    ? `/api/radar/mrms-tile?product=${normalized.id}&z={z}&x={x}&y={y}`
     : `${IEM_TILE}/ridge::${sector}-${productCode}-0/{z}/{x}/{y}.png`;
   const compositeTileUrl = `${IEM_TILE}/nexrad-n0q-900913/{z}/{x}/{y}.png`;
 
@@ -183,6 +192,10 @@ export async function GET(request: Request) {
 
   const provider = normalized.id === 'hhc'
     ? 'NOAA NCEP opengeo WMS (RIDGEII BDHC)'
+    : normalized.id === 'cc'
+    ? 'NOAA NCEP MRMS MergedRhoHV (2D 0.5km)'
+    : normalized.id === 'zdr'
+    ? 'NOAA NCEP MRMS MergedZdr (2D 0.5km)'
     : isTdwr ? 'FAA TDWR / IEM RIDGE' : 'NOAA NEXRAD Level III / IEM RIDGE';
 
   return NextResponse.json(
