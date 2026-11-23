@@ -1186,7 +1186,7 @@ export default function MesoVortexWorkstation() {
         <div className="mx-auto max-w-5xl px-2">
           <span className="font-semibold tracking-wide text-slate-400/80">MesoVortexWX</span>
           <span className="mx-1.5 text-slate-600">&middot;</span>
-          <span>&ldquo;He sends the lightning with the rain and brings out the wind from his storehouses.&rdquo; &mdash; Psalm 135:7</span>
+          <span>&ldquo;HE sends the lightning with the rain and brings out the wind from HIS storehouses.&rdquo; &mdash; Psalm 135:7</span>
         </div>
       </footer>
     </div>
