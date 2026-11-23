@@ -32,6 +32,12 @@ jobs:
       - name: Severe capability matrix regression / metadata completeness
         run: node scripts/test-severe-capabilities.mjs
 
+      - name: Aviation/marine capability matrix regression / metadata completeness
+        run: node scripts/test-aviation-marine-capabilities.mjs
+
+      - name: Platform capability matrix regression / metadata completeness
+        run: node scripts/test-platform-capabilities.mjs
+
       - name: Fake-data guard tests
         run: node scripts/test-fake-data-guards.mjs
 
