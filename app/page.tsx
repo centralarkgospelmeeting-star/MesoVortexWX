@@ -8,6 +8,7 @@ import { WeatherWiseAlertsPanel } from '../components/WeatherWiseAlertsPanel';
 import { AlertSettingsPanel } from '../components/AlertSettingsPanel';
 import { RADAR_SITES } from '../lib/radar-config';
 import { useFastAlerts } from '../lib/alerts/use-fast-alerts';
+import { DATA_SOURCES, DATA_SOURCE_STATUS_LABEL, type DataSourceStatus } from '../lib/data-sources';
 import {
   ALERT_CATEGORY_META,
   alertsToFeatureCollection,
@@ -152,6 +153,7 @@ export default function MesoVortexWorkstation() {
   const [alertSettingsOpen, setAlertSettingsOpen] = useState(false);
   const [alertSettings, setAlertSettings] = useState<AlertSettings>(DEFAULT_ALERT_SETTINGS);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [dataSourceFilter, setDataSourceFilter] = useState<'ALL' | DataSourceStatus>('ALL');
 
   useEffect(() => { setAlertSettings(loadAlertSettings()); }, []);
   useEffect(() => { saveAlertSettings(alertSettings); }, [alertSettings]);
@@ -926,6 +928,7 @@ export default function MesoVortexWorkstation() {
                 ['Tropics','Tropics'],
                 ['Discussions','Discussions'],
                 ['Lightning','Lightning'],
+                ['DataSources','Data Sources'],
                 ['Settings','Settings'],
               ].map(([id,label]) => (
                 <button key={id} type="button"
@@ -1077,6 +1080,36 @@ export default function MesoVortexWorkstation() {
                 <div><span className="text-slate-500">Source:</span> NOAA GOES-R GLM-L2-LCFA (AWS Open Data)</div>
                 <div><span className="text-slate-500">Availability:</span> {showLightning ? 'Enabled (data-dependent)' : 'Disabled by user'}</div>
                 <div className="text-slate-500">No synthetic lightning. Data unavailable is shown in-layer behavior, not permanent cards.</div>
+              </div>
+            </div>
+          )}
+
+          {openPanel === 'DataSources' && (
+            <div className="space-y-3 text-[11px] text-slate-300">
+              <div className="text-slate-400">Evidence-based source registry. Status reflects MesoVortexWX implementation/verification, not upstream existence.</div>
+              <div className="flex flex-wrap gap-1">
+                {(['ALL','IMPLEMENTED','PARTIAL','NOT_IMPLEMENTED'] as const).map((s) => (
+                  <button key={s} type="button" onClick={() => setDataSourceFilter(s)} className={`rounded-md px-2 py-1 text-[10px] font-bold ${dataSourceFilter===s ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-200 hover:bg-slate-700'}`}>
+                    {s === 'ALL' ? 'All' : DATA_SOURCE_STATUS_LABEL[s]}
+                  </button>
+                ))}
+              </div>
+              <div className="space-y-2 max-h-[55vh] overflow-auto pr-1">
+                {DATA_SOURCES.filter((d) => dataSourceFilter === 'ALL' || d.status === dataSourceFilter).map((d) => (
+                  <div key={d.id} className="rounded-lg border border-slate-800 bg-slate-900/60 p-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="font-bold text-slate-100">{d.data}</div>
+                        <div className="text-[10px] text-slate-400">{d.source}{d.attribution ? ` · ${d.attribution}` : ''}</div>
+                      </div>
+                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black uppercase ${d.status==='IMPLEMENTED' ? 'bg-emerald-500/20 text-emerald-300' : d.status==='PARTIAL' ? 'bg-amber-500/20 text-amber-300' : 'bg-slate-700 text-slate-300'}`}>
+                        {DATA_SOURCE_STATUS_LABEL[d.status]}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-[10px] text-slate-500">{d.category}{d.url ? <> · <a href={d.url} target="_blank" rel="noreferrer" className="text-cyan-400 hover:underline">source</a></> : null}</div>
+                    {d.notes && <div className="mt-1 text-[10px] text-slate-400">{d.notes}</div>}
+                  </div>
+                ))}
               </div>
             </div>
           )}
