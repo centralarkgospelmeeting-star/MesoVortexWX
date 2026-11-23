@@ -475,6 +475,21 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
     dataHonesty: { realData: true, substitute: false, synthetic: false, reason: 'Available only for verified/partial supported products and tilts.' },
     verification: { level: 'PARTIALLY_VERIFIED', lastCheckedAt: CHECKED_AT, evidence: ['ref/vel support tilt selection in capability matrix; srvel 0.5 only; many products unavailable'] },
   },
+  {
+    id: 'gate_to_gate_shear',
+    name: 'Gate-to-Gate Shear',
+    shortLabel: 'GATE',
+    source: { type: 'NONE', provider: 'Unverified', notes: 'Derived from base radial velocity; no verified gate-to-gate shear source or processing pipeline is connected.' },
+    availability: 'UNAVAILABLE',
+    archiveSupport: 'UNKNOWN',
+    superResolutionSupport: 'N/A',
+    playbackSupport: 'NONE',
+    networks: ['NEXRAD'],
+    tiltSupport: [],
+    dataHonesty: { realData: false, substitute: false, synthetic: false, reason: 'No verified source or derived processing.' },
+    unavailableReason: 'DATA UNAVAILABLE - Gate-to-gate shear is not verified end-to-end.',
+    verification: { level: 'UNVERIFIED', lastCheckedAt: CHECKED_AT, evidence: ['GATE means gate-to-gate shear here; existing gate_filter capability is a different feature.'] },
+  },
 ] as const;
 
 export function getRadarCapability(id: string): RadarProductCapability | undefined {
