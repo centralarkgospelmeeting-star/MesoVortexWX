@@ -23,12 +23,18 @@ export async function GET() {
       match => match[1]
     );
 
-    return NextResponse.json({
-      available: response.ok,
-      status: response.status,
-      count: keys.length,
-      files: keys,
-    });
+    const latestFile =
+  keys.length > 0 ? keys[keys.length - 1] : null;
+
+return NextResponse.json({
+  available: response.ok,
+  status: response.status,
+  count: keys.length,
+  latestFile,
+  latestUrl: latestFile
+    ? `${BUCKET}/${latestFile}`
+    : null,
+});
   } catch (error: any) {
     return NextResponse.json({
       available: false,
