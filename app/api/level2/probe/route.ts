@@ -7,7 +7,7 @@ const BUCKET =
 
 export async function GET() {
   try {
-    const prefix = '2026';
+    const prefix = '2026/11/22/KLZK/';
 
     const url =
       `${BUCKET}/?list-type=2&prefix=${prefix}&max-keys=5`;
