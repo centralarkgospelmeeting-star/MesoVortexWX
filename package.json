@@ -16,13 +16,14 @@
     "test:capability": "node scripts/test-capability-matrix.mjs",
     "test:fake-data": "node scripts/test-fake-data-guards.mjs",
     "test:archive": "node scripts/test-archive-integrity.mjs",
-    "test:verify": "node scripts/test-capability-matrix.mjs && node scripts/test-satellite-capability-matrix.mjs && node scripts/test-observation-capabilities.mjs && node scripts/test-severe-capabilities.mjs && node scripts/test-aviation-marine-capabilities.mjs && node scripts/test-platform-capabilities.mjs && node scripts/test-sounding-capabilities.mjs && node scripts/test-fake-data-guards.mjs && node scripts/test-archive-integrity.mjs",
+    "test:verify": "node scripts/test-capability-matrix.mjs && node scripts/test-satellite-capability-matrix.mjs && node scripts/test-observation-capabilities.mjs && node scripts/test-severe-capabilities.mjs && node scripts/test-aviation-marine-capabilities.mjs && node scripts/test-platform-capabilities.mjs && node scripts/test-sounding-capabilities.mjs && node scripts/test-radar-render-config.mjs && node scripts/test-fake-data-guards.mjs && node scripts/test-archive-integrity.mjs",
     "test:satellite-capability": "node scripts/test-satellite-capability-matrix.mjs",
     "test:observation-capabilities": "node scripts/test-observation-capabilities.mjs",
     "test:severe-capabilities": "node scripts/test-severe-capabilities.mjs",
     "test:aviation-marine-capabilities": "node scripts/test-aviation-marine-capabilities.mjs",
     "test:platform-capabilities": "node scripts/test-platform-capabilities.mjs",
-    "test:sounding-capabilities": "node scripts/test-sounding-capabilities.mjs"
+    "test:sounding-capabilities": "node scripts/test-sounding-capabilities.mjs",
+    "test:radar-render-config": "node scripts/test-radar-render-config.mjs"
   },
   "dependencies": {
     "next": "14.2.15",

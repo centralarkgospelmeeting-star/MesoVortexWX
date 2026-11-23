@@ -41,6 +41,9 @@ jobs:
       - name: Sounding capability matrix regression / metadata completeness
         run: node scripts/test-sounding-capabilities.mjs
 
+      - name: Radar render config contract
+        run: node scripts/test-radar-render-config.mjs
+
       - name: Fake-data guard tests
         run: node scripts/test-fake-data-guards.mjs
 

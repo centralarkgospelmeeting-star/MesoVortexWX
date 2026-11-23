@@ -10,6 +10,7 @@ import { registerSyncedMap } from '../lib/map-sync';
 import { ALERT_CATEGORY_META, formatAlertTime, type WeatherAlert } from '../lib/alerts/model';
 import { DEFAULT_SATELLITE_SELECTION, getSatelliteTileUrl, normalizeSatelliteSelection, type SatelliteSelection } from '../lib/satellite';
 import { getModelById } from '../lib/model-registry';
+import { getRadarRasterRenderConfig } from '../lib/radar/render-config';
 
 // Next/webpack bundles maplibre-gl, so the library's relative worker URL
 // (./maplibre-gl-worker.mjs) resolves to a chunk that does not exist. Serve the
@@ -1195,11 +1196,13 @@ export function RadarMap({
       const beforeId = map.getLayer(WARNINGS_FILL_ID) ? WARNINGS_FILL_ID : undefined;
 
       const isSatelliteMode = mode === 'Satellite';
+      const renderConfig = getRadarRasterRenderConfig({ mode, product });
       const rasterPaint: any = {
         'raster-opacity': radarOpacity,
-        'raster-fade-duration': 0,
-        // Nearest-neighbor keeps radar gates crisp at overzoom; linear is better for satellite imagery.
-        'raster-resampling': isSatelliteMode ? 'linear' : 'nearest',
+        'raster-fade-duration': renderConfig.rasterFadeDuration,
+        // Product-aware resampling inspired by Supercell-Wx view/render separation:
+        // nearest for radar gates, linear for satellite imagery.
+        'raster-resampling': renderConfig.rasterResampling,
         'raster-saturation': isSatelliteMode ? 0.18 : 0,
         'raster-contrast': isSatelliteMode ? 0.18 : 0,
         'raster-brightness-min': isSatelliteMode ? 0.02 : 0,
@@ -1222,6 +1225,7 @@ export function RadarMap({
         } else {
           map.setPaintProperty(RADAR_LAYER_ID, 'raster-opacity', rasterPaint['raster-opacity']);
           map.setPaintProperty(RADAR_LAYER_ID, 'raster-resampling', rasterPaint['raster-resampling']);
+          map.setPaintProperty(RADAR_LAYER_ID, 'raster-fade-duration', rasterPaint['raster-fade-duration']);
           map.setPaintProperty(RADAR_LAYER_ID, 'raster-saturation', rasterPaint['raster-saturation']);
           map.setPaintProperty(RADAR_LAYER_ID, 'raster-contrast', rasterPaint['raster-contrast']);
           map.setPaintProperty(RADAR_LAYER_ID, 'raster-brightness-min', rasterPaint['raster-brightness-min']);
@@ -1231,12 +1235,15 @@ export function RadarMap({
         if (map.getLayer(RADAR_LAYER_ID)) map.removeLayer(RADAR_LAYER_ID);
         if (map.getSource(RADAR_SOURCE_ID)) map.removeSource(RADAR_SOURCE_ID);
 
-        map.addSource(RADAR_SOURCE_ID, {
+        const source: any = {
           type: 'raster',
           tiles: [tileUrl],
-          tileSize: 256,
+          tileSize: renderConfig.tileSize,
           scheme: 'xyz',
-        });
+        };
+        if (typeof renderConfig.maxzoom === 'number') source.maxzoom = renderConfig.maxzoom;
+
+        map.addSource(RADAR_SOURCE_ID, source);
 
         map.addLayer(
           {
