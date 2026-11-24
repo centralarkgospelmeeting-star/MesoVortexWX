@@ -103,6 +103,8 @@ export type Props = {
   [key: string]: any;
 };
 
+const FAVORITES_KEY = 'mesovortex_radar_favorites_v1';
+
 export function WeatherWiseRadarCard({
   mode = 'Radar',
   siteId,
@@ -142,11 +144,23 @@ export function WeatherWiseRadarCard({
   onSelectCompositeProduct,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return ['ref', 'vel', 'srvel', 'cc'];
+    try { const raw = localStorage.getItem(FAVORITES_KEY); const parsed = raw ? JSON.parse(raw) : null; return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : ['ref', 'vel', 'srvel', 'cc']; } catch { return ['ref', 'vel', 'srvel', 'cc']; }
+  });
   const isRadarMode = mode === 'Radar' || mode === '3D Radar';
   const isSatellite = mode === 'Satellite';
   const isModels = mode === 'Models';
   const isComposite = mode === 'Composite';
   const isOutlooks = mode === 'Outlooks';
+
+  const toggleFavorite = (key: string) => {
+    setFavorites((prev) => {
+      const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
+      try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
 
   const activeProduct = useMemo(() => {
     const found = RADAR_PRODUCTS.find((p) => p.key === product);
@@ -166,31 +180,48 @@ export function WeatherWiseRadarCard({
             {isRadarMode && (
               <>
                 <div>
-                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Product</div>
-                  <div className="max-h-64 overflow-auto rounded-lg border border-slate-800 bg-slate-900/30">
-                    {RADAR_CATEGORIES.map((category) => {
-                      const items = RADAR_PRODUCTS.filter((p) => p.category === category);
-                      if (!items.length) return null;
+                  <div className="mb-1 flex items-center justify-between">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Product</div>
+                    <div className="text-[9px] text-slate-500">Code / Name / Status</div>
+                  </div>
+                  <div className="max-h-72 overflow-auto rounded-lg border border-slate-800 bg-slate-900/30">
+                    {(() => {
+                      const favItems = RADAR_PRODUCTS.filter((p) => favorites.includes(p.key));
+                      const renderRow = (p: typeof RADAR_PRODUCTS[number]) => {
+                        const active = p.key === product;
+                        const unavailable = !p.available;
+                        const status = unavailable ? 'DATA UNAVAILABLE' : p.warning ? 'PARTIAL' : 'AVAILABLE';
+                        const fav = favorites.includes(p.key);
+                        return (
+                          <div key={p.key} className={`grid w-full grid-cols-[1.5rem_3rem_minmax(0,1fr)_auto] items-center gap-1.5 px-2 py-1 text-[11px] border-t border-slate-800/40 first:border-t-0 ${active ? 'bg-cyan-500/12 text-cyan-100' : unavailable ? 'text-slate-500' : 'text-slate-200 hover:bg-slate-800/60'}`}>
+                            <button type="button" onClick={() => toggleFavorite(p.key)} title={fav ? 'Remove favorite' : 'Add favorite'} className={`text-[11px] leading-none ${fav ? 'text-amber-300' : 'text-slate-600 hover:text-slate-300'}`}>{fav ? '★' : '☆'}</button>
+                            <button type="button" disabled={unavailable} onClick={() => !unavailable && onSelectProduct(p.key)} title={unavailable ? p.reason : p.warning ? `PARTIAL: ${p.warning}` : `${p.label} (${p.short})`} className={`font-mono text-[10px] text-left ${active ? 'text-cyan-300' : 'text-slate-400'} ${unavailable ? 'cursor-not-allowed' : ''}`}>{p.short}</button>
+                            <button type="button" disabled={unavailable} onClick={() => !unavailable && onSelectProduct(p.key)} title={unavailable ? p.reason : p.warning ? `PARTIAL: ${p.warning}` : `${p.label} (${p.short})`} className={`truncate text-left ${unavailable ? 'cursor-not-allowed' : ''}`}>{p.label}</button>
+                            <span className={`text-[9px] font-bold uppercase tracking-wide ${unavailable ? 'text-slate-500' : p.warning ? 'text-amber-300' : 'text-emerald-400'}`}>{status}</span>
+                          </div>
+                        );
+                      };
                       return (
-                        <div key={category} className="border-b border-slate-800/80 last:border-b-0">
-                          <div className="px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-slate-500 bg-slate-950/60 sticky top-0">{category}</div>
-                          {items.map((p) => {
-                            const active = p.key === product;
-                            const unavailable = !p.available;
-                            const status = unavailable ? 'DATA UNAVAILABLE' : p.warning ? 'PARTIAL' : 'AVAILABLE';
+                        <>
+                          {favItems.length > 0 && (
+                            <div className="border-b border-slate-800/80">
+                              <div className="px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-amber-300/80 bg-slate-950/70 sticky top-0">Favorites</div>
+                              {favItems.map(renderRow)}
+                            </div>
+                          )}
+                          {RADAR_CATEGORIES.map((category) => {
+                            const items = RADAR_PRODUCTS.filter((p) => p.category === category);
+                            if (!items.length) return null;
                             return (
-                              <button key={p.key} type="button" disabled={unavailable} onClick={() => !unavailable && onSelectProduct(p.key)}
-                                title={unavailable ? p.reason : p.warning ? `PARTIAL: ${p.warning}` : `${p.label} (${p.short})`}
-                                className={`grid w-full grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-2 px-2.5 py-1 text-left text-[11px] border-t border-slate-800/40 first:border-t-0 ${active ? 'bg-cyan-500/12 text-cyan-100' : unavailable ? 'text-slate-500 cursor-not-allowed' : 'text-slate-200 hover:bg-slate-800/70'}`}>
-                                <span className={`font-mono text-[10px] ${active ? 'text-cyan-300' : 'text-slate-400'}`}>{p.short}</span>
-                                <span className="truncate">{p.label}</span>
-                                <span className={`text-[9px] font-bold uppercase tracking-wide ${unavailable ? 'text-slate-500' : p.warning ? 'text-amber-300' : 'text-emerald-400'}`}>{status}</span>
-                              </button>
+                              <div key={category} className="border-b border-slate-800/80 last:border-b-0">
+                                <div className="px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-slate-500 bg-slate-950/60 sticky top-0">{category}</div>
+                                {items.map(renderRow)}
+                              </div>
                             );
                           })}
-                        </div>
+                        </>
                       );
-                    })}
+                    })()}
                   </div>
                 </div>
                 <div>
