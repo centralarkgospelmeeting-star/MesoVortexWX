@@ -63,7 +63,7 @@ export async function GET(request: Request) {
   const site = RADAR_SITES.find((item) => item.network === 'NEXRAD' && (item.id === siteId || item.radarId === siteId || item.radarId === siteId.replace(/^K/, '')));
 
   if (!site) return problem(`Unknown NEXRAD radar site "${siteId}".`);
-  if (!['cc', 'zdr', 'kdp', 'sw', 'gate'].includes(product)) return problem(`Unsupported Level II radar moment "${product}".`);
+  if (!['cc', 'min_cc', 'zdr', 'kdp', 'sw', 'gate'].includes(product)) return problem(`Unsupported Level II radar moment "${product}".`);
   if (!Number.isFinite(tilt) || tilt < 0 || tilt > 20) return problem('Invalid elevation angle.');
   if (z === undefined || x === undefined || y === undefined || z > 16 || x >= 2 ** z || y >= 2 ** z) {
     return problem('Invalid XYZ tile coordinates.');
@@ -83,6 +83,7 @@ export async function GET(request: Request) {
         'X-MesoVortex-Tilt': String(tilt),
         'X-MesoVortex-KDP-Method': product === 'kdp' ? '7-gate-linear-fit-of-unwrapped-PHI/2; RHO>=0.80' : 'not-applicable',
         'X-MesoVortex-GATE-Method': product === 'gate' ? 'absolute adjacent-range-gate velocity difference, m/s converted to knots' : 'not-applicable',
+        'X-MesoVortex-MCC-Method': product === 'min_cc' ? 'minimum valid RHOHV across available elevation cuts; 4/3-earth beam-range correction; app-derived' : 'not-applicable',
       },
     });
   } catch (error) {

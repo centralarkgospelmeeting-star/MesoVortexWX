@@ -1,6 +1,6 @@
 import { RADAR_SITES, type RadarSite } from '../radar-config';
 
-export type PolarMoment = 'cc' | 'zdr' | 'kdp' | 'sw' | 'gate';
+export type PolarMoment = 'cc' | 'min_cc' | 'zdr' | 'kdp' | 'sw' | 'gate';
 
 type Moment = { moment_data?: Array<number | null>; gate_count?: number; gate_size?: number; first_gate?: number };
 type Radial = { azimuth?: number; elevation_angle?: number; reflect?: Moment | Array<number | null>; rho?: Moment; zdr?: Moment; phi?: Moment; spectrum?: Moment; velocity?: Moment };
@@ -106,7 +106,7 @@ function bestElevation(volume: Level2Volume, degrees: number, product?: PolarMom
 }
 
 function momentFor(radial: Radial, product: PolarMoment): Moment | undefined {
-  if (product === 'cc') return radial.rho;
+  if (product === 'cc' || product === 'min_cc') return radial.rho;
   if (product === 'zdr') return radial.zdr;
   if (product === 'sw') return radial.spectrum;
   if (product === 'gate') return radial.velocity;
@@ -191,6 +191,7 @@ function destination(lat: number, lon: number, targetLat: number, targetLon: num
 }
 
 export function level2RgbaTile(frame: PolarTileFrame, product: PolarMoment, tilt: number, z: number, x: number, y: number, size = 256): Uint8Array {
+  if (product === 'min_cc') return volumeMinimumCcTile(frame, z, x, y, size);
   const radials = bestElevation(frame.volume, tilt, product).filter((radial) => Number.isFinite(radial.azimuth)).sort((a, b) => (a.azimuth || 0) - (b.azimuth || 0));
   const first = radials.find((radial) => momentFor(radial, product)?.moment_data?.length);
   const firstMoment = first && momentFor(first, product);
@@ -236,6 +237,72 @@ export function level2RgbaTile(frame: PolarTileFrame, product: PolarMoment, tilt
     }
   }
   return rgba;
+}
+
+/**
+ * Derive a map of the lowest valid CC sampled through the live volume.
+ * Each map point samples the nearest radial/gate from every elevation cut,
+ * correcting ground range to slant range with a 4/3-earth beam model.
+ */
+function volumeMinimumCcTile(frame: PolarTileFrame, z: number, x: number, y: number, size: number): Uint8Array {
+  const effectiveEarthRadiusKm = 6371.0088 * 4 / 3;
+  const sweeps = frame.volume.listElevations().map((elevation) => {
+    const radials = (frame.volume.data[elevation] || [])
+      .map((item) => item.record)
+      .filter((radial): radial is Radial => Boolean(radial?.rho?.moment_data?.length && Number.isFinite(radial.azimuth)))
+      .sort((a, b) => (a.azimuth || 0) - (b.azimuth || 0));
+    return { radials, first: radials.find((radial) => radial.rho?.moment_data?.length) };
+  }).filter((sweep) => sweep.first?.rho);
+  if (!sweeps.length) throw new Error('CC is not present in the live Level II volume');
+
+  const extent = Math.pow(2, z);
+  const rgba = new Uint8Array(size * size * 4);
+  for (let py = 0; py < size; py++) {
+    const tileY = y + (py + 0.5) / size;
+    const lat = (180 / Math.PI) * Math.atan(Math.sinh(Math.PI * (1 - 2 * tileY / extent)));
+    for (let px = 0; px < size; px++) {
+      const tileX = x + (px + 0.5) / size;
+      const lon = tileX / extent * 360 - 180;
+      const { distanceKm, bearing } = destination(frame.site.lat, frame.site.lon, lat, lon);
+      if (distanceKm > 460) continue;
+
+      let minimum = Number.POSITIVE_INFINITY;
+      for (const sweep of sweeps) {
+        const radial = nearestRadial(sweep.radials, bearing);
+        const moment = radial?.rho;
+        const data = moment?.moment_data;
+        if (!radial || !moment || !data?.length) continue;
+        const elevationRad = ((radial.elevation_angle || 0) * Math.PI) / 180;
+        const groundAngle = distanceKm / effectiveEarthRadiusKm;
+        const denominator = Math.cos(elevationRad + groundAngle);
+        if (denominator <= 0) continue;
+        const slantRangeKm = effectiveEarthRadiusKm * Math.sin(groundAngle) / denominator;
+        const gateSizeKm = moment.gate_size || 0.25;
+        const firstGateKm = moment.first_gate || 2.125;
+        const gate = Math.round((slantRangeKm - firstGateKm) / gateSizeKm);
+        if (gate < 0 || gate >= data.length) continue;
+        const value = data[gate];
+        if (value != null && Number.isFinite(value) && value >= 0.2 && value <= 1.05) minimum = Math.min(minimum, value);
+      }
+
+      if (!Number.isFinite(minimum)) continue;
+      const color = minCcColor(minimum);
+      const offset = (py * size + px) * 4;
+      rgba[offset] = color[0]; rgba[offset + 1] = color[1]; rgba[offset + 2] = color[2]; rgba[offset + 3] = color[3];
+    }
+  }
+  return rgba;
+}
+
+function minCcColor(value: number): [number, number, number, number] {
+  if (!Number.isFinite(value) || value < 0.2 || value > 1.05) return [0, 0, 0, 0];
+  if (value < 0.5) return [150, 0, 180, 205];
+  if (value < 0.65) return [40, 90, 210, 195];
+  if (value < 0.8) return [0, 190, 220, 190];
+  if (value < 0.9) return [0, 190, 0, 190];
+  if (value < 0.95) return [220, 220, 0, 195];
+  if (value < 0.97) return [255, 128, 0, 200];
+  return [255, 255, 255, 210];
 }
 
 function spectrumWidthColor(value: number): [number, number, number, number] {

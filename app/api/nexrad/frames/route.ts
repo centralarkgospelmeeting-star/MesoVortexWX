@@ -104,6 +104,10 @@ export async function GET(request: Request) {
     productCode = 'BDHC';
     provider = 'NOAA NCEP opengeo WMS (RIDGEII BDHC)';
     latestTileUrl = `/api/radar/ncep-wms?product=hhc&site=${encodeURIComponent(sector)}&bbox={bbox-epsg-3857}&width=256&height=256`;
+  } else if (cap.id === 'min_cc') {
+    productCode = 'Volume-minimum RHOHV (derived from live Level II elevation cuts)';
+    provider = 'NOAA NEXRAD Level II volume scan (derived)';
+    latestTileUrl = `/api/radar/level2-tile?site=${encodeURIComponent(site.id)}&product=min_cc&z={z}&x={x}&y={y}`;
   } else if (cap.id === 'cc' || cap.id === 'zdr' || cap.id === 'kdp') {
     if (!cap.tiltSupport.includes(tilt)) {
       return unavailable(`DATA UNAVAILABLE - Elevation ${tilt}° is not supported for ${cap.name}.`, {

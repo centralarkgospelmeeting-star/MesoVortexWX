@@ -50,6 +50,16 @@ const CC: LegendStep[] = [
   { color: '#ffffff', label: '1.00', value: '0.99+', unit: 'CC', meaning: 'Near-perfect CC: highly uniform echoes' },
 ];
 
+const MIN_CC: LegendStep[] = [
+  { color: '#9600b4', label: '< 0.50', value: '0.20-0.50', unit: 'CC', meaning: 'Very low sampled CC' },
+  { color: '#285ad2', label: '0.50-0.65', value: '0.50-0.65', unit: 'CC', meaning: 'Low sampled CC' },
+  { color: '#00bedc', label: '0.65-0.80', value: '0.65-0.80', unit: 'CC', meaning: 'Reduced sampled CC' },
+  { color: '#00be00', label: '0.80-0.90', value: '0.80-0.90', unit: 'CC', meaning: 'Moderate sampled CC' },
+  { color: '#dcdc00', label: '0.90-0.95', value: '0.90-0.95', unit: 'CC', meaning: 'High sampled CC' },
+  { color: '#ff8000', label: '0.95-0.97', value: '0.95-0.97', unit: 'CC', meaning: 'Very high sampled CC' },
+  { color: '#ffffff', label: '0.97+', value: '0.97-1.05', unit: 'CC', meaning: 'Near-unity minimum CC' },
+];
+
 const ZDR: LegendStep[] = [
   { color: '#8246c8', label: '-1', value: '< -1', unit: 'dB', meaning: 'Negative ZDR: vertically oriented/mixed targets' },
   { color: '#2878ff', label: '0', value: '-1-0', unit: 'dB', meaning: 'Low ZDR: small/mixed hydrometeors' },
@@ -104,7 +114,10 @@ export function ProductInfoBanner(props: Props) {
       if (props.product === 'vel' || props.product === 'srvel' || props.product === 'norm_vel') {
         return { title: props.product === 'srvel' ? 'Storm Relative Velocity' : props.product === 'norm_vel' ? 'Normal Velocity' : 'Base Velocity', desc: 'Radial velocity showing inbound/outbound motion relative to radar.', scale: VEL, legendLabel: 'Velocity scale (kt)' };
       }
-      if (props.product === 'cc' || props.product === 'min_cc') {
+      if (props.product === 'min_cc') {
+        return { title: 'Volume-Minimum Correlation Coefficient', desc: 'Lowest valid CC sampled from the live Level II elevation sweeps at each map location. App-derived vertical-column estimate, not a separate official Level III product.', scale: MIN_CC, legendLabel: 'Minimum sampled CC' };
+      }
+      if (props.product === 'cc') {
         return { title: 'Correlation Coefficient', desc: 'Correlation Coefficient (CC) indicating uniformity of targets. Lower values can indicate non-meteorological debris or mixed precipitation.', scale: CC, legendLabel: 'Correlation Coefficient (CC)' };
       }
       if (props.product === 'zdr') {
