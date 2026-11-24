@@ -192,33 +192,32 @@ export function WeatherWiseRadarCard({
                   </div>
                   <div className="max-h-72 overflow-auto rounded border border-slate-700 bg-[#0f172a] p-2 space-y-2">
                     {(() => {
-                      const thumbFor = (key: string) => {
-                        if (key === 'ref' || key === 'max_ref' || key === 'ref_x') return '/product-thumbs/ref.svg';
-                        if (key === 'vel') return '/product-thumbs/vel.svg';
-                        if (key === 'srvel' || key === 'norm_vel') return '/product-thumbs/srvel.svg';
-                        if (key === 'cc' || key === 'min_cc') return '/product-thumbs/cc.svg';
-                        if (key === 'zdr' || key === 'kdp') return '/product-thumbs/zdr.svg';
-                        return '/product-thumbs/generic.svg';
+                      const productStyle = (key: string) => {
+                        if (key === 'ref' || key === 'max_ref' || key === 'ref_x') return { bg: 'bg-gradient-to-br from-emerald-900/60 via-yellow-900/40 to-red-900/50', code: 'text-emerald-200' };
+                        if (key === 'vel' || key === 'srvel' || key === 'norm_vel' || key === 'sw') return { bg: 'bg-gradient-to-r from-green-900/50 to-red-900/50', code: 'text-slate-100' };
+                        if (key === 'cc' || key === 'min_cc' || key === 'zdr' || key === 'kdp') return { bg: 'bg-gradient-to-br from-sky-900/50 via-emerald-900/30 to-amber-900/40', code: 'text-sky-100' };
+                        return { bg: 'bg-gradient-to-br from-slate-800 to-slate-900', code: 'text-slate-200' };
                       };
                       const renderGrid = (items: typeof RADAR_PRODUCTS) => (
-                        <div className="grid grid-cols-3 gap-1.5">
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                           {items.map((p) => {
                             const active = p.key === product;
                             const unavailable = !p.available;
                             const fav = favorites.includes(p.key);
+                            const style = productStyle(p.key);
                             return (
                               <button key={p.key} type="button" disabled={unavailable}
                                 onClick={() => !unavailable && onSelectProduct(p.key)}
                                 title={unavailable ? p.reason : p.warning ? `PARTIAL: ${p.warning}` : `${p.label} (${p.short})`}
-                                className={`relative rounded border p-1 text-left ${active ? 'border-sky-500 bg-[#162033]' : unavailable ? 'border-slate-800 bg-[#0b1220] opacity-60 cursor-not-allowed' : 'border-slate-700 bg-[#101826] hover:border-slate-500 hover:bg-[#162033]'}`}>
-                                <span onClick={(e)=>{e.stopPropagation(); toggleFavorite(p.key);}} role="button" tabIndex={0} title={fav ? 'Remove favorite' : 'Add favorite'} className={`absolute right-1 top-0.5 text-[10px] ${fav ? 'text-amber-300' : 'text-slate-600 hover:text-slate-300'}`}>{fav ? '★' : '☆'}</span>
-                                <div className={`h-12 w-full overflow-hidden rounded-sm border ${active ? 'border-sky-700' : 'border-slate-700'} bg-[#0b1220] mb-1`}>
-                                  <img src={thumbFor(p.key)} alt="" className="h-full w-full object-cover" />
+                                className={`relative rounded-md border p-1.5 text-left transition-colors ${active ? 'border-sky-500 bg-[#162033]' : unavailable ? 'border-slate-800 bg-[#0b1220] opacity-55 cursor-not-allowed' : 'border-slate-700 bg-[#101826] hover:border-slate-500 hover:bg-[#162033]'}`}>
+                                <span onClick={(e)=>{e.stopPropagation(); toggleFavorite(p.key);}} role="button" tabIndex={0} title={fav ? 'Remove favorite' : 'Add favorite'} className={`absolute right-1.5 top-1 z-10 text-xs ${fav ? 'text-amber-300' : 'text-slate-500 hover:text-slate-300'}`}>{fav ? '★' : '☆'}</span>
+                                <div className={`flex h-16 w-full items-center justify-center rounded border ${active ? 'border-sky-700' : 'border-slate-700'} ${style.bg} mb-1.5`}>
+                                  <span className={`text-2xl font-black tracking-wide ${style.code}`}>{p.short}</span>
                                 </div>
-                                <div className="text-[10px] font-bold text-slate-200 truncate pr-3">{p.label}</div>
-                                <div className="flex items-center justify-between gap-1">
-                                  <span className="text-[9px] font-mono text-slate-400">{p.short}</span>
-                                  <span className={`text-[8px] font-bold uppercase ${unavailable ? 'text-slate-500' : p.warning ? 'text-amber-300' : 'text-emerald-400'}`}>{unavailable ? 'UNAVAIL' : p.warning ? 'PARTIAL' : 'OK'}</span>
+                                <div className="text-[11px] font-bold text-slate-100 leading-tight min-h-[2rem] pr-4">{p.label}</div>
+                                <div className="mt-1 flex items-center justify-between gap-1">
+                                  <span className={`text-[9px] font-bold uppercase ${unavailable ? 'text-slate-500' : p.warning ? 'text-amber-300' : 'text-emerald-400'}`}>{unavailable ? 'DATA UNAVAILABLE' : p.warning ? 'PARTIAL' : 'AVAILABLE'}</span>
+                                  {active && <span className="text-[9px] font-black text-sky-300">SELECTED</span>}
                                 </div>
                               </button>
                             );

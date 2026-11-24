@@ -321,19 +321,26 @@ export function FloatingProductPanel({
               <div>
                 <div className="mb-1 flex items-center justify-between">
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Radar Product</label>
-                  <span className="text-[9px] text-slate-500">Name / Code / Status</span>
+                  <span className="text-[9px] text-slate-500">Verified availability shown</span>
                 </div>
-                <div className="max-h-52 overflow-auto rounded-md border border-slate-800 bg-[#0f172a]">
+                <div className="max-h-64 overflow-auto rounded-md border border-slate-700 bg-[#0f172a]">
                   {RADAR_CATEGORIES.map((category) => {
                     const items = RADAR_PRODUCTS.filter((p) => p.category === category);
                     if (!items.length) return null;
                     return (
-                      <div key={category} className="border-b border-slate-800/80 last:border-b-0">
-                        <div className="sticky top-0 bg-slate-950/80 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-slate-500">{category}</div>
+                      <div key={category} className="border-b border-slate-700 last:border-b-0">
+                        <div className="sticky top-0 bg-[#111827] px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-slate-500 border-b border-slate-700">{category}</div>
                         {items.map((p) => {
                           const active = p.key === product;
                           const unavailable = !p.available;
                           const status = unavailable ? 'DATA UNAVAILABLE' : p.warning ? 'PARTIAL' : 'AVAILABLE';
+                          const style = (p.key === 'ref' || p.key === 'max_ref' || p.key === 'ref_x')
+                            ? 'bg-gradient-to-br from-emerald-900/60 via-yellow-900/40 to-red-900/50'
+                            : (p.key === 'vel' || p.key === 'srvel' || p.key === 'norm_vel' || p.key === 'sw')
+                            ? 'bg-gradient-to-r from-green-900/50 to-red-900/50'
+                            : (p.key === 'cc' || p.key === 'min_cc' || p.key === 'zdr' || p.key === 'kdp')
+                            ? 'bg-gradient-to-br from-sky-900/50 via-emerald-900/30 to-amber-900/40'
+                            : 'bg-gradient-to-br from-slate-800 to-slate-900';
                           return (
                             <button
                               key={p.key}
@@ -341,11 +348,16 @@ export function FloatingProductPanel({
                               disabled={unavailable}
                               onClick={() => !unavailable && onSelectProduct(p.key)}
                               title={unavailable ? p.reason : p.warning || p.label}
-                              className={`grid w-full grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-2 border-t border-slate-800/40 px-2.5 py-1 text-left text-[11px] first:border-t-0 ${active ? 'bg-sky-900/30 text-slate-100' : unavailable ? 'text-slate-500 cursor-not-allowed' : 'text-slate-200 hover:bg-slate-800/70'}`}
+                              className={`grid w-full grid-cols-[3.5rem_minmax(0,1fr)_auto] items-center gap-2 border-t border-slate-700 px-2 py-1.5 text-left first:border-t-0 ${active ? 'bg-[#162033]' : unavailable ? 'opacity-55 cursor-not-allowed' : 'hover:bg-[#162033]'}`}
                             >
-                              <span className={`font-mono text-[10px] ${active ? 'text-sky-300' : 'text-slate-400'}`}>{p.short}</span>
-                              <span className="truncate">{p.label}</span>
-                              <span className={`text-[9px] font-bold uppercase tracking-wide ${unavailable ? 'text-slate-500' : p.warning ? 'text-amber-300' : 'text-emerald-400'}`}>{status}</span>
+                              <div className={`flex h-11 items-center justify-center rounded border ${active ? 'border-sky-600' : 'border-slate-700'} ${style}`}>
+                                <span className="text-base font-black tracking-wide text-slate-100">{p.short}</span>
+                              </div>
+                              <div className="min-w-0">
+                                <div className="truncate text-[11px] font-bold text-slate-200">{p.label}</div>
+                                <div className={`text-[9px] font-bold uppercase tracking-wide ${unavailable ? 'text-slate-500' : p.warning ? 'text-amber-300' : 'text-emerald-400'}`}>{status}</div>
+                              </div>
+                              {active ? <span className="text-[9px] font-black text-sky-300 pr-1">SELECTED</span> : <span className="w-10" />}
                             </button>
                           );
                         })}
