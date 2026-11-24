@@ -20,6 +20,7 @@ import {
   type WeatherAlert,
 } from '../lib/alerts/model';
 import { AlertDetailsPanel, buildLocationContext } from '../components/AlertDetailsPanel';
+import { ProductInfoBanner } from '../components/ProductInfoBanner';
 import {
   DEFAULT_SATELLITE_SELECTION,
   SATELLITE_BIRDS,
@@ -799,57 +800,43 @@ export default function MesoVortexWorkstation() {
   const activeModel = getModelById(modelId) || MODEL_CATALOG[0];
   const activeModelField = activeModel.fields.find(f => f.id === modelField) || activeModel.fields[0];
 
-  return (
-    <div className="relative flex h-screen w-screen flex-col overflow-hidden bg-[#0b1220] font-sans text-slate-100 selection:bg-cyan-500/30">
-      <aside aria-label="Product legend" className="flex h-[22px] shrink-0 items-center justify-between border-t border-slate-800 bg-slate-950 px-3 text-[9px] font-mono">
-        <span className="font-bold text-slate-400 whitespace-nowrap">
-          {product === 'max_ref' ? `MAX REF (${maxRefWindow} scans)` :
-           product === 'ref' ? 'REF (dBZ)' :
-           product === 'ref_x' ? 'REF X (dBZ)' :
-           product === 'vel' ? 'VEL (kt)' :
-           product === 'srvel' ? 'SRV (kt)' :
-           product === 'cc' ? 'CC' :
-           product === 'zdr' ? 'ZDR (dB)' :
-           product === 'kdp' ? 'KDP (deg/km)' :
-           product === 'tops' ? 'TOPS (kft)' :
-           product === 'vil' ? 'VIL (kg/m\u00b2)' :
-           product.toUpperCase()}
-        </span>
-        <div className="mx-2 flex h-2 w-72 overflow-hidden rounded border border-slate-700">
-          <div className="flex-1 bg-[#04e9e7]" />
-          <div className="flex-1 bg-[#019ff4]" />
-          <div className="flex-1 bg-[#0300f4]" />
-          <div className="flex-1 bg-[#02fd02]" />
-          <div className="flex-1 bg-[#01c501]" />
-          <div className="flex-1 bg-[#008e00]" />
-          <div className="flex-1 bg-[#fdf802]" />
-          <div className="flex-1 bg-[#e5bc00]" />
-          <div className="flex-1 bg-[#fd9500]" />
-          <div className="flex-1 bg-[#fd0000]" />
-          <div className="flex-1 bg-[#d40000]" />
-          <div className="flex-1 bg-[#f800fd]" />
-          <div className="flex-1 bg-[#9854c6]" />
-          <div className="flex-1 bg-[#ffffff]" />
-        </div>
-        <span className="text-slate-400">5 · 15 · 30 · 45 · 60 · 70+</span>
-      </aside>
+  const activeProductLabel = quadMode
+    ? quadPanes.map(p => p.mode === 'Radar' ? p.product.toUpperCase() : p.mode).join(' / ')
+    : expertMode ? `${leftPane}+${rightPane}` : tab === 'Radar' ? product : tab;
+  const bannerProduct = tab === 'Radar' ? product : (expertMode ? product : product);
 
-      <div className="pointer-events-none absolute top-7 left-0 right-0 z-40 flex items-center justify-between px-4">
+  return (
+    <div className="relative flex h-screen w-screen flex-col overflow-hidden bg-[#0b1220] font-sans text-slate-100 selection:bg-sky-500/30">
+      <div className="z-50 shrink-0">
+        <ProductInfoBanner
+          tab={tab}
+          product={bannerProduct}
+          satelliteLabel={activeSatDef?.label}
+          satelliteDescription={activeSatDef?.description}
+          outlookDay={spcDay}
+          modelLabel={activeModel?.name}
+          modelFieldLabel={activeModelField?.label}
+          modelStatus={activeModelField?.status === 'READY_NOW' ? 'VERIFIED' : 'DATA UNAVAILABLE'}
+          alertBanner={alertBanner}
+        />
+      </div>
+
+      <div className="pointer-events-none relative z-40 flex shrink-0 items-center justify-between border-b border-slate-800 bg-[#111318] px-4 py-2">
         <div className="pointer-events-auto flex items-center gap-2">
           <button
             onClick={() => setMenuOpen((v) => !v)}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-400 text-slate-950 shadow-xl hover:bg-amber-300 transition font-black text-lg border border-amber-300 cursor-pointer"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-[#181c22] text-amber-300 shadow-lg hover:bg-slate-700 transition font-black text-lg border border-slate-700 cursor-pointer"
             title="Menu & Layer Selector"
           >
             ☰
           </button>
 
-          <div className="flex items-center rounded-full border border-slate-700 bg-[#0b1220] p-0.5 shadow-xl">
+          <div className="flex items-center rounded-full border border-slate-700 bg-[#181c22] p-0.5 shadow-lg">
             <button
               onClick={() => handleSelectBasemap('satellite-streets')}
               className={`rounded-full px-3 py-1 text-xs font-bold transition cursor-pointer ${
                 basemap === 'satellite-streets'
-                  ? 'bg-blue-600 text-white shadow-md'
+                  ? 'bg-sky-600 text-white shadow-sm border border-sky-500'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
@@ -859,7 +846,7 @@ export default function MesoVortexWorkstation() {
               onClick={() => handleSelectBasemap('custom-weather')}
               className={`rounded-full px-3 py-1 text-xs font-bold transition cursor-pointer ${
                 basemap === 'custom-weather'
-                  ? 'bg-blue-600 text-white shadow-md'
+                  ? 'bg-sky-600 text-white shadow-sm border border-sky-500'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
@@ -869,10 +856,10 @@ export default function MesoVortexWorkstation() {
         </div>
 
         <div className="pointer-events-auto flex flex-col items-center">
-          <div className="flex items-center gap-2 rounded-full bg-white px-3 py-1 shadow-lg border border-slate-200">
+          <div className="flex items-center gap-2 rounded-full bg-[#181c22] px-3 py-1.5 shadow-lg border border-slate-700">
             <div
               onClick={() => setMenuOpen((v) => !v)}
-              className="flex items-center gap-2 pr-2 border-r border-slate-200 font-black text-xs text-slate-900 cursor-pointer hover:opacity-80 transition"
+              className="flex items-center gap-2 pr-3 border-r border-slate-700 font-black text-xs text-slate-100 cursor-pointer hover:text-white transition"
             >
               <Image
                 src="/logo.png"
@@ -882,14 +869,14 @@ export default function MesoVortexWorkstation() {
                 className="rounded-full shadow-sm"
                 priority
               />
-              <span>MesoVortex</span>
-              <span className="text-[10px] text-slate-400">▾</span>
+              <span>MesoVortex<span className="text-sky-400">WX</span></span>
+              <span className="text-[10px] text-slate-500">▾</span>
             </div>
 
             <button
               type="button"
               onClick={() => { setSearchOpen((v) => !v); setSearchResults([]); }}
-              className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition"
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-600 bg-[#111827] text-slate-300 hover:bg-slate-700 hover:text-white transition"
               title="Search cities, ZIP, airports, radar sites, lat/lon, counties, states"
               aria-label="Search"
             >
@@ -905,8 +892,8 @@ export default function MesoVortexWorkstation() {
                     setExpertMode(false);
                     setQuadMode(false);
                   }}
-                  className={`rounded-full px-3 py-1 transition cursor-pointer flex items-center gap-1 ${
-                    !expertMode && !quadMode && tab === modeTab ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+                  className={`rounded-full px-3.5 py-1.5 transition cursor-pointer flex items-center gap-1 border ${
+                    !expertMode && !quadMode && tab === modeTab ? 'bg-sky-600 border-sky-500 text-white shadow-sm' : 'border-slate-700 bg-[#111827] text-slate-300 hover:bg-slate-700 hover:text-white'
                   }`}
                 >
                   {modeTab}
@@ -914,8 +901,8 @@ export default function MesoVortexWorkstation() {
               ))}
               <button
                 onClick={() => { setExpertMode((v) => !v); setQuadMode(false); }}
-                className={`rounded-full px-3 py-1 transition cursor-pointer flex items-center gap-1 ${
-                  expertMode ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+                className={`rounded-full px-3.5 py-1.5 transition cursor-pointer flex items-center gap-1 border ${
+                  expertMode ? 'bg-cyan-600 border-cyan-500 text-white shadow-sm' : 'border-slate-700 bg-[#111827] text-slate-300 hover:bg-slate-700 hover:text-white'
                 }`}
                 title="Pair any two modes side-by-side with synchronized camera movement"
               >
@@ -923,8 +910,8 @@ export default function MesoVortexWorkstation() {
               </button>
               <button
                 onClick={() => { setTripleMode((v)=>!v); setExpertMode(true); setQuadMode(false); }}
-                className={`rounded-full px-3 py-1 transition cursor-pointer flex items-center gap-1 ${
-                  tripleMode ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+                className={`rounded-full px-3.5 py-1.5 transition cursor-pointer flex items-center gap-1 border ${
+                  tripleMode ? 'bg-indigo-600 border-indigo-500 text-white shadow-sm' : 'border-slate-700 bg-[#111827] text-slate-300 hover:bg-slate-700 hover:text-white'
                 }`}
                 title="Three synchronized panes (Expert layout)"
               >
@@ -932,8 +919,8 @@ export default function MesoVortexWorkstation() {
               </button>
               <button
                 onClick={() => { setQuadMode((v) => !v); setExpertMode(false); setTripleMode(false); }}
-                className={`rounded-full px-3 py-1 transition cursor-pointer flex items-center gap-1 ${
-                  quadMode ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+                className={`rounded-full px-3.5 py-1.5 transition cursor-pointer flex items-center gap-1 border ${
+                  quadMode ? 'bg-violet-600 border-violet-500 text-white shadow-sm' : 'border-slate-700 bg-[#111827] text-slate-300 hover:bg-slate-700 hover:text-white'
                 }`}
                 title="Four synchronized panes (desktop/tablet)"
               >
@@ -943,7 +930,7 @@ export default function MesoVortexWorkstation() {
           </div>
 
           {searchOpen && (
-            <div className="mt-2 w-[min(32rem,calc(100vw-2rem))] rounded-md border border-slate-700 bg-[#111827] p-3 shadow-lg text-slate-100">
+            <div className="mt-2 w-[min(32rem,calc(100vw-2rem))] rounded-2xl border border-slate-700 bg-[#111827] p-3 shadow-lg text-slate-100">
               <div className="flex items-center gap-2">
                 <input
                   autoFocus
@@ -951,16 +938,16 @@ export default function MesoVortexWorkstation() {
                   onChange={(e) => { const v=e.target.value; setSearchQuery(v); runSearch(v); }}
                   onKeyDown={(e) => { if (e.key === 'Escape') { setSearchOpen(false); } if (e.key === 'Enter' && searchResults[0]) handleSearchSelect(searchResults[0]); }}
                   placeholder="City, ZIP, airport, radar site, lat/lon, county, state..."
-                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-cyan-500"
+                  className="w-full rounded-full border border-slate-700 bg-[#0f172a] px-4 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-sky-500"
                 />
-                <button type="button" onClick={() => setSearchOpen(false)} className="rounded-lg px-2 py-2 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Close search">✕</button>
+                <button type="button" onClick={() => setSearchOpen(false)} className="rounded-full px-3 py-2 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Close search">✕</button>
               </div>
               <div className="mt-1 text-[10px] text-slate-500">Supports: Cities, ZIP codes, Airports, Radar sites, Lat/Lon, Counties, States</div>
               <div className="mt-2 max-h-64 overflow-auto space-y-1">
                 {searchBusy && <div className="px-2 py-1 text-xs text-slate-400">Searching...</div>}
                 {!searchBusy && searchQuery.trim() && searchResults.length === 0 && <div className="px-2 py-1 text-xs text-slate-500">No results.</div>}
                 {searchResults.map((r, i) => (
-                  <button key={`${r.type}-${r.label}-${i}`} type="button" onClick={() => handleSearchSelect(r)} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left hover:bg-slate-800">
+                  <button key={`${r.type}-${r.label}-${i}`} type="button" onClick={() => handleSearchSelect(r)} className="flex w-full items-center justify-between rounded-full px-3 py-1.5 text-left hover:bg-slate-800">
                     <span className="text-xs text-slate-200 truncate pr-2">{r.label}</span>
                     <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-sky-400">{r.type}</span>
                   </button>
@@ -970,7 +957,7 @@ export default function MesoVortexWorkstation() {
           )}
 
           {quadMode ? (
-            <div className="mt-1.5 flex items-center gap-2 rounded-full bg-[#0b1220] px-3 py-1 shadow-xl border border-slate-700 text-[11px] font-bold text-slate-200">
+            <div className="mt-1.5 flex items-center gap-2 rounded-full bg-[#181c22] px-3 py-1.5 shadow-lg border border-slate-700 text-[11px] font-bold text-slate-200">
               <span className="text-violet-300">Quad View</span>
               <span className="text-slate-500">•</span>
               <span>4 panes synced</span>
@@ -978,7 +965,7 @@ export default function MesoVortexWorkstation() {
               <span className="text-slate-400">{isPlaying ? 'playback synced' : 'camera synced'}</span>
             </div>
           ) : expertMode ? (
-            <div className="mt-1.5 flex items-center gap-2 rounded-full bg-[#0b1220] px-3 py-1 shadow-xl border border-slate-700 text-[11px] font-bold text-slate-200">
+            <div className="mt-1.5 flex items-center gap-2 rounded-full bg-[#181c22] px-3 py-1.5 shadow-lg border border-slate-700 text-[11px] font-bold text-slate-200">
               <span className="text-sky-300">Expert Mode</span>
               <span className="text-slate-500">•</span>
               <span>{leftPane}</span>
@@ -988,7 +975,7 @@ export default function MesoVortexWorkstation() {
               <span className="text-slate-400">{isPlaying ? 'playback synced' : 'synced pan/zoom'}</span>
             </div>
           ) : tab === 'Satellite' ? (
-            <div className="mt-1.5 flex items-center gap-2 rounded-full bg-[#0b1220] px-3 py-1 shadow-xl border border-slate-700 text-[11px] font-bold text-slate-200">
+            <div className="mt-1.5 flex items-center gap-2 rounded-full bg-[#181c22] px-3 py-1.5 shadow-lg border border-slate-700 text-[11px] font-bold text-slate-200">
               <span className="text-sky-300">{SATELLITE_BIRDS.find(b=>b.id===activeSatSel.bird)?.label}</span>
               <span className="text-slate-500">•</span>
               <span>{getSectorsForBird(activeSatSel.bird).find(s=>s.id===activeSatSel.sector)?.label}</span>
@@ -997,7 +984,7 @@ export default function MesoVortexWorkstation() {
               {!activeSatDef.available && <span className="text-amber-300">• DATA UNAVAILABLE</span>}
             </div>
           ) : tab === 'Models' ? (
-            <div className="mt-1.5 flex items-center gap-2 rounded-full bg-[#0b1220] px-3 py-1 shadow-xl border border-slate-700 text-[11px] font-bold text-slate-200">
+            <div className="mt-1.5 flex items-center gap-2 rounded-full bg-[#181c22] px-3 py-1.5 shadow-lg border border-slate-700 text-[11px] font-bold text-slate-200">
               <span className="text-sky-300">{activeModel.name.split('(')[0].trim()}</span>
               <span className="text-slate-500">•</span>
               <span>{activeModelField.label}</span>
@@ -1005,15 +992,15 @@ export default function MesoVortexWorkstation() {
               <span className={activeModelField.status==='READY_NOW' ? 'text-emerald-300' : 'text-amber-300'}>{activeModelField.status==='READY_NOW' ? 'VERIFIED' : 'DATA UNAVAILABLE'}</span>
             </div>
           ) : tab === 'Outlooks' ? (
-            <div className="mt-1.5 flex items-center gap-2 rounded-full bg-white px-3 py-1 shadow-xl border border-slate-200 text-xs font-bold text-slate-700">
-              <span className="px-1">Categorical</span>
-              <span className="text-slate-300">|</span>
+            <div className="mt-1.5 flex items-center gap-2 rounded-full bg-[#181c22] px-3 py-1.5 shadow-lg border border-slate-700 text-xs font-bold text-slate-200">
+              <span className="px-1 text-slate-300">Categorical</span>
+              <span className="text-slate-600">|</span>
               {(['Day 1', 'Day 2', 'Day 3'] as SpcDay[]).map((d) => (
                 <button
                   key={d}
                   onClick={() => setSpcDay(d)}
-                  className={`rounded-full px-2.5 py-0.5 text-[11px] transition cursor-pointer ${
-                    spcDay === d ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                  className={`rounded-full px-3 py-1 text-[11px] transition cursor-pointer border ${
+                    spcDay === d ? 'bg-sky-600 border-sky-500 text-white' : 'border-slate-700 bg-[#111827] text-slate-300 hover:bg-slate-700 hover:text-white'
                   }`}
                 >
                   {d}
@@ -1024,7 +1011,7 @@ export default function MesoVortexWorkstation() {
         </div>
 
         <div className="pointer-events-auto relative">
-          <div className="flex items-center gap-1 rounded-full bg-amber-400 px-1.5 py-1 shadow-xl border border-amber-300">
+          <div className="flex items-center gap-1 rounded-full bg-amber-400 px-1.5 py-1 shadow-lg border border-amber-300">
             <button
               onClick={() => setAlertsOpen((v) => !v)}
               className="flex items-center gap-1.5 rounded-full px-2 py-0.5 text-slate-950 font-black text-xs hover:bg-amber-300 transition cursor-pointer"
@@ -1075,7 +1062,7 @@ export default function MesoVortexWorkstation() {
         </div>
       </div>
 
-      <div className="relative min-h-0 flex-1 pt-[22px] pb-10">
+      <div className="relative min-h-0 flex-1 pb-10">
         {quadMode ? (
           <>
             <div className="hidden h-full w-full md:grid md:grid-cols-2 md:grid-rows-2">
@@ -1434,7 +1421,7 @@ export default function MesoVortexWorkstation() {
               <div className="text-slate-400">Evidence-based source registry. Status reflects MesoVortexWX implementation/verification, not upstream existence.</div>
               <div className="flex flex-wrap gap-1">
                 {(['ALL','IMPLEMENTED','PARTIAL','NOT_IMPLEMENTED'] as const).map((s) => (
-                  <button key={s} type="button" onClick={() => setDataSourceFilter(s)} className={`rounded-md px-2 py-1 text-[10px] font-bold ${dataSourceFilter===s ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-200 hover:bg-slate-700'}`}>
+                  <button key={s} type="button" onClick={() => setDataSourceFilter(s)} className={`rounded-full px-2 py-1 text-[10px] font-bold ${dataSourceFilter===s ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-200 hover:bg-slate-700'}`}>
                     {s === 'ALL' ? 'All' : DATA_SOURCE_STATUS_LABEL[s]}
                   </button>
                 ))}
@@ -1473,7 +1460,7 @@ export default function MesoVortexWorkstation() {
                 <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">Velocity Units</div>
                 <div className="flex gap-1">
                   {(['mph','knots','kmh'] as const).map(u => (
-                    <button key={u} type="button" onClick={()=>setVelocityUnit(u)} className={`rounded-md px-2 py-1 text-[11px] font-bold ${velocityUnit===u?'bg-cyan-600 text-white':'bg-slate-800 text-slate-200'}`}>{u==='kmh'?'km/h':u}</button>
+                    <button key={u} type="button" onClick={()=>setVelocityUnit(u)} className={`rounded-full px-2 py-1 text-[11px] font-bold ${velocityUnit===u?'bg-cyan-600 text-white':'bg-slate-800 text-slate-200'}`}>{u==='kmh'?'km/h':u}</button>
                   ))}
                 </div>
               </div>
@@ -1500,8 +1487,8 @@ export default function MesoVortexWorkstation() {
                 <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={warningPopup} onChange={(e)=>setWarningPopup(e.target.checked)} />Show warning popup details</label>
                 <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={warningVoiceEnabled} onChange={(e)=>setWarningVoiceEnabled(e.target.checked)} />Voice alerts (browser speech)</label>
                 <div className="flex gap-1">
-                  <button type="button" onClick={()=>setWarningVoicePack('default')} className={`rounded-md px-2 py-1 text-[11px] font-bold ${warningVoicePack==='default'?'bg-cyan-600 text-white':'bg-slate-800 text-slate-200'}`}>Default voice</button>
-                  <button type="button" onClick={()=>setWarningVoicePack('short')} className={`rounded-md px-2 py-1 text-[11px] font-bold ${warningVoicePack==='short'?'bg-cyan-600 text-white':'bg-slate-800 text-slate-200'}`}>Short voice</button>
+                  <button type="button" onClick={()=>setWarningVoicePack('default')} className={`rounded-full px-2 py-1 text-[11px] font-bold ${warningVoicePack==='default'?'bg-cyan-600 text-white':'bg-slate-800 text-slate-200'}`}>Default voice</button>
+                  <button type="button" onClick={()=>setWarningVoicePack('short')} className={`rounded-full px-2 py-1 text-[11px] font-bold ${warningVoicePack==='short'?'bg-cyan-600 text-white':'bg-slate-800 text-slate-200'}`}>Short voice</button>
                 </div>
                 <div className="text-[10px] text-slate-500">Default: "The National Weather Service has issued a..." Custom sound files can be added later; no fake audio assets included.</div>
               </div>

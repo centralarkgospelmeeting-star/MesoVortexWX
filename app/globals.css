@@ -209,3 +209,9 @@ html, body {
   pointer-events: none;
   z-index: 25;
 }
+
+
+@keyframes marquee {
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}

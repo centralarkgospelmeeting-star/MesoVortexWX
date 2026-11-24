@@ -252,7 +252,7 @@ export function WeatherWiseRadarCard({
                   <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Tilt</div>
                   <div className="flex flex-wrap gap-1">
                     {TILTS.map((t) => (
-                      <button key={t} type="button" onClick={() => onSelectTilt(t)} className={`rounded-md px-2 py-1 text-[11px] font-bold ${tilt === t ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>{t}°</button>
+                      <button key={t} type="button" onClick={() => onSelectTilt(t)} className={`rounded-full px-2 py-1 text-[11px] font-bold ${tilt === t ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>{t}°</button>
                     ))}
                   </div>
                 </div>
@@ -265,7 +265,7 @@ export function WeatherWiseRadarCard({
                 {product === 'max_ref' && onSelectMaxRefWindow && (
                   <div>
                     <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Max Ref Window</div>
-                    <div className="flex gap-1">{[5, 10, 20, 30].map((w) => <button key={w} type="button" onClick={() => onSelectMaxRefWindow(w)} className={`rounded-md px-2 py-1 text-[11px] font-bold ${maxRefWindow === w ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-300'}`}>{w}</button>)}</div>
+                    <div className="flex gap-1">{[5, 10, 20, 30].map((w) => <button key={w} type="button" onClick={() => onSelectMaxRefWindow(w)} className={`rounded-full px-2 py-1 text-[11px] font-bold ${maxRefWindow === w ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-300'}`}>{w}</button>)}</div>
                   </div>
                 )}
                 <label className="flex items-center gap-2 text-[11px] text-slate-300"><input type="checkbox" checked={showFastScan} onChange={onToggleFastScan} />Fast Scan (ingest indicator)</label>
@@ -278,7 +278,7 @@ export function WeatherWiseRadarCard({
                 <div>
                   <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Satellite Platform</div>
                   <div className="flex flex-wrap gap-1">
-                    {['goes-east', 'goes-west'].map((b) => <button key={b} type="button" onClick={() => onSelectSatelliteBird?.(b)} className={`rounded-md px-2 py-1 text-[11px] font-bold ${satelliteBird === b ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300'}`}>{b === 'goes-east' ? 'GOES-East' : 'GOES-West'}</button>)}
+                    {['goes-east', 'goes-west'].map((b) => <button key={b} type="button" onClick={() => onSelectSatelliteBird?.(b)} className={`rounded-full px-2 py-1 text-[11px] font-bold ${satelliteBird === b ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300'}`}>{b === 'goes-east' ? 'GOES-East' : 'GOES-West'}</button>)}
                   </div>
                 </div>
                 <div>
