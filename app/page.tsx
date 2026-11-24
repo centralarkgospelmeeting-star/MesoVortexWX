@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { RadarMap, BasemapType, ModeTab } from '../components/RadarMap';
+import { VolumeScanInspector } from '../components/radar/VolumeScanInspector';
 import { WeatherWiseRadarCard } from '../components/WeatherWiseRadarCard';
 import { ToolboxPanel } from '../components/map-tools/ToolboxPanel';
 import { WeatherWiseAlertsPanel } from '../components/WeatherWiseAlertsPanel';
@@ -49,7 +50,8 @@ type RadarProduct =
   | 'tops'
   | 'vil'
   | 'hhc'
-  | 'qpe';
+  | 'qpe'
+  | 'volume_scan';
 
 type SpcDay = 'Day 1' | 'Day 2' | 'Day 3';
 type PaneMode = 'Radar' | 'Satellite' | 'Composite' | 'Models';
@@ -1134,6 +1136,13 @@ export default function MesoVortexWorkstation() {
             onToolMeasurementsChange={setToolMeasurements}
             onToolDrawingsChange={setToolDrawings}
             onToolModeChange={setToolMode}
+          />
+        )}
+        {product === 'volume_scan' && !quadMode && !expertMode && tab === 'Radar' && (
+          <VolumeScanInspector
+            siteId={currentSite.id}
+            onSelectProduct={(next) => setProduct(next as RadarProduct)}
+            onSelectTilt={setTilt}
           />
         )}
       </div>

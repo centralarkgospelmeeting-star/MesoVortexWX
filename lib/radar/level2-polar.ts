@@ -2,8 +2,8 @@ import { RADAR_SITES, type RadarSite } from '../radar-config';
 
 export type PolarMoment = 'cc' | 'zdr' | 'kdp' | 'sw' | 'gate';
 
-type Moment = { moment_data?: Array<number | null>; gate_size?: number; first_gate?: number };
-type Radial = { azimuth?: number; elevation_angle?: number; rho?: Moment; zdr?: Moment; phi?: Moment; spectrum?: Moment; velocity?: Moment };
+type Moment = { moment_data?: Array<number | null>; gate_count?: number; gate_size?: number; first_gate?: number };
+type Radial = { azimuth?: number; elevation_angle?: number; reflect?: Moment | Array<number | null>; rho?: Moment; zdr?: Moment; phi?: Moment; spectrum?: Moment; velocity?: Moment };
 type Level2Volume = {
   data: Array<Array<{ record?: Radial }> | undefined>;
   listElevations(): number[];
@@ -85,17 +85,20 @@ async function loadVolume(site: RadarSite): Promise<PolarTileFrame> {
   }
 }
 
-function bestElevation(volume: Level2Volume, degrees: number): Radial[] {
+function bestElevation(volume: Level2Volume, degrees: number, product?: PolarMoment): Radial[] {
   let best: Radial[] = [];
   let bestDifference = Number.POSITIVE_INFINITY;
+  let bestMomentRadials = -1;
   for (const elevation of volume.listElevations()) {
     const radials = (volume.data[elevation] || []).map((item) => item.record).filter((record): record is Radial => Boolean(record));
     const angles = radials.map((radial) => radial.elevation_angle).filter((angle): angle is number => Number.isFinite(angle));
     if (!angles.length) continue;
     const angle = angles.reduce((sum, value) => sum + value, 0) / angles.length;
     const difference = Math.abs(angle - degrees);
-    if (difference < bestDifference) {
+    const momentRadials = product ? radials.filter((radial) => momentFor(radial, product)?.moment_data?.length).length : 0;
+    if (difference < bestDifference - 0.02 || (Math.abs(difference - bestDifference) <= 0.02 && momentRadials > bestMomentRadials)) {
       bestDifference = difference;
+      bestMomentRadials = momentRadials;
       best = radials;
     }
   }
@@ -188,7 +191,7 @@ function destination(lat: number, lon: number, targetLat: number, targetLon: num
 }
 
 export function level2RgbaTile(frame: PolarTileFrame, product: PolarMoment, tilt: number, z: number, x: number, y: number, size = 256): Uint8Array {
-  const radials = bestElevation(frame.volume, tilt).filter((radial) => Number.isFinite(radial.azimuth)).sort((a, b) => (a.azimuth || 0) - (b.azimuth || 0));
+  const radials = bestElevation(frame.volume, tilt, product).filter((radial) => Number.isFinite(radial.azimuth)).sort((a, b) => (a.azimuth || 0) - (b.azimuth || 0));
   const first = radials.find((radial) => momentFor(radial, product)?.moment_data?.length);
   const firstMoment = first && momentFor(first, product);
   if (!first || !firstMoment?.moment_data) throw new Error(`${product.toUpperCase()} is not present in the ${tilt}° Level II scan`);
@@ -296,4 +299,30 @@ export async function fetchLevel2Frame(siteId: string): Promise<PolarTileFrame> 
   const site = siteFor(siteId);
   if (!site) throw new Error(`Unknown NEXRAD site "${siteId}"`);
   return loadVolume(site);
+}
+
+/** Summarize measured sweeps/moments in the current live Level II volume. */
+export async function fetchLevel2VolumeSummary(siteId: string) {
+  const frame = await fetchLevel2Frame(siteId);
+  const sweeps = frame.volume.listElevations().map((elevationIndex, sweepIndex) => {
+    const radials = (frame.volume.data[elevationIndex] || []).map((item) => item.record).filter((record): record is Radial => Boolean(record));
+    const angles = radials.map((radial) => radial.elevation_angle).filter((angle): angle is number => Number.isFinite(angle));
+    const elevation = angles.length ? angles.reduce((sum, angle) => sum + angle, 0) / angles.length : null;
+    const moments = [
+      ['REF', (radial: Radial) => Array.isArray(radial.reflect) ? { moment_data: radial.reflect } : radial.reflect],
+      ['VEL', (radial: Radial) => radial.velocity],
+      ['SW', (radial: Radial) => radial.spectrum],
+      ['CC', (radial: Radial) => radial.rho],
+      ['ZDR', (radial: Radial) => radial.zdr],
+      ['PHI', (radial: Radial) => radial.phi],
+    ].flatMap(([name, getMoment]) => {
+      const present = radials.map((radial) => (getMoment as (radial: Radial) => Moment | undefined)(radial)).filter((moment): moment is Moment => Boolean(moment?.moment_data?.length));
+      if (!present.length) return [];
+      const gates = present.reduce((sum, moment) => sum + (moment.gate_count ?? moment.moment_data?.length ?? 0), 0);
+      const gateSizesKm = present.map((moment) => moment.gate_size).filter((size): size is number => Number.isFinite(size));
+      return [{ name: name as string, radials: present.length, gates, gateSizeKm: gateSizesKm.length ? gateSizesKm[0] : null }];
+    });
+    return { sweep: sweepIndex + 1, elevationDegrees: elevation === null ? null : Number(elevation.toFixed(2)), radialCount: radials.length, moments };
+  });
+  return { site: frame.site.id, siteName: frame.site.name, scanTime: frame.time, source: 'NOAA NEXRAD Level II on AWS', liveOnly: true, sweeps };
 }
