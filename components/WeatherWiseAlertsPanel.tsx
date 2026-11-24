@@ -86,7 +86,7 @@ export function WeatherWiseAlertsPanel({
         </div>
         <div className="flex items-center gap-1">
           {onTogglePinned && (
-            <button type="button" onClick={onTogglePinned} title={pinned ? 'Unpin sidebar' : 'Pin sidebar'} className={`rounded-full px-2 py-1 text-[11px] font-bold transition ${pinned ? 'bg-cyan-500/20 text-cyan-300' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>{pinned ? '📌 Pinned' : 'Pin'}</button>
+            <button type="button" onClick={onTogglePinned} title={pinned ? 'Unpin sidebar' : 'Pin sidebar'} className={`rounded-full px-2 py-1 text-[11px] font-bold transition ${pinned ? 'bg-sky-900/40 text-sky-300' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>{pinned ? '📌 Pinned' : 'Pin'}</button>
           )}
           {onOpenSettings && (
             <button
@@ -119,7 +119,7 @@ export function WeatherWiseAlertsPanel({
       <div className="space-y-3 border-b border-slate-800 p-3">
         <div className="flex flex-wrap items-center gap-1.5">
           {(['all','warnings','watches','statements'] as const).map((mode) => (
-            <button key={mode} type="button" onClick={() => onChangeFilterMode?.(mode)} className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition ${filterMode===mode ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'bg-slate-800 text-slate-200 hover:bg-slate-700 border border-transparent'}`}>{mode === 'all' ? 'All' : mode[0].toUpperCase()+mode.slice(1)}</button>
+            <button key={mode} type="button" onClick={() => onChangeFilterMode?.(mode)} className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition ${filterMode===mode ? 'bg-sky-900/40 text-sky-300 border border-sky-700' : 'bg-slate-800 text-slate-200 hover:bg-slate-700 border border-transparent'}`}>{mode === 'all' ? 'All' : mode[0].toUpperCase()+mode.slice(1)}</button>
           ))}
           <div className="ml-auto flex items-center gap-1">
             <span className="text-[10px] text-slate-500">Sort</span>
@@ -161,7 +161,7 @@ export function WeatherWiseAlertsPanel({
           })}
         </div>
 
-        <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-2.5">
+        <div className="rounded-xl border border-slate-800 bg-[#111827] p-2.5">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className={`text-sm ${audioEnabled ? 'text-emerald-400' : 'text-slate-500'}`}>
@@ -227,7 +227,7 @@ export function WeatherWiseAlertsPanel({
               type="button"
               key={alert.id}
               onClick={() => onSelectAlert(alert)}
-              className={`w-full rounded-xl border p-3 text-left transition ${selected ? 'border-cyan-500/60 bg-cyan-500/10' : 'border-slate-800 bg-slate-900/60 hover:border-slate-600 hover:bg-slate-900'}`}
+              className={`w-full rounded-xl border p-3 text-left transition ${selected ? 'border-sky-600 bg-sky-900/25' : 'border-slate-800 bg-[#111827] hover:border-slate-600 hover:bg-slate-900'}`}
               style={{ borderLeft: `3px solid ${alert.color}` }}
             >
               <div className="flex items-center justify-between gap-2">

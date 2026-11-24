@@ -2167,7 +2167,7 @@ export function RadarMap({
       <canvas ref={sweepCanvasRef} className="radar-sweep-canvas" />
 
       {flashEnabled && !flashDismissed && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-full border border-purple-500/80 bg-slate-950/90 px-4 py-1.5 text-xs font-mono font-black text-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.4)] backdrop-blur-md">
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-full border border-purple-500/80 bg-[#0b1220] px-4 py-1.5 text-xs font-mono font-black text-purple-300 shadow-lg">
           <span className="h-2 w-2 rounded-full bg-purple-400 animate-pulse" />
           <span>FLASH REFLECTIVITY (VISUAL)</span>
           <button type="button" onClick={() => setFlashDismissed(true)} className="ml-1 text-slate-400 hover:text-white" aria-label="Dismiss flash indicator">×</button>
@@ -2175,7 +2175,7 @@ export function RadarMap({
       )}
 
       {liveOnly && !tileError && !liveOnlyDismissed && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-xl border border-amber-500/60 bg-slate-950/95 px-4 py-2 font-mono text-xs font-bold text-amber-300 shadow-2xl backdrop-blur-md">
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-xl border border-amber-500/60 bg-[#0b1220] px-4 py-2 font-mono text-xs font-bold text-amber-300 shadow-2xl">
           <span className="h-2 w-2 rounded-full bg-amber-400" />
           <span>LIVE ONLY</span>
           <span className="font-normal text-slate-400">No archive for this source</span>
@@ -2184,7 +2184,7 @@ export function RadarMap({
       )}
 
       {tileError && !tileErrorDismissed && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-xl border border-red-500/60 bg-slate-950/95 px-4 py-2 font-mono text-xs text-red-400 shadow-2xl backdrop-blur-md">
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-xl border border-red-500/60 bg-[#0b1220] px-4 py-2 font-mono text-xs text-red-400 shadow-2xl">
           <span>⚠️</span>
           <span>{tileError}</span>
           <button type="button" onClick={() => setTileErrorDismissed(true)} className="ml-1 text-slate-400 hover:text-white" aria-label="Dismiss error">×</button>
@@ -2192,7 +2192,7 @@ export function RadarMap({
       )}
 
       {fastScanEnabled && scanIngesting && !scanIngestDismissed && !tileError && (
-        <div className="absolute top-28 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-xl border border-emerald-500/60 bg-slate-950/95 px-4 py-2 font-mono text-xs font-bold text-emerald-300 shadow-2xl backdrop-blur-md">
+        <div className="absolute top-28 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-xl border border-emerald-500/60 bg-[#0b1220] px-4 py-2 font-mono text-xs font-bold text-emerald-300 shadow-2xl">
           <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
           <span>SCAN INGEST FRONTIER</span>
           <span className="font-normal text-slate-400">New scan detected; sweep indicates ingest window</span>
@@ -2201,9 +2201,9 @@ export function RadarMap({
       )}
 
       {inspectionMode && (
-        <div className="absolute left-3 top-20 z-40 w-[min(22rem,calc(100vw-1.5rem))] rounded-xl border border-cyan-500/40 bg-slate-950/95 p-3 text-xs text-slate-200 shadow-2xl backdrop-blur-md">
+        <div className="absolute left-3 top-20 z-40 w-[min(22rem,calc(100vw-1.5rem))] rounded-xl border border-sky-700 bg-[#0b1220] p-3 text-xs text-slate-200 shadow-2xl">
           <div className="flex items-center justify-between gap-2">
-            <div className="text-[10px] font-black uppercase tracking-wider text-cyan-300">Inspection / Sampling</div>
+            <div className="text-[10px] font-black uppercase tracking-wider text-sky-300">Inspection / Sampling</div>
             <button type="button" onClick={() => setInspectionResult(null)} className="text-slate-400 hover:text-white" aria-label="Clear inspection">×</button>
           </div>
           {!inspectionResult ? (

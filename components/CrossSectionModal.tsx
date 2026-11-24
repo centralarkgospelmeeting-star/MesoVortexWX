@@ -37,18 +37,18 @@ export function CrossSectionModal({ data, onClose }: Props) {
   const numDistCols = data.grid[0]?.length || 1;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-3 sm:p-5 backdrop-blur-xl animate-fade-in select-none font-sans">
-      <div className="flex h-[90vh] w-full max-w-5xl flex-col rounded-3xl border border-cyan-500/40 bg-slate-950 shadow-2xl overflow-hidden font-mono">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#050a12] p-3 sm:p-5 animate-fade-in select-none font-sans">
+      <div className="flex h-[90vh] w-full max-w-5xl flex-col rounded-3xl border border-sky-700 bg-slate-950 shadow-2xl overflow-hidden font-mono">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/10 px-6 py-3.5 bg-slate-900/80">
           <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-cyan-500/20 text-xl text-cyan-400 border border-cyan-500/30">
+            <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-sky-900/40 text-xl text-sky-400 border border-sky-700">
               ✂️
             </span>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-sm sm:text-base font-extrabold text-white">Vertical Cross-Section (SYNTHETIC / DEMO)</h2>
-                <span className="rounded-full bg-cyan-500/20 px-2 py-0.5 text-[9px] font-black uppercase text-cyan-300">
+                <span className="rounded-full bg-sky-900/40 px-2 py-0.5 text-[9px] font-black uppercase text-sky-300">
                   SYNTHETIC - NOT REAL VOLUMETRIC
                 </span>
               </div>
@@ -92,14 +92,14 @@ export function CrossSectionModal({ data, onClose }: Props) {
           </div>
 
           {/* Storm Lean / Tilt */}
-          <div className="rounded-2xl border border-cyan-500/30 bg-cyan-950/20 p-3">
+          <div className="rounded-2xl border border-sky-700 bg-cyan-950/20 p-3">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-400">Storm Lean / Tilt</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-sky-400">Storm Lean / Tilt</span>
               <span className="text-xs">↗️</span>
             </div>
             <div className="text-sm font-black text-cyan-200 mt-0.5 truncate">{data.stormLeanDirection}</div>
             <p className="text-[10px] text-slate-400 mt-1 font-mono">
-              Displacement: <b className="text-cyan-300">{data.stormLeanDisplacementNm} nm</b> downshear
+              Displacement: <b className="text-sky-300">{data.stormLeanDisplacementNm} nm</b> downshear
             </p>
           </div>
         </div>
@@ -112,7 +112,7 @@ export function CrossSectionModal({ data, onClose }: Props) {
         {/* Main RHI Vertical Atmospheric Slicing Grid */}
         <div className="relative flex-1 p-5 flex flex-col justify-between bg-[#030611] overflow-hidden">
           {/* 0°C Freezing Level Isotherm */}
-          <div className="pointer-events-none absolute left-14 right-6 top-[63%] border-b border-dashed border-cyan-400/60 flex justify-between text-[9px] text-cyan-300 z-10">
+          <div className="pointer-events-none absolute left-14 right-6 top-[63%] border-b border-dashed border-cyan-400/60 flex justify-between text-[9px] text-sky-300 z-10">
             <span className="bg-slate-950/80 px-1 rounded">0°C Freezing Level (~12,500 ft)</span>
           </div>
 
@@ -166,16 +166,16 @@ export function CrossSectionModal({ data, onClose }: Props) {
 
           {/* X-Axis Baseline Scale */}
           <div className="flex justify-between pl-14 pr-2 pt-2 text-[10px] text-slate-400 font-sans">
-            <span className="font-bold text-cyan-400">Point A (0.0 nm)</span>
+            <span className="font-bold text-sky-400">Point A (0.0 nm)</span>
             <span className="text-slate-500">Horizontal Cut Length ({data.lengthNm} nm)</span>
             <span className="font-bold text-purple-400">Point B ({data.lengthNm} nm)</span>
           </div>
 
           {/* Live Hover Telemetry Footer */}
           {hoverData && (
-            <div className="mt-2.5 flex items-center justify-between rounded-xl border border-cyan-500/40 bg-slate-900/90 px-4 py-2 text-xs animate-fade-in font-mono">
+            <div className="mt-2.5 flex items-center justify-between rounded-xl border border-sky-700 bg-[#111827] px-4 py-2 text-xs animate-fade-in font-mono">
               <div>
-                <span className="text-slate-400">Altitude:</span> <b className="text-cyan-400">{hoverData.altFt.toLocaleString()} ft AGL</b>
+                <span className="text-slate-400">Altitude:</span> <b className="text-sky-400">{hoverData.altFt.toLocaleString()} ft AGL</b>
               </div>
               <div>
                 <span className="text-slate-400">Distance Along Cut:</span> <b className="text-white">{hoverData.distNm} nm</b>

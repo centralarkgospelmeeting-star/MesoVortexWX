@@ -83,7 +83,7 @@ export function MainNavbar({
         <div className="pointer-events-auto flex items-center gap-2">
           <button
             onClick={onToggleMainMenu}
-            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-700 bg-slate-900/90 text-amber-400 shadow-2xl backdrop-blur-md hover:bg-slate-800 hover:text-amber-300 transition cursor-pointer text-lg font-black"
+            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-700 bg-[#111827] text-amber-400 shadow-2xl hover:bg-slate-800 hover:text-amber-300 transition cursor-pointer text-lg font-black"
             title="Open Main Menu"
           >
             ☰
@@ -91,7 +91,7 @@ export function MainNavbar({
         </div>
 
         {/* Center: MesoVortex Logo, Location Search, and 6 Product Navigation Tabs */}
-        <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-slate-800 bg-slate-950/90 p-1 shadow-2xl backdrop-blur-xl">
+        <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-slate-800 bg-[#0b1220] p-1 shadow-2xl">
           {/* Brand Logo & Name */}
           <div
             onClick={onToggleMainMenu}
@@ -106,7 +106,7 @@ export function MainNavbar({
               priority
             />
             <span className="hidden sm:inline font-black text-xs uppercase tracking-wider text-white">
-              MESO<span className="text-cyan-400">VORTEX</span>{' '}
+              MESO<span className="text-sky-400">VORTEX</span>{' '}
               <span className="text-amber-400 text-[10px] font-black">WX</span>
             </span>
           </div>
@@ -131,7 +131,7 @@ export function MainNavbar({
 
             {/* Autocomplete Dropdown */}
             {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute top-full left-0 mt-1 w-64 rounded-xl border border-slate-800 bg-slate-950/95 py-1.5 shadow-2xl backdrop-blur-xl z-50 text-xs">
+              <div className="absolute top-full left-0 mt-1 w-64 rounded-xl border border-slate-800 bg-[#0b1220] py-1.5 shadow-2xl z-50 text-xs">
                 {suggestions.map((s) => (
                   <div
                     key={s.id}
@@ -139,7 +139,7 @@ export function MainNavbar({
                     className="flex items-center justify-between px-3 py-1.5 hover:bg-slate-900 cursor-pointer text-slate-200"
                   >
                     <div>
-                      <b className="text-cyan-400 font-mono">{s.id}</b>
+                      <b className="text-sky-400 font-mono">{s.id}</b>
                       <span className="ml-1.5 text-slate-300">{s.name}</span>
                     </div>
                     <span className="text-[10px] text-slate-500 font-mono">{s.network}</span>
@@ -171,7 +171,7 @@ export function MainNavbar({
         <div className="pointer-events-auto flex items-center gap-2">
           <button
             onClick={onToggleWarningDrawer}
-            className="flex items-center gap-1.5 rounded-full border border-red-500/50 bg-red-600/90 hover:bg-red-500 px-3.5 py-1.5 text-xs font-black text-white shadow-xl backdrop-blur-md transition cursor-pointer"
+            className="flex items-center gap-1.5 rounded-full border border-red-500/50 bg-red-600/90 hover:bg-red-500 px-3.5 py-1.5 text-xs font-black text-white shadow-xl transition cursor-pointer"
             title="Open Active Warning Drawer"
           >
             <span>⚠️</span>
@@ -182,7 +182,7 @@ export function MainNavbar({
 
       {/* Sub-bar for SPC Day Selection when in Outlooks Mode */}
       {activeTab === 'Outlooks' && onSelectSpcDay && (
-        <div className="pointer-events-auto mt-2 flex items-center gap-2 rounded-full border border-slate-800 bg-slate-950/90 px-3 py-1 shadow-2xl backdrop-blur-xl text-xs font-bold text-slate-300 animate-fade-in">
+        <div className="pointer-events-auto mt-2 flex items-center gap-2 rounded-full border border-slate-800 bg-[#0b1220] px-3 py-1 shadow-2xl text-xs font-bold text-slate-300 animate-fade-in">
           <span className="text-[10px] uppercase tracking-wider text-slate-400 px-1 font-mono">
             SPC Convective
           </span>

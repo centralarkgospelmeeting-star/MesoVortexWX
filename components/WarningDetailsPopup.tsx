@@ -47,14 +47,14 @@ export function WarningDetailsPopup({ warning, onClose, onSpeak }: Props) {
   };
 
   return (
-    <div className="absolute top-20 right-4 sm:right-[400px] z-40 w-84 sm:w-96 rounded-3xl border border-slate-700 bg-slate-950/95 font-sans text-slate-100 shadow-2xl backdrop-blur-2xl p-5 animate-fade-in select-none">
+    <div className="absolute top-20 right-4 sm:right-[400px] z-40 w-84 sm:w-96 rounded-3xl border border-slate-700 bg-[#0b1220] font-sans text-slate-100 shadow-2xl p-5 animate-fade-in select-none">
       {/* Header with Title and Close Button (Section 10 & Wireframe 4) */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-3">
         <div className="flex items-center gap-2">
           <span className={`rounded-xl px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${badgeClass}`}>
             {warning.event}
           </span>
-          <span className="text-[10px] font-mono text-cyan-400 font-bold">
+          <span className="text-[10px] font-mono text-sky-400 font-bold">
             {warning.wfo || 'NWS'}
           </span>
         </div>
@@ -87,10 +87,10 @@ export function WarningDetailsPopup({ warning, onClose, onSpeak }: Props) {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 text-[11px] font-mono bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
+        <div className="grid grid-cols-2 gap-2 text-[11px] font-mono bg-[#111827] p-2.5 rounded-xl border border-slate-800">
           <div>
             <span className="text-slate-500">Issuer:</span>{' '}
-            <b className="text-cyan-400">{warning.wfo || 'NOAA / NWS'}</b>
+            <b className="text-sky-400">{warning.wfo || 'NOAA / NWS'}</b>
           </div>
           <div>
             <span className="text-slate-500">Severity:</span>{' '}

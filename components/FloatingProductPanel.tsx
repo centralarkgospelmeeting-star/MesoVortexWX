@@ -222,18 +222,18 @@ export function FloatingProductPanel({
   const supportedTilts = productTilts?.length ? productTilts : ['0.5'];
 
   return (
-    <div className="absolute bottom-4 left-4 z-30 w-80 sm:w-84 max-h-[82vh] flex flex-col rounded-3xl border border-slate-800 bg-slate-950/95 font-sans text-slate-100 shadow-2xl backdrop-blur-2xl select-none overflow-hidden transition-all">
+    <div className="absolute bottom-4 left-4 z-30 w-80 sm:w-84 max-h-[82vh] flex flex-col rounded-3xl border border-slate-800 bg-[#0b1220] font-sans text-slate-100 shadow-2xl select-none overflow-hidden transition-all">
       {/* Header with Title and Minimize Button (Section 3) */}
       <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3 bg-slate-900/80">
         <div>
-          <span className="text-[10px] font-black uppercase tracking-wider text-cyan-400">
+          <span className="text-[10px] font-black uppercase tracking-wider text-sky-400">
             MESOVORTEX WX
           </span>
           <h2 className="text-xs font-black uppercase text-white">{tab.toUpperCase()} CONTROLS</h2>
         </div>
         <button
           onClick={() => setCollapsed((v) => !v)}
-          className="flex h-7 w-7 items-center justify-center rounded-xl bg-slate-800 text-xs text-slate-300 hover:text-white transition cursor-pointer"
+          className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-800 text-xs text-slate-300 hover:text-white transition cursor-pointer"
           title={collapsed ? 'Expand panel' : 'Collapse panel'}
         >
           {collapsed ? '▲' : '▼'}
@@ -243,36 +243,36 @@ export function FloatingProductPanel({
       {!collapsed && (
         <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
           {/* PLAYBACK CONTROLS (Inside floating panel, per Section 3) */}
-          <div className="space-y-2 rounded-2xl border border-slate-800/80 bg-slate-900/60 p-3">
+          <div className="space-y-2 rounded-md border border-slate-800/80 bg-[#0f172a] p-3">
             <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase">
               <span>Playback</span>
-              <span className="font-mono text-cyan-300">{timestampLabel || 'LIVE'}</span>
+              <span className="font-mono text-sky-300">{timestampLabel || 'LIVE'}</span>
             </div>
 
             <div className="flex items-center justify-between gap-1.5 pt-0.5">
               <button
                 onClick={() => onStepFrame(-1)}
-                className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-800 text-slate-200 hover:bg-slate-700 font-bold transition cursor-pointer"
+                className="flex h-8 w-8 items-center justify-center rounded-md bg-slate-800 text-slate-200 hover:bg-slate-700 font-bold transition cursor-pointer"
                 title="Previous Frame"
               >
                 ◀
               </button>
               <button
                 onClick={onTogglePlay}
-                className="flex h-8 flex-1 items-center justify-center rounded-xl bg-blue-600 font-bold text-white shadow-lg hover:bg-blue-500 transition cursor-pointer"
+                className="flex h-8 flex-1 items-center justify-center rounded-md bg-blue-600 font-bold text-white shadow-lg hover:bg-blue-500 transition cursor-pointer"
               >
                 {isPlaying ? '❚❚ PAUSE' : '▶ PLAY'}
               </button>
               <button
                 onClick={() => onStepFrame(1)}
-                className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-800 text-slate-200 hover:bg-slate-700 font-bold transition cursor-pointer"
+                className="flex h-8 w-8 items-center justify-center rounded-md bg-slate-800 text-slate-200 hover:bg-slate-700 font-bold transition cursor-pointer"
                 title="Next Frame"
               >
                 ▶
               </button>
               <button
                 onClick={onGoLive}
-                className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase text-emerald-400 hover:bg-emerald-500/20 transition cursor-pointer"
+                className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase text-emerald-400 hover:bg-emerald-500/20 transition cursor-pointer"
                 title="Jump to Live Scan"
               >
                 LIVE
@@ -323,7 +323,7 @@ export function FloatingProductPanel({
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Radar Product</label>
                   <span className="text-[9px] text-slate-500">Name / Code / Status</span>
                 </div>
-                <div className="max-h-52 overflow-auto rounded-xl border border-slate-800 bg-slate-900/40">
+                <div className="max-h-52 overflow-auto rounded-md border border-slate-800 bg-[#0f172a]">
                   {RADAR_CATEGORIES.map((category) => {
                     const items = RADAR_PRODUCTS.filter((p) => p.category === category);
                     if (!items.length) return null;
@@ -341,9 +341,9 @@ export function FloatingProductPanel({
                               disabled={unavailable}
                               onClick={() => !unavailable && onSelectProduct(p.key)}
                               title={unavailable ? p.reason : p.warning || p.label}
-                              className={`grid w-full grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-2 border-t border-slate-800/40 px-2.5 py-1 text-left text-[11px] first:border-t-0 ${active ? 'bg-cyan-500/12 text-cyan-100' : unavailable ? 'text-slate-500 cursor-not-allowed' : 'text-slate-200 hover:bg-slate-800/70'}`}
+                              className={`grid w-full grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-2 border-t border-slate-800/40 px-2.5 py-1 text-left text-[11px] first:border-t-0 ${active ? 'bg-sky-900/30 text-slate-100' : unavailable ? 'text-slate-500 cursor-not-allowed' : 'text-slate-200 hover:bg-slate-800/70'}`}
                             >
-                              <span className={`font-mono text-[10px] ${active ? 'text-cyan-300' : 'text-slate-400'}`}>{p.short}</span>
+                              <span className={`font-mono text-[10px] ${active ? 'text-sky-300' : 'text-slate-400'}`}>{p.short}</span>
                               <span className="truncate">{p.label}</span>
                               <span className={`text-[9px] font-bold uppercase tracking-wide ${unavailable ? 'text-slate-500' : p.warning ? 'text-amber-300' : 'text-emerald-400'}`}>{status}</span>
                             </button>
@@ -363,7 +363,7 @@ export function FloatingProductPanel({
                 <select
                   value={currentSiteId}
                   onChange={(e) => onSelectSite(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none"
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 p-2 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none"
                 >
                   {RADAR_SITES.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -406,7 +406,7 @@ export function FloatingProductPanel({
               <select
                 value={product}
                 onChange={(e) => onSelectProduct(e.target.value)}
-                className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none"
+                className="w-full rounded-md border border-slate-700 bg-slate-900 p-2 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none"
               >
                 {COMPOSITE_PRODUCTS.map((p) => (
                   <option key={p.key} value={p.key}>
@@ -424,7 +424,7 @@ export function FloatingProductPanel({
                 <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   Satellite Source
                 </label>
-                <select className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none">
+                <select className="w-full rounded-md border border-slate-700 bg-slate-900 p-2 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none">
                   <option>GOES-East (CONUS 1km)</option>
                   <option>GOES-West (Pacific / West US)</option>
                   <option>NASA GIBS TrueColor Global</option>
@@ -437,7 +437,7 @@ export function FloatingProductPanel({
                 <select
                   value={product}
                   onChange={(e) => onSelectProduct(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none"
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 p-2 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none"
                 >
                   {SATELLITE_PRODUCTS.map((s) => {
                     const cap = getSatelliteCapability(s.capId);
@@ -463,7 +463,7 @@ export function FloatingProductPanel({
                 <select
                   value={selectedModel}
                   onChange={(e) => setSelectedModel(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none"
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 p-2 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none"
                 >
                   {FORECAST_MODELS.map((m) => (
                     <option key={m.id} value={m.id}>
@@ -480,7 +480,7 @@ export function FloatingProductPanel({
                 <select
                   value={selectedVariable}
                   onChange={(e) => setSelectedVariable(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none"
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 p-2 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none"
                 >
                   {MODEL_VARIABLES.map((v) => (
                     <option key={v.key} value={v.key}>
@@ -497,7 +497,7 @@ export function FloatingProductPanel({
                 <select
                   value={selectedPressure}
                   onChange={(e) => setSelectedPressure(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none"
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 p-2 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none"
                 >
                   {PRESSURE_LEVELS.map((pl) => (
                     <option key={pl} value={pl}>
@@ -510,7 +510,7 @@ export function FloatingProductPanel({
               <div>
                 <div className="flex justify-between font-bold text-slate-300 text-[11px] mb-1">
                   <span>Forecast Hour</span>
-                  <span className="font-mono text-cyan-400">F{String(forecastHour).padStart(2, '0')}</span>
+                  <span className="font-mono text-sky-400">F{String(forecastHour).padStart(2, '0')}</span>
                 </div>
                 <input
                   type="range"
@@ -532,7 +532,7 @@ export function FloatingProductPanel({
                 <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   Issuing Agency
                 </label>
-                <select className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none">
+                <select className="w-full rounded-md border border-slate-700 bg-slate-900 p-2 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none">
                   <option>Storm Prediction Center (SPC)</option>
                   <option>Weather Prediction Center (WPC)</option>
                   <option>National Hurricane Center (NHC)</option>
@@ -544,7 +544,7 @@ export function FloatingProductPanel({
                 <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   Outlook Product
                 </label>
-                <select className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none">
+                <select className="w-full rounded-md border border-slate-700 bg-slate-900 p-2 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none">
                   <option>Categorical Convective Outlook</option>
                   <option>Tornado Probability</option>
                   <option>Damaging Wind Probability</option>
@@ -587,7 +587,7 @@ export function FloatingProductPanel({
             <div>
               <div className="flex justify-between font-bold text-slate-300 text-[11px] mb-1">
                 <span>Opacity</span>
-                <span className="font-mono text-cyan-400">{Math.round(radarOpacity * 100)}%</span>
+                <span className="font-mono text-sky-400">{Math.round(radarOpacity * 100)}%</span>
               </div>
               <input
                 type="range"
@@ -621,7 +621,7 @@ export function FloatingProductPanel({
               <select
                 value={colorTable}
                 onChange={(e) => onSelectColorTable(e.target.value)}
-                className="w-full rounded-xl border border-slate-700 bg-slate-900 p-1.5 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none"
+                className="w-full rounded-md border border-slate-700 bg-slate-900 p-1.5 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none"
               >
                 {COLOR_TABLES.map((t) => (
                   <option key={t.id} value={t.id}>
@@ -671,7 +671,7 @@ export function FloatingProductPanel({
               {onOpenQuadView && (
                 <button
                   onClick={onOpenQuadView}
-                  className="rounded-xl border border-slate-700 bg-slate-900/80 p-2 text-center font-bold text-slate-200 hover:bg-slate-800 hover:text-white transition cursor-pointer"
+                  className="rounded-md border border-slate-700 bg-slate-900/80 p-2 text-center font-bold text-slate-200 hover:bg-slate-800 hover:text-white transition cursor-pointer"
                 >
                   🔲 Quad Compare
                 </button>
@@ -685,7 +685,7 @@ export function FloatingProductPanel({
                     onClick={available ? onOpenCrossSection : undefined}
                     disabled={!available}
                     title={reason}
-                    className={`rounded-xl border p-2 text-center font-bold transition ${available ? 'border-slate-700 bg-slate-900/80 text-slate-200 hover:bg-slate-800 hover:text-white cursor-pointer' : 'border-slate-800/80 bg-slate-950/40 text-slate-500 cursor-not-allowed'}`}
+                    className={`rounded-md border p-2 text-center font-bold transition ${available ? 'border-slate-700 bg-slate-900/80 text-slate-200 hover:bg-slate-800 hover:text-white cursor-pointer' : 'border-slate-800/80 bg-slate-950/40 text-slate-500 cursor-not-allowed'}`}
                   >
                     📐 Cross Section{!available ? ' (Unavailable)' : ''}
                   </button>
@@ -694,7 +694,7 @@ export function FloatingProductPanel({
               {onOpenSkewT && (
                 <button
                   onClick={onOpenSkewT}
-                  className="rounded-xl border border-slate-700 bg-slate-900/80 p-2 text-center font-bold text-slate-200 hover:bg-slate-800 hover:text-white transition cursor-pointer"
+                  className="rounded-md border border-slate-700 bg-slate-900/80 p-2 text-center font-bold text-slate-200 hover:bg-slate-800 hover:text-white transition cursor-pointer"
                 >
                   📈 Skew-T Sounding
                 </button>
@@ -702,7 +702,7 @@ export function FloatingProductPanel({
               {onOpenMCD && (
                 <button
                   onClick={onOpenMCD}
-                  className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-2 text-center font-bold text-amber-300 hover:bg-amber-500/20 transition cursor-pointer"
+                  className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-center font-bold text-amber-300 hover:bg-amber-500/20 transition cursor-pointer"
                 >
                   📝 AI SPC MCD
                 </button>

@@ -90,12 +90,12 @@ export function SettingsWorkspace({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-2xl animate-fade-in select-none font-sans">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#050a12] p-4 animate-fade-in select-none font-sans">
       <div className="flex h-[84vh] w-full max-w-4xl rounded-3xl border border-slate-800 bg-slate-950 shadow-2xl overflow-hidden">
         {/* Left Category Sidebar (Section 13 & Wireframe 6) */}
-        <div className="w-60 border-r border-slate-800 bg-slate-900/60 p-4 space-y-1 text-xs overflow-y-auto">
+        <div className="w-60 border-r border-slate-800 bg-[#111827] p-4 space-y-1 text-xs overflow-y-auto">
           <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-2">
-            <span className="font-black uppercase text-xs tracking-wider text-cyan-400">
+            <span className="font-black uppercase text-xs tracking-wider text-sky-400">
               SETTINGS WORKSPACE
             </span>
           </div>
@@ -328,7 +328,7 @@ export function SettingsWorkspace({
                 </label>
               </div>
 
-              <div className="p-3.5 rounded-2xl border border-cyan-500/30 bg-cyan-950/20 space-y-3">
+              <div className="p-3.5 rounded-2xl border border-sky-700 bg-cyan-950/20 space-y-3">
                 <div className="font-bold text-white text-sm flex items-center gap-2">
                   <span>🗣️</span> Spoken Warning Announcements (Text-to-Speech)
                 </div>
@@ -349,7 +349,7 @@ export function SettingsWorkspace({
                   <div className="space-y-1.5 pt-2 border-t border-slate-800">
                     <div className="flex justify-between font-bold text-slate-300 text-[11px]">
                       <span>Speech Volume</span>
-                      <span className="font-mono text-cyan-400">{Math.round(ttsVolume * 100)}%</span>
+                      <span className="font-mono text-sky-400">{Math.round(ttsVolume * 100)}%</span>
                     </div>
                     <input
                       type="range"

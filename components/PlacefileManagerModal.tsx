@@ -69,12 +69,12 @@ export function PlacefileManagerModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-3 sm:p-5 backdrop-blur-xl animate-fade-in select-none">
-      <div className="flex h-[88vh] w-full max-w-4xl flex-col rounded-3xl border border-cyan-500/30 bg-slate-950 shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#050a12] p-3 sm:p-5 animate-fade-in select-none">
+      <div className="flex h-[88vh] w-full max-w-4xl flex-col rounded-3xl border border-sky-700 bg-slate-950 shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/10 px-6 py-4 bg-slate-900/50">
+        <div className="flex items-center justify-between border-b border-white/10 px-6 py-4 bg-[#111827]">
           <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-cyan-500/20 text-xl text-cyan-400 border border-cyan-500/30">
+            <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-sky-900/40 text-xl text-sky-400 border border-sky-700">
               📡
             </span>
             <div>
@@ -130,8 +130,8 @@ export function PlacefileManagerModal({
                   onClick={() => handleToggleCatalogItem(item)}
                   className={`flex cursor-pointer items-start justify-between rounded-2xl border p-3.5 transition ${
                     isEnabled
-                      ? 'border-cyan-500/50 bg-cyan-950/30 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
-                      : 'border-white/5 bg-slate-900/40 hover:border-white/15 hover:bg-slate-900/70'
+                      ? 'border-sky-600 bg-cyan-950/30 shadow-md'
+                      : 'border-white/5 bg-[#111827] hover:border-white/15 hover:bg-[#111827]'
                   }`}
                 >
                   <div className="flex items-start gap-3 overflow-hidden pr-2">
@@ -159,7 +159,7 @@ export function PlacefileManagerModal({
         </div>
 
         {/* Footer: Custom Placefile URL Adder */}
-        <div className="border-t border-white/10 bg-slate-900/60 p-4">
+        <div className="border-t border-white/10 bg-[#111827] p-4">
           <form onSubmit={handleCustomAdd} className="flex flex-col sm:flex-row items-center gap-2">
             <input
               type="text"

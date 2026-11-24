@@ -251,7 +251,7 @@ export function SpotterNetworkPanel({ isOpen, onClose, onSpottersUpdated, radarL
       style={{ marginTop: 0 }}>
 
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 bg-slate-950/90 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-slate-800 bg-[#0b1220] px-4 py-3">
         <div className="flex items-center gap-2">
           <div className={`h-2 w-2 rounded-full ${
             status === 'connected' ? 'bg-emerald-400 animate-pulse' :
@@ -274,7 +274,7 @@ export function SpotterNetworkPanel({ isOpen, onClose, onSpottersUpdated, radarL
             onClick={() => setActiveTab(t)}
             className={`flex-1 py-2 text-[11px] font-semibold uppercase tracking-wider transition-colors ${
               activeTab === t
-                ? 'border-b-2 border-cyan-500 text-cyan-400'
+                ? 'border-b-2 border-cyan-500 text-sky-400'
                 : 'text-slate-500 hover:text-slate-300'
             }`}
           >
@@ -320,7 +320,7 @@ export function SpotterNetworkPanel({ isOpen, onClose, onSpottersUpdated, radarL
             {status !== 'connected' && (
               <>
                 {/* Info box */}
-                <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-400">
+                <div className="rounded-xl border border-slate-800 bg-[#111827] p-3 text-xs text-slate-400">
                   <div className="mb-1 font-semibold text-slate-200">What you get</div>
                   <ul className="space-y-1">
                     <li>🌪 Live ground reports as events unfold</li>
@@ -334,7 +334,7 @@ export function SpotterNetworkPanel({ isOpen, onClose, onSpottersUpdated, radarL
                       href="https://www.spotternetwork.org/register"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-cyan-400 underline hover:text-cyan-300"
+                      className="text-sky-400 underline hover:text-sky-300"
                     >
                       Register free at spotternetwork.org
                     </a>
@@ -415,7 +415,7 @@ export function SpotterNetworkPanel({ isOpen, onClose, onSpottersUpdated, radarL
             {/* Radius filter */}
             <div className="border-t border-slate-800 pt-3">
               <label className="mb-1.5 block text-[11px] font-semibold text-slate-400">
-                Search Radius: <span className="text-cyan-400">{radiusKm} km</span>
+                Search Radius: <span className="text-sky-400">{radiusKm} km</span>
               </label>
               <input
                 type="range"
@@ -432,7 +432,7 @@ export function SpotterNetworkPanel({ isOpen, onClose, onSpottersUpdated, radarL
             </div>
 
             {/* LSR public feed note */}
-            <div className="rounded-lg bg-slate-900/50 p-2.5 text-[10px] text-slate-500">
+            <div className="rounded-lg bg-[#111827] p-2.5 text-[10px] text-slate-500">
               <span className="font-semibold text-slate-400">Also shown:</span> IEM Local Storm Reports (NWS-verified, public feed, no login required)
             </div>
           </div>
@@ -452,7 +452,7 @@ export function SpotterNetworkPanel({ isOpen, onClose, onSpottersUpdated, radarL
                 {status !== 'connected' && (
                   <button
                     onClick={() => setActiveTab('connect')}
-                    className="mt-1 rounded-lg bg-cyan-900/50 px-4 py-2 text-xs font-semibold text-cyan-400 hover:bg-cyan-900"
+                    className="mt-1 rounded-lg bg-cyan-900/50 px-4 py-2 text-xs font-semibold text-sky-400 hover:bg-cyan-900"
                   >
                     Connect Account →
                   </button>
@@ -460,14 +460,14 @@ export function SpotterNetworkPanel({ isOpen, onClose, onSpottersUpdated, radarL
               </div>
             ) : (
               <div>
-                <div className="sticky top-0 bg-slate-950/90 px-3 py-2 text-[10px] text-slate-500 backdrop-blur">
+                <div className="sticky top-0 bg-[#0b1220] px-3 py-2 text-[10px] text-slate-500">
                   {spotters.length} active spotters · {radiusKm} km radius
                   {lastRefresh && ` · ${timeAgo(lastRefresh.toISOString())}`}
                 </div>
                 {spotters.map((s) => (
                   <div
                     key={s.id}
-                    className="border-b border-slate-800/60 px-3 py-2.5 hover:bg-slate-900/60 transition-colors"
+                    className="border-b border-slate-800/60 px-3 py-2.5 hover:bg-[#111827] transition-colors"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-1.5">
@@ -493,7 +493,7 @@ export function SpotterNetworkPanel({ isOpen, onClose, onSpottersUpdated, radarL
         {activeTab === 'reports' && (
           <div>
             {/* Hazard filter */}
-            <div className="sticky top-0 z-10 border-b border-slate-800 bg-slate-950/90 px-3 py-2 backdrop-blur">
+            <div className="sticky top-0 z-10 border-b border-slate-800 bg-[#0b1220] px-3 py-2">
               <div className="flex flex-wrap gap-1">
                 {['all', 'tornado', 'hail', 'wind', 'flood', 'snow'].map((h) => (
                   <button
@@ -522,7 +522,7 @@ export function SpotterNetworkPanel({ isOpen, onClose, onSpottersUpdated, radarL
                 {status !== 'connected' && (
                   <button
                     onClick={() => setActiveTab('connect')}
-                    className="mt-1 rounded-lg bg-cyan-900/50 px-4 py-2 text-xs font-semibold text-cyan-400 hover:bg-cyan-900"
+                    className="mt-1 rounded-lg bg-cyan-900/50 px-4 py-2 text-xs font-semibold text-sky-400 hover:bg-cyan-900"
                   >
                     Connect Account →
                   </button>
@@ -539,7 +539,7 @@ export function SpotterNetworkPanel({ isOpen, onClose, onSpottersUpdated, radarL
                   return (
                     <div
                       key={r.id}
-                      className="border-b border-slate-800/60 px-3 py-3 hover:bg-slate-900/60 transition-colors"
+                      className="border-b border-slate-800/60 px-3 py-3 hover:bg-[#111827] transition-colors"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${badge.bg} text-white`}>

@@ -185,7 +185,7 @@ export function UniversalLegend({
             <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-[11px] animate-pulse">
               ⚠️
             </span>
-            <span className="font-mono uppercase tracking-wider text-[10px] bg-black/30 px-1.5 py-0.5 rounded">
+            <span className="font-mono uppercase tracking-wider text-[10px] bg-[#050a12]/80 px-1.5 py-0.5 rounded">
               OFFICIAL NWS ALERT
             </span>
             <span className="truncate">
@@ -197,7 +197,7 @@ export function UniversalLegend({
             {onSpeakAnnouncement && (
               <button
                 onClick={onSpeakAnnouncement}
-                className="flex items-center gap-1 rounded bg-black/30 hover:bg-black/50 px-2 py-0.5 text-[10px] font-bold text-white transition cursor-pointer"
+                className="flex items-center gap-1 rounded bg-[#050a12]/80 hover:bg-black/50 px-2 py-0.5 text-[10px] font-bold text-white transition cursor-pointer"
                 title="Speak Warning Announcement"
               >
                 <span>🔊</span> Listen
@@ -231,7 +231,7 @@ export function UniversalLegend({
 
       {/* 3. Floating Tooltip on Hover */}
       {hovered && (
-        <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-white/20 bg-slate-950/95 px-3 py-1 text-[10px] font-mono font-bold text-white shadow-2xl backdrop-blur-md animate-fade-in z-50 flex items-center gap-1.5">
+        <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-white/20 bg-[#0b1220] px-3 py-1 text-[10px] font-mono font-bold text-white shadow-2xl animate-fade-in z-50 flex items-center gap-1.5">
           <span
             className="inline-block h-2.5 w-2.5 rounded-full border border-white/40"
             style={{ backgroundColor: hovered.color }}

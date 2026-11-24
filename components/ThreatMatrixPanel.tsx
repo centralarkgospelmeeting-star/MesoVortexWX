@@ -6,7 +6,7 @@ type Props = {
 
 export function ThreatMatrixPanel({ onClose }: Props) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-xl animate-fade-in select-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#050a12] p-4 animate-fade-in select-none">
       <div className="w-full max-w-lg rounded-3xl border border-red-500/30 bg-slate-950 p-6 shadow-2xl space-y-5">
         <div className="flex items-center justify-between border-b border-white/10 pb-3">
           <div className="flex items-center gap-2">
@@ -23,7 +23,7 @@ export function ThreatMatrixPanel({ onClose }: Props) {
             <div className="text-3xl font-black text-white font-mono">86 <span className="text-xs text-red-400">/ 100</span></div>
             <p className="text-[11px] text-slate-400 mt-0.5">High confidence supercells with active tornado parameters.</p>
           </div>
-          <span className="rounded-2xl bg-red-600 px-3 py-1.5 text-xs font-black uppercase text-white shadow-[0_0_15px_rgba(239,68,68,0.5)]">
+          <span className="rounded-2xl bg-red-600 px-3 py-1.5 text-xs font-black uppercase text-white shadow-md">
             CRITICAL
           </span>
         </div>
@@ -49,11 +49,11 @@ export function ThreatMatrixPanel({ onClose }: Props) {
         </div>
 
         {/* Neighborhood Micro-Metrics */}
-        <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 space-y-2">
-          <div className="text-xs font-bold text-cyan-300">Neighborhood Surface Metrics</div>
+        <div className="rounded-2xl border border-white/10 bg-[#111827] p-4 space-y-2">
+          <div className="text-xs font-bold text-sky-300">Neighborhood Surface Metrics</div>
           <div className="grid grid-cols-2 gap-2 text-xs font-mono">
             <div>Feels-Like: <b className="text-white">92°F</b></div>
-            <div>Wet-Bulb: <b className="text-cyan-400">76°F</b></div>
+            <div>Wet-Bulb: <b className="text-sky-400">76°F</b></div>
             <div>Pressure Tendency: <b className="text-red-400">-2.4 mb/hr</b></div>
             <div>Precip Arrival: <b className="text-amber-400">~14 mins</b></div>
           </div>

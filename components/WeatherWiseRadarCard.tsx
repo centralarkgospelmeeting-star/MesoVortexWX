@@ -177,9 +177,9 @@ export function WeatherWiseRadarCard({
   return (
     <div className="pointer-events-auto absolute bottom-14 left-3 z-30 font-sans text-slate-100 select-none">
       {expanded && (
-        <div className="mb-2 w-[min(22rem,calc(100vw-1.5rem))] max-h-[min(60vh,32rem)] overflow-auto rounded-2xl border border-slate-700/80 bg-slate-950/95 shadow-2xl backdrop-blur-md">
+        <div className="mb-2 w-[min(22rem,calc(100vw-1.5rem))] max-h-[min(60vh,32rem)] overflow-auto rounded-2xl border border-slate-700/80 bg-[#0b1220] shadow-2xl">
           <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2">
-            <div className="text-[10px] font-black uppercase tracking-wider text-cyan-400">{mode} Controls</div>
+            <div className="text-[10px] font-black uppercase tracking-wider text-sky-400">{mode} Controls</div>
             <button type="button" onClick={() => setExpanded(false)} className="rounded px-1.5 py-0.5 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Close drawer">✕</button>
           </div>
           <div className="p-3 space-y-3 text-xs">
@@ -187,41 +187,60 @@ export function WeatherWiseRadarCard({
               <>
                 <div>
                   <div className="mb-1 flex items-center justify-between">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Product</div>
-                    <div className="text-[9px] text-slate-500">Code / Name / Status</div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Radar Products</div>
+                    <div className="text-[9px] text-slate-500">Verified availability shown</div>
                   </div>
-                  <div className="max-h-72 overflow-auto rounded-lg border border-slate-800 bg-slate-900/30">
+                  <div className="max-h-72 overflow-auto rounded border border-slate-700 bg-[#0f172a] p-2 space-y-2">
                     {(() => {
-                      const favItems = RADAR_PRODUCTS.filter((p) => favorites.includes(p.key));
-                      const renderRow = (p: typeof RADAR_PRODUCTS[number]) => {
-                        const active = p.key === product;
-                        const unavailable = !p.available;
-                        const status = unavailable ? 'DATA UNAVAILABLE' : p.warning ? 'PARTIAL' : 'AVAILABLE';
-                        const fav = favorites.includes(p.key);
-                        return (
-                          <div key={p.key} className={`grid w-full grid-cols-[1.5rem_3rem_minmax(0,1fr)_auto] items-center gap-1.5 px-2 py-1 text-[11px] border-t border-slate-800/40 first:border-t-0 ${active ? 'bg-cyan-500/12 text-cyan-100' : unavailable ? 'text-slate-500' : 'text-slate-200 hover:bg-slate-800/60'}`}>
-                            <button type="button" onClick={() => toggleFavorite(p.key)} title={fav ? 'Remove favorite' : 'Add favorite'} className={`text-[11px] leading-none ${fav ? 'text-amber-300' : 'text-slate-600 hover:text-slate-300'}`}>{fav ? '★' : '☆'}</button>
-                            <button type="button" disabled={unavailable} onClick={() => !unavailable && onSelectProduct(p.key)} title={unavailable ? p.reason : p.warning ? `PARTIAL: ${p.warning}` : `${p.label} (${p.short})`} className={`font-mono text-[10px] text-left ${active ? 'text-cyan-300' : 'text-slate-400'} ${unavailable ? 'cursor-not-allowed' : ''}`}>{p.short}</button>
-                            <button type="button" disabled={unavailable} onClick={() => !unavailable && onSelectProduct(p.key)} title={unavailable ? p.reason : p.warning ? `PARTIAL: ${p.warning}` : `${p.label} (${p.short})`} className={`truncate text-left ${unavailable ? 'cursor-not-allowed' : ''}`}>{p.label}</button>
-                            <span className={`text-[9px] font-bold uppercase tracking-wide ${unavailable ? 'text-slate-500' : p.warning ? 'text-amber-300' : 'text-emerald-400'}`}>{status}</span>
-                          </div>
-                        );
+                      const thumbFor = (key: string) => {
+                        if (key === 'ref' || key === 'max_ref' || key === 'ref_x') return '/product-thumbs/ref.svg';
+                        if (key === 'vel') return '/product-thumbs/vel.svg';
+                        if (key === 'srvel' || key === 'norm_vel') return '/product-thumbs/srvel.svg';
+                        if (key === 'cc' || key === 'min_cc') return '/product-thumbs/cc.svg';
+                        if (key === 'zdr' || key === 'kdp') return '/product-thumbs/zdr.svg';
+                        return '/product-thumbs/generic.svg';
                       };
+                      const renderGrid = (items: typeof RADAR_PRODUCTS) => (
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {items.map((p) => {
+                            const active = p.key === product;
+                            const unavailable = !p.available;
+                            const fav = favorites.includes(p.key);
+                            return (
+                              <button key={p.key} type="button" disabled={unavailable}
+                                onClick={() => !unavailable && onSelectProduct(p.key)}
+                                title={unavailable ? p.reason : p.warning ? `PARTIAL: ${p.warning}` : `${p.label} (${p.short})`}
+                                className={`relative rounded border p-1 text-left ${active ? 'border-sky-500 bg-[#162033]' : unavailable ? 'border-slate-800 bg-[#0b1220] opacity-60 cursor-not-allowed' : 'border-slate-700 bg-[#101826] hover:border-slate-500 hover:bg-[#162033]'}`}>
+                                <span onClick={(e)=>{e.stopPropagation(); toggleFavorite(p.key);}} role="button" tabIndex={0} title={fav ? 'Remove favorite' : 'Add favorite'} className={`absolute right-1 top-0.5 text-[10px] ${fav ? 'text-amber-300' : 'text-slate-600 hover:text-slate-300'}`}>{fav ? '★' : '☆'}</span>
+                                <div className={`h-12 w-full overflow-hidden rounded-sm border ${active ? 'border-sky-700' : 'border-slate-700'} bg-[#0b1220] mb-1`}>
+                                  <img src={thumbFor(p.key)} alt="" className="h-full w-full object-cover" />
+                                </div>
+                                <div className="text-[10px] font-bold text-slate-200 truncate pr-3">{p.label}</div>
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className="text-[9px] font-mono text-slate-400">{p.short}</span>
+                                  <span className={`text-[8px] font-bold uppercase ${unavailable ? 'text-slate-500' : p.warning ? 'text-amber-300' : 'text-emerald-400'}`}>{unavailable ? 'UNAVAIL' : p.warning ? 'PARTIAL' : 'OK'}</span>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                      const favItems = RADAR_PRODUCTS.filter((p) => favorites.includes(p.key));
                       return (
                         <>
                           {favItems.length > 0 && (
-                            <div className="border-b border-slate-800/80">
-                              <div className="px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-amber-300/80 bg-slate-950/70 sticky top-0">Favorites</div>
-                              {favItems.map(renderRow)}
+                            <div>
+                              <div className="mb-1 text-[9px] font-black uppercase tracking-wider text-amber-300">Favorites</div>
+                              {renderGrid(favItems)}
                             </div>
                           )}
                           {RADAR_CATEGORIES.map((category) => {
                             const items = RADAR_PRODUCTS.filter((p) => p.category === category);
                             if (!items.length) return null;
                             return (
-                              <div key={category} className="border-b border-slate-800/80 last:border-b-0">
-                                <div className="px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-slate-500 bg-slate-950/60 sticky top-0">{category}</div>
-                                {items.map(renderRow)}
+                              <div key={category}>
+                                <div className="mb-1 text-[9px] font-black uppercase tracking-wider text-slate-500">{category}</div>
+                                {renderGrid(items)}
                               </div>
                             );
                           })}
@@ -267,8 +286,8 @@ export function WeatherWiseRadarCard({
                   <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Live Product (verified tile source)</div>
                   <div className="space-y-1">
                     {(satelliteProducts.length ? satelliteProducts : [{ id: 'visible', label: 'Visible', available: true }, { id: 'ir', label: 'Infrared', available: true }, { id: 'wv-mid', label: 'Water Vapor', available: true }]).map((p) => (
-                      <button key={p.id} type="button" disabled={!p.available} onClick={() => p.available && onSelectSatelliteProduct?.(p.id)} className={`flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-[11px] ${satelliteProductId === p.id ? 'bg-cyan-500/15 text-cyan-200' : 'text-slate-200 hover:bg-slate-800'} ${!p.available ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                        <span>{!p.available ? '⛔ ' : ''}{p.label}</span>{satelliteProductId === p.id && <span className="text-cyan-400">●</span>}
+                      <button key={p.id} type="button" disabled={!p.available} onClick={() => p.available && onSelectSatelliteProduct?.(p.id)} className={`flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-[11px] ${satelliteProductId === p.id ? 'bg-sky-900/30 text-cyan-200' : 'text-slate-200 hover:bg-slate-800'} ${!p.available ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                        <span>{!p.available ? '⛔ ' : ''}{p.label}</span>{satelliteProductId === p.id && <span className="text-sky-400">●</span>}
                       </button>
                     ))}
                   </div>
@@ -313,7 +332,7 @@ export function WeatherWiseRadarCard({
                       const available = cap?.availability === 'WORKING' || cap?.availability === 'PARTIAL';
                       const reason = !available ? (cap?.unavailableReason || 'DATA UNAVAILABLE') : (cap?.availability === 'PARTIAL' ? cap.notes : undefined);
                       return (
-                        <div key={item.id} title={reason} className={`flex items-center justify-between rounded-md px-2.5 py-1.5 text-[11px] ${available ? 'bg-slate-800/60 text-slate-200' : 'bg-slate-900/40 text-slate-500'}`}>
+                        <div key={item.id} title={reason} className={`flex items-center justify-between rounded-md px-2.5 py-1.5 text-[11px] ${available ? 'bg-slate-800/60 text-slate-200' : 'bg-[#111827] text-slate-500'}`}>
                           <span>{!available ? '⛔ ' : cap?.availability === 'PARTIAL' ? '⚠ ' : '✓ '}{item.label}</span>
                           <span className={`text-[10px] font-bold ${available ? 'text-amber-300' : 'text-slate-500'}`}>{cap?.availability || 'UNAVAILABLE'}</span>
                         </div>
@@ -328,9 +347,9 @@ export function WeatherWiseRadarCard({
               <>
                 <div>
                   <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Model</div>
-                  <div className="max-h-40 overflow-auto rounded-lg border border-slate-800 bg-slate-900/40">
+                  <div className="max-h-40 overflow-auto rounded border border-slate-700 bg-[#0f172a]">
                     {modelOptions.map((m) => (
-                      <button key={m.id} type="button" onClick={() => onSelectModel?.(m.id)} className={`flex w-full items-center justify-between px-2.5 py-1.5 text-left text-[11px] border-b border-slate-800/60 last:border-b-0 ${modelId === m.id ? 'bg-cyan-500/15 text-cyan-200' : 'text-slate-200 hover:bg-slate-800'}`}>
+                      <button key={m.id} type="button" onClick={() => onSelectModel?.(m.id)} className={`flex w-full items-center justify-between px-2.5 py-1.5 text-left text-[11px] border-b border-slate-800/60 last:border-b-0 ${modelId === m.id ? 'bg-sky-900/30 text-cyan-200' : 'text-slate-200 hover:bg-slate-800'}`}>
                         <span>{m.status !== 'READY_NOW' ? '⛔ ' : ''}{m.label}</span>
                       </button>
                     ))}
@@ -351,7 +370,7 @@ export function WeatherWiseRadarCard({
               <div>
                 <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Composite Product</div>
                 {[{ id: 'ref', label: 'Regional/National Reflectivity' }, { id: 'max_ref', label: 'Max Reflectivity Swath' }].map((p) => (
-                  <button key={p.id} type="button" onClick={() => onSelectCompositeProduct?.(p.id)} className={`flex w-full rounded-md px-2.5 py-1.5 text-[11px] mb-1 ${compositeProduct === p.id ? 'bg-cyan-500/15 text-cyan-200' : 'bg-slate-800 text-slate-200 hover:bg-slate-700'}`}>{p.label}</button>
+                  <button key={p.id} type="button" onClick={() => onSelectCompositeProduct?.(p.id)} className={`flex w-full rounded-md px-2.5 py-1.5 text-[11px] mb-1 ${compositeProduct === p.id ? 'bg-sky-900/30 text-cyan-200' : 'bg-slate-800 text-slate-200 hover:bg-slate-700'}`}>{p.label}</button>
                 ))}
               </div>
             )}
@@ -366,7 +385,7 @@ export function WeatherWiseRadarCard({
         </div>
       )}
 
-      <div className="flex items-center gap-1.5 rounded-2xl border border-slate-700/80 bg-slate-950/94 px-2.5 py-2 shadow-2xl backdrop-blur-md">
+      <div className="flex items-center gap-1.5 rounded-2xl border border-slate-700/80 bg-[#0b1220] px-2.5 py-2 shadow-2xl">
         <div className="min-w-0 pr-1">
           <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500">{isRadarMode ? 'Radar Site' : mode}</div>
           <div className="text-xs font-black text-white leading-tight">{isRadarMode ? siteId : (isSatellite ? 'Satellite' : isModels ? 'Models' : isComposite ? 'Composite' : 'Outlooks')}</div>
@@ -377,11 +396,11 @@ export function WeatherWiseRadarCard({
         </div>
 
         {isRadarMode && (
-          <button type="button" onClick={onToggleInspection} title="Inspection / Sampling Tool" className={`rounded-lg px-2 py-1.5 text-[11px] font-bold border ${inspectionMode ? 'border-cyan-500 bg-cyan-500/15 text-cyan-200' : 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'}`}>◎</button>
+          <button type="button" onClick={onToggleInspection} title="Inspection / Sampling Tool" className={`rounded-lg px-2 py-1.5 text-[11px] font-bold border ${inspectionMode ? 'border-cyan-500 bg-sky-900/30 text-cyan-200' : 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'}`}>◎</button>
         )}
 
         <button type="button" onClick={onTogglePlay} title={isPlaying ? 'Pause' : 'Play'} className="rounded-lg bg-cyan-600 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-cyan-500">{isPlaying ? '❚❚' : '▶'}</button>
-        <button type="button" onClick={onTogglePlay} title="Loop" className={`rounded-lg border px-2 py-1.5 text-[11px] font-bold ${isPlaying ? 'border-cyan-500/60 bg-cyan-500/10 text-cyan-200' : 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'}`}>↻</button>
+        <button type="button" onClick={onTogglePlay} title="Loop" className={`rounded-lg border px-2 py-1.5 text-[11px] font-bold ${isPlaying ? 'border-sky-600 bg-sky-900/25 text-cyan-200' : 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'}`}>↻</button>
 
         {isRadarMode && (
           <button type="button" onClick={onToggleRadarPills} title="Radar Tower Pills Toggle" className={`rounded-lg border px-2 py-1.5 text-[11px] font-bold ${showRadarPills ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800'}`}>⌖</button>

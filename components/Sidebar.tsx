@@ -43,7 +43,7 @@ export function Sidebar({
   return (
     <aside className="flex h-full w-[250px] shrink-0 flex-col border-r border-slate-800 bg-[#0b1220] text-slate-100">
       <div className="border-b border-slate-800 px-2 py-1.5 flex items-center justify-between">
-        <div className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">Radar Products</div>
+        <div className="text-[10px] font-black uppercase tracking-[0.18em] text-sky-300">Radar Products</div>
         <button onClick={onOpenPal} className="text-[9px] font-bold text-amber-300 hover:text-amber-200" title="Load .pal color table">.PAL</button>
       </div>
       <div className="grid grid-cols-2 gap-1 p-1.5 border-b border-slate-800">
@@ -60,10 +60,10 @@ export function Sidebar({
               title={unavailable ? reason : partial ? `PARTIAL - ${reason}` : item.description}
               className={`rounded border px-1.5 py-1 text-left transition ${
                 active
-                  ? 'border-cyan-500/70 bg-cyan-900/50 text-cyan-100'
+                  ? 'border-cyan-500/70 bg-cyan-900/50 text-slate-100'
                   : unavailable
                   ? 'border-slate-800 bg-slate-950/40 text-slate-600 cursor-not-allowed'
-                  : 'border-slate-700 bg-slate-900/60 text-slate-300 hover:border-slate-500 hover:text-white'
+                  : 'border-slate-700 bg-[#111827] text-slate-300 hover:border-slate-500 hover:text-white'
               }`}
             >
               <div className="text-[11px] font-extrabold leading-none">{unavailable ? '⛔ ' : partial ? '⚠ ' : ''}{item.short}</div>
@@ -74,7 +74,7 @@ export function Sidebar({
       </div>
 
       <div className="border-b border-slate-800 px-2 py-1.5 flex items-center justify-between">
-        <div className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">Layers</div>
+        <div className="text-[10px] font-black uppercase tracking-[0.18em] text-sky-300">Layers</div>
         <button onClick={onOpenLayerManager} className="text-[9px] font-bold text-slate-400 hover:text-white">MANAGER</button>
       </div>
       <div className="border-b border-slate-800 p-1 space-y-0.5">
@@ -86,8 +86,8 @@ export function Sidebar({
       </div>
 
       <div className="border-b border-slate-800 px-2 py-1.5 flex items-center justify-between">
-        <div className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">Placefiles</div>
-        <button onClick={onOpenPlacefileManager} className="text-[9px] font-bold text-cyan-300 hover:text-cyan-200">EDIT ({enabledPf}/{placefiles.length})</button>
+        <div className="text-[10px] font-black uppercase tracking-[0.18em] text-sky-300">Placefiles</div>
+        <button onClick={onOpenPlacefileManager} className="text-[9px] font-bold text-sky-300 hover:text-cyan-200">EDIT ({enabledPf}/{placefiles.length})</button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-1">
         {placefiles.length === 0 ? (

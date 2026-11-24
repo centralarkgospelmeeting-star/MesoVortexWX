@@ -121,7 +121,7 @@ export function METARPanel({
         <div className="text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-400">
           METARs & Surface Obs
         </div>
-        <div className="mt-2 flex items-center gap-2 text-sm text-cyan-300">
+        <div className="mt-2 flex items-center gap-2 text-sm text-sky-300">
           <span>AviationWeather.gov</span>
           {status === 'loading' && <span className="text-[10px] text-slate-500">updating…</span>}
           {status === 'ok' && <span className="text-[10px] text-emerald-400">live</span>}
@@ -139,9 +139,9 @@ export function METARPanel({
         )}
 
         {obs.map((o) => (
-          <div key={o.station} className="rounded-xl border border-slate-700 bg-slate-900/50 p-3">
+          <div key={o.station} className="rounded-xl border border-slate-700 bg-[#111827] p-3">
             <div className="mb-1 flex items-center justify-between">
-              <span className="font-bold text-cyan-300">{o.station}</span>
+              <span className="font-bold text-sky-300">{o.station}</span>
               {o.time && (
                 <span className="text-[10px] text-slate-500">
                   {new Date(o.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
@@ -151,13 +151,13 @@ export function METARPanel({
             <div className="break-all text-slate-300">{o.text}</div>
             <div className="mt-2 grid grid-cols-1 gap-0.5 text-[10px] text-slate-400">
               <div>
-                Temp: <span className="text-cyan-300">{o.temp}</span>
+                Temp: <span className="text-sky-300">{o.temp}</span>
               </div>
               <div>
-                Dew: <span className="text-cyan-300">{o.dewpoint}</span>
+                Dew: <span className="text-sky-300">{o.dewpoint}</span>
               </div>
               <div>
-                Wind: <span className="text-cyan-300">{o.wind}</span>
+                Wind: <span className="text-sky-300">{o.wind}</span>
               </div>
             </div>
           </div>

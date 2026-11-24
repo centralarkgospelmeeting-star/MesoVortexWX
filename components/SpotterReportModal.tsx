@@ -41,7 +41,7 @@ export function SpotterReportModal({ currentCoords, onClose, onSubmit }: Props) 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#050a12] p-4">
       <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-950 p-6 shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <h3 className="text-base font-bold text-white">Submit Spotter Network Observation</h3>
@@ -102,7 +102,7 @@ export function SpotterReportModal({ currentCoords, onClose, onSubmit }: Props) 
             />
           </div>
 
-          <div className="rounded-lg bg-slate-900 p-2.5 font-mono text-[11px] text-cyan-400">
+          <div className="rounded-lg bg-slate-900 p-2.5 font-mono text-[11px] text-sky-400">
             Coordinates: {currentCoords[1].toFixed(4)}°N, {currentCoords[0].toFixed(4)}°W
           </div>
 

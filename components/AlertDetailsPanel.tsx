@@ -62,14 +62,14 @@ export function AlertDetailsPanel({ alert, context, onClose, onSelectAlert }: Pr
   if (!alert && !context) return null;
 
   return (
-    <div className="absolute left-3 top-14 bottom-14 z-40 w-[390px] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border border-slate-700 bg-slate-950/96 shadow-2xl backdrop-blur text-slate-100">
+    <div className="absolute left-3 top-14 bottom-14 z-40 w-[390px] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border border-slate-700 bg-[#0b1220] shadow-2xl text-slate-100">
       <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2">
-        <div className="text-[11px] font-black uppercase tracking-wider text-cyan-300">{context ? 'Location / Alert Details' : 'Alert Details'}</div>
+        <div className="text-[11px] font-black uppercase tracking-wider text-sky-300">{context ? 'Location / Alert Details' : 'Alert Details'}</div>
         <button type="button" onClick={onClose} className="rounded px-2 py-0.5 text-slate-400 hover:bg-slate-800 hover:text-white">✕</button>
       </div>
       <div className="max-h-[calc(100%-41px)] overflow-auto p-3 space-y-3">
         {context && (
-          <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-3">
+          <section className="rounded-xl border border-slate-800 bg-[#111827] p-3">
             <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Map Location Context</div>
             <div className="mt-1 text-xs text-slate-200 font-mono">{context.lat.toFixed(4)}, {context.lon.toFixed(4)}</div>
             <div className="mt-2 space-y-2">
@@ -83,7 +83,7 @@ export function AlertDetailsPanel({ alert, context, onClose, onSelectAlert }: Pr
                 )) : <div className="text-[10px] text-slate-500">No active warnings/watches/statements contain this point.</div>}
               </div>
               <div>
-                <div className="text-[10px] font-bold text-cyan-300 mb-1">Nearest radar sites</div>
+                <div className="text-[10px] font-bold text-sky-300 mb-1">Nearest radar sites</div>
                 {context.nearestRadarSites.length ? context.nearestRadarSites.map((s) => <div key={s.id} className="text-[10px] text-slate-300">{s.id} - {s.name} <span className="text-slate-500">({formatDistance(s.distanceM)})</span></div>) : <div className="text-[10px] text-slate-500">Unavailable.</div>}
               </div>
               <div>
@@ -107,7 +107,7 @@ export function AlertDetailsPanel({ alert, context, onClose, onSelectAlert }: Pr
         )}
 
         {alert && (
-          <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-3">
+          <section className="rounded-xl border border-slate-800 bg-[#111827] p-3">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Warning Details</div>

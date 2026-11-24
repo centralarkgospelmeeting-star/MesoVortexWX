@@ -96,7 +96,7 @@ export function SynchronizedQuadView({ radarSite, onClose }: QuadProps) {
       {/* Top Quad Header */}
       <div className="flex h-12 items-center justify-between border-b border-slate-800 bg-slate-950 px-4">
         <div className="flex items-center gap-3">
-          <span className="rounded bg-cyan-600/30 px-2 py-0.5 text-xs font-bold text-cyan-400">
+          <span className="rounded bg-cyan-600/30 px-2 py-0.5 text-xs font-bold text-sky-400">
             QUAD SYNCHRO VIEW
           </span>
           <span className="text-sm font-semibold text-white">
@@ -116,7 +116,7 @@ export function SynchronizedQuadView({ radarSite, onClose }: QuadProps) {
         {QUAD_PRODUCTS.map((prod, idx) => (
           <div key={prod.key} className="relative h-full w-full overflow-hidden rounded border border-slate-800">
             <div ref={containerRefs[idx]} className="h-full w-full" />
-            <div className="pointer-events-none absolute left-2 top-2 z-10 rounded bg-slate-950/80 px-2.5 py-1 text-xs font-bold tracking-wide text-cyan-300 backdrop-blur">
+            <div className="pointer-events-none absolute left-2 top-2 z-10 rounded bg-slate-950/80 px-2.5 py-1 text-xs font-bold tracking-wide text-sky-300">
               {prod.label}
             </div>
           </div>

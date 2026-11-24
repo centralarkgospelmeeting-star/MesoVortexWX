@@ -63,7 +63,7 @@ export function LayerManagerPanel({ open, onClose, state, onChange }: Props) {
   const groups = Array.from(new Set(DEFAULT_LAYERS.map((l) => l.group)));
 
   return (
-    <div className="pointer-events-auto absolute right-14 top-16 z-30 w-80 rounded-2xl border border-white/15 bg-slate-950/95 shadow-2xl backdrop-blur-xl">
+    <div className="pointer-events-auto absolute right-14 top-16 z-30 w-80 rounded-2xl border border-white/15 bg-[#0b1220] shadow-2xl">
       <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
         <div>
           <div className="text-sm font-bold text-slate-100">Layer Manager</div>

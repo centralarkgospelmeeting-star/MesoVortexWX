@@ -214,7 +214,7 @@ export function SkewTSoundingModal({ lat, lon, sounding: legacySounding, onClose
 
   if (state.status === 'loading' || state.status === 'idle') {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-3 backdrop-blur-xl">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#050a12] p-3">
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-slate-950 px-8 py-10">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent" />
           <p className="text-sm text-slate-300">Loading sounding…</p>
@@ -231,7 +231,7 @@ export function SkewTSoundingModal({ lat, lon, sounding: legacySounding, onClose
 
   if (state.status === 'error') {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-3 backdrop-blur-xl">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#050a12] p-3">
         <div className="max-w-sm rounded-2xl border border-red-500/30 bg-slate-950 px-6 py-8 text-center">
           <p className="text-sm font-semibold text-white">Sounding failed</p>
           <p className="mt-2 text-xs text-slate-400">{state.message}</p>
@@ -254,7 +254,7 @@ export function SkewTSoundingModal({ lat, lon, sounding: legacySounding, onClose
   const hodo = buildHodographPath(levels);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-3 backdrop-blur-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#050a12] p-3">
       <div className="flex h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-950 shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
@@ -312,8 +312,8 @@ export function SkewTSoundingModal({ lat, lon, sounding: legacySounding, onClose
               </div>
             </div>
             <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/30 p-2.5">
-              <div className="text-[10px] text-cyan-400/80">STP</div>
-              <div className="text-base font-bold text-cyan-300">{indices.stp || '—'}</div>
+              <div className="text-[10px] text-sky-400/80">STP</div>
+              <div className="text-base font-bold text-sky-300">{indices.stp || '—'}</div>
             </div>
           </div>
 

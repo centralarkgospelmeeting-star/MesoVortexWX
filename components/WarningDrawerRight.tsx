@@ -63,9 +63,9 @@ export function WarningDrawerRight({
   const floodCount = alerts.filter((a) => a.event.includes('Flood')).length;
 
   return (
-    <aside className="absolute right-0 top-7 bottom-0 z-40 w-80 sm:w-96 border-l border-slate-800 bg-slate-950/95 font-sans text-slate-100 shadow-2xl backdrop-blur-2xl flex flex-col select-none animate-slide-left">
+    <aside className="absolute right-0 top-7 bottom-0 z-40 w-80 sm:w-96 border-l border-slate-800 bg-[#0b1220] font-sans text-slate-100 shadow-2xl flex flex-col select-none animate-slide-left">
       {/* Top Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 p-4 bg-slate-900/70">
+      <div className="flex items-center justify-between border-b border-slate-800 p-4 bg-[#111827]">
         <div className="flex items-center gap-2">
           <span className="text-base font-extrabold text-white">ACTIVE ALERTS</span>
           <span className="rounded-full bg-red-600 px-2.5 py-0.5 text-[10px] font-black text-white shadow-sm">
@@ -82,7 +82,7 @@ export function WarningDrawerRight({
       </div>
 
       {/* Official Warning Notice (Section 10) */}
-      <div className="bg-slate-900/50 px-4 py-1.5 border-b border-slate-800/80 text-[10px] text-slate-400 flex items-center justify-between font-mono">
+      <div className="bg-[#111827] px-4 py-1.5 border-b border-slate-800/80 text-[10px] text-slate-400 flex items-center justify-between font-mono">
         <span>OFFICIAL NWS BULLETINS</span>
         <span className="text-emerald-400 flex items-center gap-1">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" /> LIVE STREAM
@@ -170,7 +170,7 @@ export function WarningDrawerRight({
 
               <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-400">
                 <span className="truncate max-w-[200px]">{item.areaDesc || 'Multiple Counties'}</span>
-                <span className="font-mono text-cyan-400 font-bold ml-1">{item.wfo || 'NWS'}</span>
+                <span className="font-mono text-sky-400 font-bold ml-1">{item.wfo || 'NWS'}</span>
               </div>
             </div>
           );

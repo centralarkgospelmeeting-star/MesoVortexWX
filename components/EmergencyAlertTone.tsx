@@ -132,12 +132,12 @@ export function EmergencyAlertTone() {
       {!alertsEnabled ? (
         <button
           onClick={enableAlerts}
-          className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-full border border-cyan-500/40 bg-slate-950/90 px-3.5 py-2 text-xs font-semibold text-cyan-300 shadow-2xl backdrop-blur transition hover:bg-cyan-950/60"
+          className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-full border border-sky-700 bg-[#0b1220] px-3.5 py-2 text-xs font-semibold text-sky-300 shadow-2xl transition hover:bg-cyan-950/60"
         >
           <span>🔔</span> Enable Live Warning Siren
         </button>
       ) : (
-        <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-full border border-emerald-500/40 bg-slate-950/90 px-3 py-1.5 text-[11px] font-medium text-emerald-400 shadow-xl backdrop-blur">
+        <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-full border border-emerald-500/40 bg-[#0b1220] px-3 py-1.5 text-[11px] font-medium text-emerald-400 shadow-xl">
           <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
           Warning Siren Armed
         </div>
@@ -145,14 +145,14 @@ export function EmergencyAlertTone() {
 
       {/* Flashing Banner If User Is Inside a Warning Polygon */}
       {activeWarningHeadline && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-xl border border-red-500 bg-red-600/95 px-5 py-3 text-white shadow-2xl backdrop-blur animate-bounce">
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-xl border border-red-500 bg-red-600/95 px-5 py-3 text-white shadow-2xl animate-bounce">
           <span className="text-xl">⚠️</span>
           <div className="text-xs font-bold uppercase tracking-wide">
             {activeWarningHeadline}
           </div>
           <button
             onClick={() => setActiveWarningHeadline(null)}
-            className="ml-3 rounded bg-black/30 px-2 py-0.5 text-xs text-white hover:bg-black/50"
+            className="ml-3 rounded bg-[#050a12]/80 px-2 py-0.5 text-xs text-white hover:bg-black/50"
           >
             Dismiss
           </button>

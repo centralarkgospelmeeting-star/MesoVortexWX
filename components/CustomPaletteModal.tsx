@@ -45,8 +45,8 @@ export function CustomPaletteModal({ onClose, onSavePalette }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
-      <div className="w-full max-w-md rounded-2xl border border-cyan-500/40 bg-slate-950 p-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#050a12] p-4">
+      <div className="w-full max-w-md rounded-2xl border border-sky-700 bg-slate-950 p-6 shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-2">
             <span className="text-xl">🎨</span>
@@ -120,8 +120,8 @@ export function CustomPaletteModal({ onClose, onSavePalette }: Props) {
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-            <div className="mb-1 text-[11px] font-bold text-cyan-300">Live Palette Preview Scale</div>
+          <div className="rounded-xl border border-slate-800 bg-[#111827] p-3">
+            <div className="mb-1 text-[11px] font-bold text-sky-300">Live Palette Preview Scale</div>
             <div
               className="h-4 w-full rounded border border-white/20"
               style={{

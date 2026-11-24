@@ -41,8 +41,8 @@ export function MainMenuDrawer({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex bg-black/60 backdrop-blur-sm animate-fade-in font-sans select-none">
-      <aside className="w-80 sm:w-88 border-r border-slate-800 bg-slate-950/98 p-5 font-sans text-slate-100 shadow-2xl backdrop-blur-2xl flex flex-col justify-between overflow-hidden animate-slide-right">
+    <div className="fixed inset-0 z-50 flex bg-[#050a12] animate-fade-in font-sans select-none">
+      <aside className="w-80 sm:w-88 border-r border-slate-800 bg-[#0b1220] p-5 font-sans text-slate-100 shadow-2xl flex flex-col justify-between overflow-hidden animate-slide-right">
         {/* Top Header */}
         <div className="space-y-4 flex-1 overflow-y-auto pr-1">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -55,7 +55,7 @@ export function MainMenuDrawer({
                 className="rounded-full shadow-sm"
               />
               <span className="font-black text-sm uppercase tracking-wider text-white">
-                MESO<span className="text-cyan-400">VORTEX</span> <span className="text-amber-400">WX</span>
+                MESO<span className="text-sky-400">VORTEX</span> <span className="text-amber-400">WX</span>
               </span>
             </div>
             <button
@@ -104,7 +104,7 @@ export function MainMenuDrawer({
 
           {/* SECTION 2: AI WEATHER SUITE */}
           <div className="space-y-1 text-xs border-t border-slate-800 pt-3">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-400 block mb-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-sky-400 block mb-1">
               AI Weather Intelligence
             </span>
 

@@ -19,7 +19,7 @@ const PROFILES: Array<{ id: AlertSoundProfile; label: string; desc: string }> = 
 
 function ColorRow({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
-    <label className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2">
+    <label className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-[#111827] px-3 py-2">
       <span className="text-[11px] font-semibold text-slate-200">{label}</span>
       <span className="flex items-center gap-2">
         <span className="text-[10px] font-mono text-slate-500">{value}</span>
@@ -41,7 +41,7 @@ async function fileToDataUrl(file: File): Promise<string> {
 function UploadRow({ label, value, onUpload, onClear }: { label: string; value?: string; onUpload: (dataUrl: string) => void; onClear: () => void }) {
   const ref = useRef<HTMLInputElement | null>(null);
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2">
+    <div className="rounded-lg border border-slate-800 bg-[#111827] px-3 py-2">
       <div className="flex items-center justify-between gap-2">
         <div>
           <div className="text-[11px] font-semibold text-slate-200">{label}</div>
@@ -70,8 +70,8 @@ export function AlertSettingsPanel({ settings, onChange, onClose }: Props) {
   const setCustomSounds = (patch: Partial<AlertSettings['customSounds']>) => set({ customSounds: { ...settings.customSounds, ...patch } });
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-3xl max-h-[85vh] overflow-hidden rounded-2xl border border-slate-700 bg-slate-950/96 text-slate-100 shadow-2xl">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#050a12] p-4">
+      <div className="w-full max-w-3xl max-h-[85vh] overflow-hidden rounded-2xl border border-slate-700 bg-[#0b1220] text-slate-100 shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
           <div>
             <div className="text-sm font-black text-white">Alert Settings</div>
@@ -85,7 +85,7 @@ export function AlertSettingsPanel({ settings, onChange, onClose }: Props) {
 
         <div className="grid max-h-[calc(85vh-56px)] overflow-auto p-4 gap-4 md:grid-cols-2">
           <section className="space-y-2">
-            <div className="text-[10px] font-black uppercase tracking-wider text-cyan-400">Alert Colors</div>
+            <div className="text-[10px] font-black uppercase tracking-wider text-sky-400">Alert Colors</div>
             <ColorRow label="Tornado Warning" value={settings.colors.tornadoWarning} onChange={(v) => setColors({ tornadoWarning: v })} />
             <ColorRow label="Severe Thunderstorm Warning" value={settings.colors.severeThunderstormWarning} onChange={(v) => setColors({ severeThunderstormWarning: v })} />
             <ColorRow label="Flash Flood Warning" value={settings.colors.flashFloodWarning} onChange={(v) => setColors({ flashFloodWarning: v })} />
@@ -95,14 +95,14 @@ export function AlertSettingsPanel({ settings, onChange, onClose }: Props) {
             <ColorRow label="Advisory Colors" value={settings.colors.advisory} onChange={(v) => setColors({ advisory: v })} />
             <ColorRow label="Statement Colors" value={settings.colors.statement} onChange={(v) => setColors({ statement: v })} />
 
-            <div className="text-[10px] font-black uppercase tracking-wider text-cyan-400 pt-2">Sidebar / Display</div>
-            <label className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 text-[11px] font-semibold text-slate-200"><span>Sidebar pinned by default</span><input type="checkbox" checked={settings.sidebarPinned} onChange={(e)=>set({sidebarPinned:e.target.checked})} /></label>
-            <label className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 text-[11px] font-semibold text-slate-200"><span>Sidebar auto-hide</span><input type="checkbox" checked={settings.sidebarAutoHide} onChange={(e)=>set({sidebarAutoHide:e.target.checked})} /></label>
-            <label className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 text-[11px] font-semibold text-slate-200 block">
+            <div className="text-[10px] font-black uppercase tracking-wider text-sky-400 pt-2">Sidebar / Display</div>
+            <label className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-[#111827] px-3 py-2 text-[11px] font-semibold text-slate-200"><span>Sidebar pinned by default</span><input type="checkbox" checked={settings.sidebarPinned} onChange={(e)=>set({sidebarPinned:e.target.checked})} /></label>
+            <label className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-[#111827] px-3 py-2 text-[11px] font-semibold text-slate-200"><span>Sidebar auto-hide</span><input type="checkbox" checked={settings.sidebarAutoHide} onChange={(e)=>set({sidebarAutoHide:e.target.checked})} /></label>
+            <label className="rounded-lg border border-slate-800 bg-[#111827] px-3 py-2 text-[11px] font-semibold text-slate-200 block">
               <div className="flex items-center justify-between"><span>Alert outline thickness</span><span className="text-slate-400">{settings.outlineThickness}px</span></div>
               <input type="range" min={1} max={6} step={0.5} value={settings.outlineThickness} onChange={(e)=>set({outlineThickness:Number(e.target.value)})} className="mt-2 w-full" />
             </label>
-            <label className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 text-[11px] font-semibold text-slate-200 block">
+            <label className="rounded-lg border border-slate-800 bg-[#111827] px-3 py-2 text-[11px] font-semibold text-slate-200 block">
               <div className="mb-1">Warning display behavior</div>
               <select value={settings.warningDisplayBehavior} onChange={(e)=>set({warningDisplayBehavior:e.target.value as any})} className="w-full rounded bg-slate-950 border border-slate-700 px-2 py-1 text-[11px]">
                 <option value="banner-and-sidebar">Banner and sidebar</option>
@@ -110,7 +110,7 @@ export function AlertSettingsPanel({ settings, onChange, onClose }: Props) {
                 <option value="banner-only">Banner only</option>
               </select>
             </label>
-            <label className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 text-[11px] font-semibold text-slate-200 block">
+            <label className="rounded-lg border border-slate-800 bg-[#111827] px-3 py-2 text-[11px] font-semibold text-slate-200 block">
               <div className="mb-1">Alert filtering</div>
               <select value={settings.filterMode} onChange={(e)=>set({filterMode:e.target.value as any})} className="w-full rounded bg-slate-950 border border-slate-700 px-2 py-1 text-[11px]">
                 <option value="all">All alerts</option>
@@ -119,7 +119,7 @@ export function AlertSettingsPanel({ settings, onChange, onClose }: Props) {
                 <option value="statements">Statements</option>
               </select>
             </label>
-            <label className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 text-[11px] font-semibold text-slate-200 block">
+            <label className="rounded-lg border border-slate-800 bg-[#111827] px-3 py-2 text-[11px] font-semibold text-slate-200 block">
               <div className="mb-1">Sidebar sorting</div>
               <select value={settings.sortMode} onChange={(e)=>set({sortMode:e.target.value as any})} className="w-full rounded bg-slate-950 border border-slate-700 px-2 py-1 text-[11px]">
                 <option value="priority">Highest priority first</option>
@@ -131,20 +131,20 @@ export function AlertSettingsPanel({ settings, onChange, onClose }: Props) {
 
           <section className="space-y-3">
             <div>
-              <div className="text-[10px] font-black uppercase tracking-wider text-cyan-400 mb-2">Notification Profiles</div>
+              <div className="text-[10px] font-black uppercase tracking-wider text-sky-400 mb-2">Notification Profiles</div>
               <div className="space-y-1">
                 {PROFILES.map((p) => (
-                  <button key={p.id} type="button" onClick={() => set({ soundProfile: p.id })} className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left ${settings.soundProfile===p.id?'border-cyan-500/60 bg-cyan-500/10':'border-slate-800 bg-slate-900/50 hover:bg-slate-900'}`}>
+                  <button key={p.id} type="button" onClick={() => set({ soundProfile: p.id })} className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left ${settings.soundProfile===p.id?'border-sky-600 bg-sky-900/25':'border-slate-800 bg-[#111827] hover:bg-slate-900'}`}>
                     <div><div className="text-[11px] font-bold text-slate-200">{p.label}</div><div className="text-[10px] text-slate-500">{p.desc}</div></div>
-                    {settings.soundProfile===p.id && <span className="text-cyan-400 text-xs">●</span>}
+                    {settings.soundProfile===p.id && <span className="text-sky-400 text-xs">●</span>}
                   </button>
                 ))}
               </div>
             </div>
 
             <div>
-              <div className="text-[10px] font-black uppercase tracking-wider text-cyan-400 mb-2">Spoken Alerts</div>
-              <div className="space-y-1 rounded-lg border border-slate-800 bg-slate-900/50 p-3 text-[11px]">
+              <div className="text-[10px] font-black uppercase tracking-wider text-sky-400 mb-2">Spoken Alerts</div>
+              <div className="space-y-1 rounded-lg border border-slate-800 bg-[#111827] p-3 text-[11px]">
                 <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={settings.speech.enabled} onChange={(e)=>setSpeech({enabled:e.target.checked})} />Spoken Alerts</label>
                 <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={settings.speech.warnings} onChange={(e)=>setSpeech({warnings:e.target.checked})} />Warning Speech</label>
                 <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={settings.speech.statements} onChange={(e)=>setSpeech({statements:e.target.checked})} />Statement Speech</label>
@@ -154,7 +154,7 @@ export function AlertSettingsPanel({ settings, onChange, onClose }: Props) {
             </div>
 
             <div>
-              <div className="text-[10px] font-black uppercase tracking-wider text-cyan-400 mb-2">Custom Audio</div>
+              <div className="text-[10px] font-black uppercase tracking-wider text-sky-400 mb-2">Custom Audio</div>
               <div className="space-y-2">
                 <UploadRow label="Global Alert Sound" value={settings.customSounds.global} onUpload={(v)=>setCustomSounds({global:v})} onClear={()=>setCustomSounds({global:undefined})} />
                 <UploadRow label="Tornado Warning Sound" value={settings.customSounds.tornadoWarning} onUpload={(v)=>setCustomSounds({tornadoWarning:v})} onClear={()=>setCustomSounds({tornadoWarning:undefined})} />
