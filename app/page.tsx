@@ -325,7 +325,7 @@ export default function MesoVortexWorkstation() {
     disableAudio,
     toggleAudioCategory,
     testTone,
-    banner,
+    banner: alertBanner,
     dismissBanner,
     lastUpdated,
     error: alertError,
@@ -334,42 +334,42 @@ export default function MesoVortexWorkstation() {
   } = useFastAlerts();
 
   useEffect(() => {
-    if (!banner) return;
+    if (!alertBanner) return;
     const speakEnabled = alertSettings.speech.enabled || warningVoiceEnabled;
     if (!speakEnabled) return;
-    if (spokenBannerIdRef.current === banner.id) return;
-    if (!shouldSpeakAlert(banner.event, banner.category, { ...alertSettings, speech: { ...alertSettings.speech, enabled: true } }) && !(warningVoiceEnabled && !alertSettings.speech.enabled)) return;
+    if (spokenBannerIdRef.current === alertBanner.id) return;
+    if (!shouldSpeakAlert(alertBanner.event, alertBanner.category, { ...alertSettings, speech: { ...alertSettings.speech, enabled: true } }) && !(warningVoiceEnabled && !alertSettings.speech.enabled)) return;
     // If using legacy toggle only, allow warning categories as before; prefer alertSettings rules.
     const allow = alertSettings.speech.enabled
-      ? shouldSpeakAlert(banner.event, banner.category, alertSettings)
+      ? shouldSpeakAlert(alertBanner.event, alertBanner.category, alertSettings)
       : warningVoiceEnabled;
     if (!allow) return;
-    spokenBannerIdRef.current = banner.id;
+    spokenBannerIdRef.current = alertBanner.id;
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     const text = alertSettings.speech.enabled
-      ? formatAlertSpeech(banner.event, banner.areaDesc, banner.senderName)
-      : (warningVoicePack === 'short' ? `${banner.event}.` : `The National Weather Service has issued a ${banner.event}${banner.areaDesc ? ` for ${banner.areaDesc}` : ''}.`);
+      ? formatAlertSpeech(alertBanner.event, alertBanner.areaDesc, alertBanner.senderName)
+      : (warningVoicePack === 'short' ? `${alertBanner.event}.` : `The National Weather Service has issued a ${alertBanner.event}${alertBanner.areaDesc ? ` for ${alertBanner.areaDesc}` : ''}.`);
     try {
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
       u.rate = 1; u.pitch = 1;
       window.speechSynthesis.speak(u);
     } catch {}
-  }, [banner, warningVoiceEnabled, warningVoicePack, alertSettings]);
+  }, [alertBanner, warningVoiceEnabled, warningVoicePack, alertSettings]);
 
   useEffect(() => {
-    if (!banner) return;
-    if (playedSoundBannerIdRef.current === banner.id) return;
+    if (!alertBanner) return;
+    if (playedSoundBannerIdRef.current === alertBanner.id) return;
     if (!profileAllowsTone(alertSettings.soundProfile)) return;
-    const custom = alertSoundForEvent(banner.event, alertSettings);
+    const custom = alertSoundForEvent(alertBanner.event, alertSettings);
     if (!custom) return;
-    playedSoundBannerIdRef.current = banner.id;
+    playedSoundBannerIdRef.current = alertBanner.id;
     try {
       const audio = new Audio(custom);
       audio.volume = 0.9;
       void audio.play().catch(() => {});
     } catch {}
-  }, [banner, alertSettings]);
+  }, [alertBanner, alertSettings]);
 
   const currentSite =
     RADAR_SITES.find((s) => s.id === radarSite) || RADAR_SITES[0];
@@ -497,7 +497,7 @@ export default function MesoVortexWorkstation() {
     else sorted.sort((a,b)=>alertPriority(b)-alertPriority(a) || Date.parse(b.sent||'')-Date.parse(a.sent||''));
     return sorted;
   }, [styledFilteredAlertsBase, alertSettings.filterMode, alertSettings.sortMode]);
-  const styledBanner = useMemo(() => (banner ? applyAlertSettingsToAlert(banner, alertSettings) : null), [banner, alertSettings]);
+  const styledBanner = useMemo(() => (alertBanner ? applyAlertSettingsToAlert(alertBanner, alertSettings) : null), [alertBanner, alertSettings]);
 
   // Alerts rendered on the map honor the category filters and visibility toggles.
   const mapAlertFeatures = useMemo(() => {
