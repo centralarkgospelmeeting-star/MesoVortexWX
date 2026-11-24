@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { RadarMap, BasemapType, ModeTab } from '../components/RadarMap';
 import { WeatherWiseRadarCard } from '../components/WeatherWiseRadarCard';
+import { ToolboxPanel } from '../components/map-tools/ToolboxPanel';
 import { WeatherWiseAlertsPanel } from '../components/WeatherWiseAlertsPanel';
 import { AlertSettingsPanel } from '../components/AlertSettingsPanel';
 import { RADAR_SITES } from '../lib/radar-config';
@@ -146,6 +147,14 @@ export default function MesoVortexWorkstation() {
   const [showFlashReflectivity, setShowFlashReflectivity] = useState(false);
   const [flashRange, setFlashRange] = useState<[number, number]>([60, 80]);
   const [inspectionMode, setInspectionMode] = useState(false);
+  const [toolMode, setToolMode] = useState<'none'|'measure-distance'|'measure-area'|'draw-point'|'draw-line'|'draw-polygon'|'annotate'>('none');
+  const [toolRevision, setToolRevision] = useState(0);
+  const [toolMeasurements, setToolMeasurements] = useState<Array<{id:string;kind:'distance'|'area';label:string;value:string;points:Array<[number,number]>}>>([]);
+  const [toolDrawings, setToolDrawings] = useState<Array<{id:string;kind:'point'|'line'|'polygon'|'annotation';label?:string;points:Array<[number,number]>;color:string}>>([]);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportStatus, setExportStatus] = useState('');
+  const [tripleMode, setTripleMode] = useState(false);
+  const [thirdPane, setThirdPane] = useState<PaneMode>('Composite');
   const spokenBannerIdRef = useRef<string | null>(null);
   const playedSoundBannerIdRef = useRef<string | null>(null);
 
@@ -355,6 +364,57 @@ export default function MesoVortexWorkstation() {
     return { lat, lon };
   };
 
+  const downloadBlob = (blob: Blob, name: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  };
+
+  const exportMapPng = async () => {
+    setExportBusy(true);
+    setExportStatus('');
+    try {
+      const canvas = document.querySelector('.maplibregl-canvas') as HTMLCanvasElement | null;
+      if (!canvas) throw new Error('Map canvas not found.');
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (!blob) throw new Error('Canvas export unavailable (possibly CORS-tainted tiles). No fake export generated.');
+      downloadBlob(blob, `mesovortexwx-${stamp}.png`);
+      setExportStatus('PNG exported from current map canvas. Includes only currently rendered real pixels.');
+    } catch (e: any) {
+      setExportStatus(`DATA UNAVAILABLE - PNG export failed: ${String(e?.message || e)}`);
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
+  const exportMapGif = async () => {
+    setExportBusy(true);
+    setExportStatus('');
+    try {
+      // Honest export: capture real currently-rendered frames only. No fabricated/interpolated frames.
+      const canvas = document.querySelector('.maplibregl-canvas') as HTMLCanvasElement | null;
+      if (!canvas) throw new Error('Map canvas not found.');
+      const frames: Blob[] = [];
+      const frameCount = Math.max(2, Math.min(12, playbackFrames.length > 1 ? Math.min(playbackFrames.length, 12) : 4));
+      for (let i = 0; i < frameCount; i++) {
+        if (playbackFrames.length > 1) setPlaybackIndex(i % playbackFrames.length);
+        await new Promise((r) => setTimeout(r, 450));
+        const b: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+        if (!b) throw new Error('Frame capture unavailable (possibly CORS-tainted). No fake GIF generated.');
+        frames.push(b);
+      }
+      // Without a verified GIF encoder dependency, export an honest frame bundle as individual PNGs is not ideal;
+      // instead fail explicitly rather than producing a fake GIF.
+      throw new Error('Animated GIF encoding is not verified in this build (no trusted encoder wired). Real PNG frames were capturable; no fake GIF generated.');
+    } catch (e: any) {
+      setExportStatus(`DATA UNAVAILABLE - GIF export: ${String(e?.message || e)}`);
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
   const runSearch = async (q: string) => {
     const query = q.trim();
     setSearchQuery(q);
@@ -479,6 +539,11 @@ export default function MesoVortexWorkstation() {
         syncGroup={syncGroup}
         playbackIndex={playbackIndex}
         playbackActive={isPlaying && playbackFrames.length > 1}
+        toolMode={toolMode}
+        toolRevision={toolRevision}
+        onToolMeasurementsChange={setToolMeasurements}
+        onToolDrawingsChange={setToolDrawings}
+        onToolModeChange={setToolMode}
       />
     </div>
   );
@@ -629,7 +694,16 @@ export default function MesoVortexWorkstation() {
                 Expert
               </button>
               <button
-                onClick={() => { setQuadMode((v) => !v); setExpertMode(false); }}
+                onClick={() => { setTripleMode((v)=>!v); setExpertMode(true); setQuadMode(false); }}
+                className={`rounded-full px-3 py-1 transition cursor-pointer flex items-center gap-1 ${
+                  tripleMode ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+                title="Three synchronized panes (Expert layout)"
+              >
+                Triple
+              </button>
+              <button
+                onClick={() => { setQuadMode((v) => !v); setExpertMode(false); setTripleMode(false); }}
                 className={`rounded-full px-3 py-1 transition cursor-pointer flex items-center gap-1 ${
                   quadMode ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
                 }`}
@@ -777,10 +851,22 @@ export default function MesoVortexWorkstation() {
             </div>
           </>
         ) : expertMode ? (
-          <div className="flex h-full w-full">
-            {renderPane(leftPane, product, satelliteSelection, 'left', 'expert-main', (mode) => setLeftPane(mode), undefined, (nextSat) => setSatelliteSelection(nextSat))}
-            <div className="w-px bg-slate-700/80 shadow-[0_0_0_1px_rgba(15,23,42,0.8)]" />
-            {renderPane(rightPane, product, satelliteSelection, 'right', 'expert-main', (mode) => setRightPane(mode), undefined, (nextSat) => setSatelliteSelection(nextSat))}
+          <div className={`flex h-full w-full ${tripleMode ? 'flex-col lg:flex-row' : ''}`}>
+            <div className={`min-h-0 min-w-0 ${tripleMode ? 'flex-1 border-b lg:border-b-0 lg:border-r border-slate-700/80' : 'flex-1'}`}>
+              {renderPane(leftPane, product, satelliteSelection, 'left', 'expert-main', (mode) => setLeftPane(mode), undefined, (nextSat) => setSatelliteSelection(nextSat))}
+            </div>
+            <div className={`${tripleMode ? 'hidden lg:block w-px bg-slate-700/80' : 'w-px bg-slate-700/80 shadow-[0_0_0_1px_rgba(15,23,42,0.8)]'}`} />
+            <div className={`min-h-0 min-w-0 ${tripleMode ? 'flex-1 border-b lg:border-b-0 lg:border-r border-slate-700/80' : 'flex-1'}`}>
+              {renderPane(rightPane, product, satelliteSelection, 'right', 'expert-main', (mode) => setRightPane(mode), undefined, (nextSat) => setSatelliteSelection(nextSat))}
+            </div>
+            {tripleMode && (
+              <>
+                <div className="hidden lg:block w-px bg-slate-700/80" />
+                <div className="min-h-0 min-w-0 flex-1">
+                  {renderPane(thirdPane, product, satelliteSelection, 'third', 'expert-main', (mode) => setThirdPane(mode), undefined, (nextSat) => setSatelliteSelection(nextSat))}
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <RadarMap
@@ -791,6 +877,11 @@ export default function MesoVortexWorkstation() {
             syncGroup={null}
             playbackIndex={playbackIndex}
             playbackActive={isPlaying && playbackFrames.length > 1}
+            toolMode={toolMode}
+            toolRevision={toolRevision}
+            onToolMeasurementsChange={setToolMeasurements}
+            onToolDrawingsChange={setToolDrawings}
+            onToolModeChange={setToolMode}
           />
         )}
       </div>
@@ -1171,11 +1262,28 @@ export default function MesoVortexWorkstation() {
                 </div>
                 <div className="mt-2"><div className="mb-1 flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-500"><span>3D Pitch/Tilt</span><span>{mapPitch}°</span></div><input type="range" min={0} max={60} step={5} value={mapPitch} onChange={(e)=>setMapPitch(Number(e.target.value))} className="w-full" /></div>
               </div>
-              <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-2 space-y-2">
-                <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">Expert / Quad</div>
-                <button type="button" onClick={()=>{ setExpertMode((v)=>!v); }} className={`w-full rounded-lg px-3 py-2 text-xs font-black ${expertMode?'bg-cyan-600 text-white':'bg-slate-800 text-slate-200'}`}>{expertMode?'Disable Expert Mode':'Enable Expert Mode'}</button>
-                <button type="button" onClick={()=>{ setQuadMode((v)=>!v); }} className={`w-full rounded-lg px-3 py-2 text-xs font-black ${quadMode?'bg-violet-600 text-white':'bg-slate-800 text-slate-200'}`}>{quadMode?'Disable Quad View':'Enable Quad View'}</button>
+                  <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-2 space-y-2">
+                <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">Expert / Multi-View</div>
+                <button type="button" onClick={()=>{ setExpertMode((v)=>!v); setQuadMode(false); }} className={`w-full rounded-lg px-3 py-2 text-xs font-black ${expertMode?'bg-cyan-600 text-white':'bg-slate-800 text-slate-200'}`}>{expertMode?'Disable Expert Mode':'Enable Expert Mode'}</button>
+                <button type="button" onClick={()=>{ setTripleMode((v)=>!v); setExpertMode(true); setQuadMode(false); }} className={`w-full rounded-lg px-3 py-2 text-xs font-black ${tripleMode?'bg-indigo-600 text-white':'bg-slate-800 text-slate-200'}`}>{tripleMode?'Disable Triple View':'Enable Triple View'}</button>
+                <button type="button" onClick={()=>{ setQuadMode((v)=>!v); setExpertMode(false); setTripleMode(false); }} className={`w-full rounded-lg px-3 py-2 text-xs font-black ${quadMode?'bg-violet-600 text-white':'bg-slate-800 text-slate-200'}`}>{quadMode?'Disable Quad View':'Enable Quad View'}</button>
+                <div className="text-[10px] text-slate-500">Dual/Triple use Expert panes with synced camera. Quad uses 4 synced panes. Product comparison is limited to verified available products per pane.</div>
               </div>
+
+              <ToolboxPanel
+                toolMode={toolMode}
+                onSetToolMode={setToolMode}
+                measurements={toolMeasurements}
+                drawings={toolDrawings}
+                onClearMeasurements={() => { setToolMeasurements([]); setToolRevision((v)=>v+1); }}
+                onClearDrawings={() => { setToolDrawings([]); setToolRevision((v)=>v+1); }}
+                onUndoDrawing={() => { setToolDrawings((d)=>d.slice(0,-1)); }}
+                onExportPng={exportMapPng}
+                onExportGif={exportMapGif}
+                exportBusy={exportBusy}
+                exportStatus={exportStatus}
+                canExport={true}
+              />
             </div>
           )}
         </div>

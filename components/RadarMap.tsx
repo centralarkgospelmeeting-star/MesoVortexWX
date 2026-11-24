@@ -11,6 +11,7 @@ import { ALERT_CATEGORY_META, formatAlertTime, type WeatherAlert } from '../lib/
 import { DEFAULT_SATELLITE_SELECTION, getSatelliteTileUrl, normalizeSatelliteSelection, type SatelliteSelection } from '../lib/satellite';
 import { getModelById } from '../lib/model-registry';
 import { getRadarRasterRenderConfig } from '../lib/radar/render-config';
+import { distanceMeters, formatArea, formatDistance, polygonAreaMeters2, polylineMeters, type LngLat } from '../lib/map-tools/geo';
 
 // Next/webpack bundles maplibre-gl, so the library's relative worker URL
 // (./maplibre-gl-worker.mjs) resolves to a chunk that does not exist. Serve the
@@ -21,6 +22,24 @@ maplibregl.setWorkerUrl('/maplibre/maplibre-gl-worker.mjs');
 export type ModeTab = 'Radar' | '3D Radar' | 'Composite' | 'Satellite' | 'Models' | 'Outlooks';
 export type BasemapType = 'satellite-streets' | 'custom-weather' | 'mapbox' | 'satellite';
 export type BasemapId = BasemapType;
+
+export type MapToolMode = 'none' | 'measure-distance' | 'measure-area' | 'draw-point' | 'draw-line' | 'draw-polygon' | 'annotate';
+
+export interface MapToolMeasurement {
+  id: string;
+  kind: 'distance' | 'area';
+  label: string;
+  value: string;
+  points: Array<[number, number]>;
+}
+
+export interface MapToolDrawing {
+  id: string;
+  kind: 'point' | 'line' | 'polygon' | 'annotation';
+  label?: string;
+  points: Array<[number, number]>;
+  color: string;
+}
 
 export interface SpotterPin {
   id: string;
@@ -95,6 +114,9 @@ export interface RadarMapProps {
   onSelectSite?: (siteId: string) => void;
   onSelectWarningFromMap?: (w: any) => void;
   onCrossSectionComplete?: (pointA: [number, number], pointB: [number, number]) => void;
+  onToolMeasurementsChange?: (items: MapToolMeasurement[]) => void;
+  onToolDrawingsChange?: (items: MapToolDrawing[]) => void;
+  onToolModeChange?: (mode: MapToolMode) => void;
   focusTarget?: { lat: number; lon: number; zoom?: number; ts?: number } | null;
   [key: string]: any;
 }
@@ -133,6 +155,14 @@ const SPOTTER_SOURCE_ID = 'mv-spotters-source';
 const SPOTTER_TRAIL_SOURCE_ID = 'mv-spotters-trail-source';
 const SPOTTER_TRAIL_LAYER_ID = 'mv-spotters-trail';
 const SPOTTER_HALO_LAYER_ID = 'mv-spotters-halo';
+const TOOL_SOURCE_ID = 'mv-tool-source';
+const TOOL_FILL_ID = 'mv-tool-fill';
+const TOOL_LINE_ID = 'mv-tool-line';
+const TOOL_POINT_ID = 'mv-tool-point';
+const TOOL_LABEL_ID = 'mv-tool-label';
+const TOOL_DRAFT_SOURCE_ID = 'mv-tool-draft-source';
+const TOOL_DRAFT_LINE_ID = 'mv-tool-draft-line';
+const TOOL_DRAFT_POINT_ID = 'mv-tool-draft-point';
 const HURRICANE_CONE_SOURCE_ID = 'mv-hurricane-cone-source';
 const HURRICANE_CONE_FILL_ID = 'mv-hurricane-cone-fill';
 const HURRICANE_CONE_LINE_ID = 'mv-hurricane-cone-line';
@@ -294,6 +324,8 @@ export function RadarMap({
   radarOpacity = 0.88,
   crossSectionMode = false,
   inspectionMode = false,
+  toolMode = 'none',
+  toolRevision = 0,
   showRangeRings = true,
   showRadarPills = true,
   showWarnings = true,
@@ -333,11 +365,22 @@ export function RadarMap({
   onSelectSite,
   onSelectWarningFromMap,
   onCrossSectionComplete,
+  onToolMeasurementsChange,
+  onToolDrawingsChange,
+  onToolModeChange,
   focusTarget = null,
 }: RadarMapProps) {
   const [scanIngesting, setScanIngesting] = useState(false);
   const [scanIngestDismissed, setScanIngestDismissed] = useState(false);
   const [inspectionResult, setInspectionResult] = useState<{ lat: number; lon: number; product: string; site: string; tilt: string; time: string; value: string; note?: string } | null>(null);
+  const [toolMeasurements, setToolMeasurements] = useState<MapToolMeasurement[]>([]);
+  const [toolDrawings, setToolDrawings] = useState<MapToolDrawing[]>([]);
+  const toolDraftRef = useRef<LngLat[]>([]);
+  const toolModeRef = useRef<MapToolMode>(toolMode);
+  const toolRevRef = useRef<number>(toolRevision);
+  const onToolMeasurementsChangeRef = useRef(onToolMeasurementsChange);
+  const onToolDrawingsChangeRef = useRef(onToolDrawingsChange);
+  const onToolModeChangeRef = useRef(onToolModeChange);
   const lastFrameRef = useRef<{ time: string; product: string; site: string; tilt: string }>({ time: '', product: '', site: '', tilt: '' });
   const isRadarMode = mode === 'Radar' || mode === '3D Radar';
   const radarVisualsEnabled = isRadarMode; // beam/sweep/towers/pills/range rings/scan-ingest visuals
@@ -365,6 +408,20 @@ export function RadarMap({
   useEffect(() => { if (liveOnly) setLiveOnlyDismissed(false); }, [liveOnly]);
   useEffect(() => { if (flashEnabled) setFlashDismissed(false); }, [flashEnabled]);
   useEffect(() => { if (!scanIngesting) return; setScanIngestDismissed(false); const t = setTimeout(() => setScanIngesting(false), 90000); return () => clearTimeout(t); }, [scanIngesting]);
+  useEffect(() => { toolModeRef.current = toolMode; }, [toolMode]);
+  useEffect(() => { onToolMeasurementsChangeRef.current = onToolMeasurementsChange; }, [onToolMeasurementsChange]);
+  useEffect(() => { onToolDrawingsChangeRef.current = onToolDrawingsChange; }, [onToolDrawingsChange]);
+  useEffect(() => { onToolModeChangeRef.current = onToolModeChange; }, [onToolModeChange]);
+  useEffect(() => {
+    // External revision bump signals clear/undo from UI.
+    if (toolRevRef.current === toolRevision) return;
+    toolRevRef.current = toolRevision;
+    toolDraftRef.current = [];
+    setToolMeasurements([]);
+    setToolDrawings([]);
+  }, [toolRevision]);
+  useEffect(() => { onToolMeasurementsChangeRef.current?.(toolMeasurements); }, [toolMeasurements]);
+  useEffect(() => { onToolDrawingsChangeRef.current?.(toolDrawings); }, [toolDrawings]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1904,6 +1961,131 @@ export function RadarMap({
       if (map.getSource(SWEEP_SOURCE_ID)) map.removeSource(SWEEP_SOURCE_ID);
     };
   }, [mapReady]);
+
+
+  const makeToolId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const toolColor = (kind: string) => kind === 'distance' ? '#22d3ee' : kind === 'area' ? '#a78bfa' : kind === 'annotation' ? '#fbbf24' : '#34d399';
+
+  const toolGeoJSON = useCallback(() => {
+    const features: any[] = [];
+    for (const m of toolMeasurements) {
+      if (m.kind === 'distance' && m.points.length >= 2) {
+        features.push({ type:'Feature', properties:{ kind:'distance', label:m.value, stroke:'#22d3ee', fill:'#22d3ee' }, geometry:{ type:'LineString', coordinates:m.points } });
+        features.push({ type:'Feature', properties:{ kind:'label', label:m.value }, geometry:{ type:'Point', coordinates:m.points[Math.floor(m.points.length/2)] } });
+      }
+      if (m.kind === 'area' && m.points.length >= 3) {
+        const ring = [...m.points, m.points[0]];
+        features.push({ type:'Feature', properties:{ kind:'area', label:m.value, stroke:'#a78bfa', fill:'#a78bfa' }, geometry:{ type:'Polygon', coordinates:[ring] } });
+        features.push({ type:'Feature', properties:{ kind:'label', label:m.value }, geometry:{ type:'Point', coordinates:m.points[0] } });
+      }
+    }
+    for (const d of toolDrawings) {
+      if (d.kind === 'point' && d.points[0]) {
+        features.push({ type:'Feature', properties:{ kind:'draw-point', label:d.label||'Point', stroke:d.color, fill:d.color }, geometry:{ type:'Point', coordinates:d.points[0] } });
+        if (d.label) features.push({ type:'Feature', properties:{ kind:'label', label:d.label }, geometry:{ type:'Point', coordinates:d.points[0] } });
+      }
+      if (d.kind === 'line' && d.points.length >= 2) {
+        features.push({ type:'Feature', properties:{ kind:'draw-line', label:d.label||'', stroke:d.color, fill:d.color }, geometry:{ type:'LineString', coordinates:d.points } });
+      }
+      if (d.kind === 'polygon' && d.points.length >= 3) {
+        features.push({ type:'Feature', properties:{ kind:'draw-polygon', label:d.label||'', stroke:d.color, fill:d.color }, geometry:{ type:'Polygon', coordinates:[[...d.points, d.points[0]]] } });
+      }
+      if (d.kind === 'annotation' && d.points[0]) {
+        features.push({ type:'Feature', properties:{ kind:'label', label:d.label||'Note' }, geometry:{ type:'Point', coordinates:d.points[0] } });
+      }
+    }
+    return { type:'FeatureCollection' as const, features };
+  }, [toolMeasurements, toolDrawings]);
+
+  const draftGeoJSON = useCallback(() => {
+    const pts = toolDraftRef.current;
+    const mode = toolModeRef.current;
+    const features: any[] = [];
+    if (pts.length) {
+      features.push(...pts.map(p => ({ type:'Feature', properties:{}, geometry:{ type:'Point', coordinates:p } })));
+      if ((mode === 'measure-distance' || mode === 'draw-line') && pts.length >= 2) {
+        features.push({ type:'Feature', properties:{}, geometry:{ type:'LineString', coordinates:pts } });
+      }
+      if ((mode === 'measure-area' || mode === 'draw-polygon') && pts.length >= 3) {
+        features.push({ type:'Feature', properties:{}, geometry:{ type:'Polygon', coordinates:[[...pts, pts[0]]] } });
+      }
+    }
+    return { type:'FeatureCollection' as const, features };
+  }, []);
+
+  const ensureToolLayers = useCallback((map: MapLibreMap) => {
+    if (!map.getSource(TOOL_SOURCE_ID)) map.addSource(TOOL_SOURCE_ID, { type:'geojson', data: toolGeoJSON() as any });
+    if (!map.getSource(TOOL_DRAFT_SOURCE_ID)) map.addSource(TOOL_DRAFT_SOURCE_ID, { type:'geojson', data: draftGeoJSON() as any });
+    if (!map.getLayer(TOOL_FILL_ID)) map.addLayer({ id: TOOL_FILL_ID, type:'fill', source: TOOL_SOURCE_ID, filter:['==',['geometry-type'],'Polygon'], paint:{ 'fill-color':['coalesce',['get','fill'],'#22d3ee'], 'fill-opacity':0.14 } });
+    if (!map.getLayer(TOOL_LINE_ID)) map.addLayer({ id: TOOL_LINE_ID, type:'line', source: TOOL_SOURCE_ID, filter:['any',['==',['geometry-type'],'Polygon'],['==',['geometry-type'],'LineString']], paint:{ 'line-color':['coalesce',['get','stroke'],'#22d3ee'], 'line-width':2.2, 'line-dasharray':[2,1.5] } });
+    if (!map.getLayer(TOOL_POINT_ID)) map.addLayer({ id: TOOL_POINT_ID, type:'circle', source: TOOL_SOURCE_ID, filter:['==',['get','kind'],'draw-point'], paint:{ 'circle-radius':5, 'circle-color':['coalesce',['get','fill'],'#34d399'], 'circle-stroke-color':'#0f172a', 'circle-stroke-width':1.5 } });
+    if (!map.getLayer(TOOL_LABEL_ID)) map.addLayer({ id: TOOL_LABEL_ID, type:'symbol', source: TOOL_SOURCE_ID, filter:['==',['get','kind'],'label'], layout:{ 'text-field':['get','label'], 'text-size':11, 'text-offset':[0,1.1], 'text-anchor':'top' }, paint:{ 'text-color':'#e2e8f0', 'text-halo-color':'#020617', 'text-halo-width':1.2 } });
+    if (!map.getLayer(TOOL_DRAFT_LINE_ID)) map.addLayer({ id: TOOL_DRAFT_LINE_ID, type:'line', source: TOOL_DRAFT_SOURCE_ID, filter:['any',['==',['geometry-type'],'Polygon'],['==',['geometry-type'],'LineString']], paint:{ 'line-color':'#f8fafc', 'line-width':2, 'line-dasharray':[1,1] } });
+    if (!map.getLayer(TOOL_DRAFT_POINT_ID)) map.addLayer({ id: TOOL_DRAFT_POINT_ID, type:'circle', source: TOOL_DRAFT_SOURCE_ID, filter:['==',['geometry-type'],'Point'], paint:{ 'circle-radius':4, 'circle-color':'#f8fafc', 'circle-stroke-color':'#0f172a', 'circle-stroke-width':1 } });
+  }, [draftGeoJSON, toolGeoJSON]);
+
+  const refreshToolLayers = useCallback(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    ensureToolLayers(map);
+    const src = map.getSource(TOOL_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+    const draft = map.getSource(TOOL_DRAFT_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+    src?.setData(toolGeoJSON() as any);
+    draft?.setData(draftGeoJSON() as any);
+  }, [draftGeoJSON, ensureToolLayers, mapReady, toolGeoJSON]);
+
+  useEffect(() => { refreshToolLayers(); }, [refreshToolLayers, toolMeasurements, toolDrawings, toolMode]);
+  useEffect(() => { toolDraftRef.current = []; refreshToolLayers(); }, [toolMode, refreshToolLayers]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const finishDraft = () => {
+      const mode = toolModeRef.current;
+      const pts = [...toolDraftRef.current];
+      if (mode === 'measure-distance' && pts.length >= 2) {
+        const meters = polylineMeters(pts);
+        setToolMeasurements(prev => [...prev, { id: makeToolId(), kind:'distance', label:`Distance ${prev.length+1}`, value: formatDistance(meters), points: pts }]);
+        toolDraftRef.current = [];
+      } else if (mode === 'measure-area' && pts.length >= 3) {
+        const m2 = polygonAreaMeters2(pts);
+        setToolMeasurements(prev => [...prev, { id: makeToolId(), kind:'area', label:`Area ${prev.length+1}`, value: formatArea(m2), points: pts }]);
+        toolDraftRef.current = [];
+      } else if (mode === 'draw-line' && pts.length >= 2) {
+        setToolDrawings(prev => [...prev, { id: makeToolId(), kind:'line', points: pts, color: toolColor('line') }]);
+        toolDraftRef.current = [];
+      } else if (mode === 'draw-polygon' && pts.length >= 3) {
+        setToolDrawings(prev => [...prev, { id: makeToolId(), kind:'polygon', points: pts, color: toolColor('polygon') }]);
+        toolDraftRef.current = [];
+      }
+      refreshToolLayers();
+    };
+    const onClick = (e: any) => {
+      const mode = toolModeRef.current;
+      if (!mode || mode === 'none' || inspectionMode) return;
+      const pt: LngLat = [e.lngLat.lng, e.lngLat.lat];
+      if (mode === 'draw-point') {
+        setToolDrawings(prev => [...prev, { id: makeToolId(), kind:'point', points:[pt], color: toolColor('point') }]);
+        return;
+      }
+      if (mode === 'annotate') {
+        const label = window.prompt('Annotation text (local map note):', 'Note');
+        if (label && label.trim()) setToolDrawings(prev => [...prev, { id: makeToolId(), kind:'annotation', label: label.trim().slice(0, 80), points:[pt], color: toolColor('annotation') }]);
+        return;
+      }
+      toolDraftRef.current = [...toolDraftRef.current, pt];
+      refreshToolLayers();
+    };
+    const onDblClick = (e: any) => { if (['measure-distance','measure-area','draw-line','draw-polygon'].includes(toolModeRef.current)) { e.preventDefault?.(); finishDraft(); } };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { toolDraftRef.current = []; refreshToolLayers(); onToolModeChangeRef.current?.('none'); }
+      if (e.key === 'Enter') finishDraft();
+    };
+    map.on('click', onClick);
+    map.on('dblclick', onDblClick);
+    window.addEventListener('keydown', onKey);
+    return () => { map.off('click', onClick); map.off('dblclick', onDblClick); window.removeEventListener('keydown', onKey); };
+  }, [mapReady, inspectionMode, refreshToolLayers]);
 
   // FastScan: poll real frames endpoint more frequently. Honest: this is faster polling of IEM, not a verified ultra-low-latency feed.
   useEffect(() => {
