@@ -2,13 +2,22 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import * as maplibregl from 'maplibre-gl';
-import type { Map as MapLibreMap, StyleSpecification } from 'maplibre-gl';
+import type { Map as MapLibreMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { RADAR_SITES } from '../lib/radar-config';
 import { computeMaxReflectivityCanvas, interpolateReflectivityFrames } from '../lib/max-reflectivity';
 import { registerSyncedMap } from '../lib/map-sync';
 import { ALERT_CATEGORY_META, formatAlertTime, type WeatherAlert } from '../lib/alerts/model';
-import { DEFAULT_SATELLITE_SELECTION, getSatelliteTileUrl, normalizeSatelliteSelection, type SatelliteSelection } from '../lib/satellite';
+import {
+  DEFAULT_SATELLITE_SELECTION,
+  getSatelliteProbeTile,
+  getSatelliteTileBounds,
+  getSatelliteTileMaxzoom,
+  getSatelliteTileUrl,
+  normalizeSatelliteSelection,
+  type SatelliteSelection,
+} from '../lib/satellite';
+import { buildBasemapStyle } from '../lib/map/basemap-styles';
 import { getModelById } from '../lib/model-registry';
 import { getRadarRasterRenderConfig } from '../lib/radar/render-config';
 import { distanceMeters, formatArea, formatDistance, polygonAreaMeters2, polylineMeters, type LngLat } from '../lib/map-tools/geo';
@@ -123,22 +132,11 @@ export interface RadarMapProps {
   [key: string]: any;
 }
 
-const MAPBOX_TOKEN =
-  process.env.NEXT_PUBLIC_MAPBOX_TOKEN ||
-  [
-    'pk',
-    'eyJ1IjoiY2VudHJhbGFya2dvc3BlbG1lZXRpbmctc3RhciIsImEiOiJjbXc1ZGZjNzkwN2hxMzBva2dmcWpveWdzIn0',
-    'hlPLiOdDno_E9_1aTxTqXA',
-  ].join('.');
-
-const CUSTOM_STYLE_ID =
-  process.env.NEXT_PUBLIC_MAPBOX_STYLE ||
-  'centralarkgospelmeeting-star/cmw9hk6p6001n01s1hch23fhb';
-
-const SATELLITE_STREETS_ID = 'mapbox/satellite-streets-v12';
-
 const RADAR_SOURCE_ID = 'mv-radar-source';
 const RADAR_LAYER_ID = 'mv-radar-layer';
+const SATELLITE_SOURCE_ID = 'mv-satellite-source';
+const SATELLITE_LAYER_ID = 'mv-satellite-layer';
+const RASTER_SOURCE_IDS = [RADAR_SOURCE_ID, SATELLITE_SOURCE_ID];
 const WARNINGS_SOURCE_ID = 'mv-warnings-source';
 const WARNINGS_FILL_ID = 'mv-warnings-fill';
 const WARNINGS_LINE_OUTER_ID = 'mv-warnings-line-outer';
@@ -195,31 +193,6 @@ const REPORT_CLUSTER_COUNT_ID = 'mv-reports-cluster-count';
 const REPORT_HALO_LAYER_ID = 'mv-reports-halo';
 const REPORT_POINT_LAYER_ID = 'mv-reports-point';
 const REPORT_ICON_LAYER_ID = 'mv-reports-icon';
-
-function buildMapboxRasterStyle(basemap: BasemapType | string): StyleSpecification {
-  const isCustom = basemap === 'custom-weather' || basemap === 'mapbox';
-  const stylePath = isCustom ? CUSTOM_STYLE_ID : SATELLITE_STREETS_ID;
-  const tileUrl = `https://api.mapbox.com/styles/v1/${stylePath}/tiles/512/{z}/{x}/{y}@2x?access_token=${MAPBOX_TOKEN}`;
-
-  return {
-    version: 8,
-    sources: {
-      'mapbox-basemap-source': {
-        type: 'raster',
-        tiles: [tileUrl],
-        tileSize: 512,
-        attribution: '© Mapbox © OpenStreetMap',
-      },
-    },
-    layers: [
-      {
-        id: 'mapbox-basemap-layer',
-        type: 'raster',
-        source: 'mapbox-basemap-source',
-      },
-    ],
-  };
-}
 
 /** Escape untrusted upstream text before it reaches MapLibre's setHTML. */
 function escapeHtml(value: unknown): string {
@@ -431,9 +404,12 @@ export function RadarMap({
     const map = mapRef.current;
     if (!map || !mapReady) return;
     try {
-      (map as any).setProjection({ type: projectionMode === 'globe' ? 'globe' : 'mercator' });
+      const current = map.getProjection?.();
+      if (current?.type !== projectionMode) {
+        (map as any).setProjection({ type: projectionMode });
+      }
     } catch {
-      // Older style/runtime may reject projection changes; keep mercator safely.
+      // Initial style already declares the projection; this is only a runtime fallback.
     }
   }, [mapReady, projectionMode]);
 
@@ -501,7 +477,7 @@ export function RadarMap({
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: buildMapboxRasterStyle(basemap),
+      style: buildBasemapStyle(basemap, projectionMode),
       center: [-98.5795, 39.8283],
       zoom: 4.4,
       attributionControl: { compact: true },
@@ -513,7 +489,7 @@ export function RadarMap({
     setMapReady(false);
 
     map.on('error', (e: any) => {
-      if (e?.sourceId && e.sourceId !== RADAR_SOURCE_ID) return;
+      if (e?.sourceId && !RASTER_SOURCE_IDS.includes(e.sourceId)) return;
       const status = e?.error?.status || e?.status;
       if (status !== 404 && status !== 503) return;
       if (radarSourceHealthyRef.current) return;
@@ -526,7 +502,7 @@ export function RadarMap({
     });
 
     map.on('sourcedata', (e: any) => {
-      if (e?.sourceId !== RADAR_SOURCE_ID) return;
+      if (!e?.sourceId || !RASTER_SOURCE_IDS.includes(e.sourceId)) return;
       if (!e?.isSourceLoaded) return;
       radarSourceHealthyRef.current = true;
       if (tileErrorTimerRef.current) {
@@ -1130,6 +1106,16 @@ export function RadarMap({
       }
       let tileUrl = '';
       let archiveAvailable = false;
+      let satelliteBounds: [number, number, number, number] | undefined;
+      let satelliteMaxzoom: number | undefined;
+
+      const isSatelliteMode = mode === 'Satellite';
+      const rasterSourceId = isSatelliteMode ? SATELLITE_SOURCE_ID : RADAR_SOURCE_ID;
+      const rasterLayerId = isSatelliteMode ? SATELLITE_LAYER_ID : RADAR_LAYER_ID;
+      const staleSourceId = isSatelliteMode ? RADAR_SOURCE_ID : SATELLITE_SOURCE_ID;
+      const staleLayerId = isSatelliteMode ? RADAR_LAYER_ID : SATELLITE_LAYER_ID;
+      if (map.getLayer(staleLayerId)) map.removeLayer(staleLayerId);
+      if (map.getSource(staleSourceId)) map.removeSource(staleSourceId);
 
       if (mode === 'Composite') {
         tileUrl = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png';
@@ -1139,32 +1125,35 @@ export function RadarMap({
         const sat = getSatelliteTileUrl(satSel);
         tileUrl = sat.url || '';
         archiveAvailable = false;
+        satelliteBounds = getSatelliteTileBounds(satSel.sector);
+        satelliteMaxzoom = getSatelliteTileMaxzoom(satSel.sector);
         if (!tileUrl) {
-          if (map.getLayer(RADAR_LAYER_ID)) map.removeLayer(RADAR_LAYER_ID);
-          if (map.getSource(RADAR_SOURCE_ID)) map.removeSource(RADAR_SOURCE_ID);
+          if (map.getLayer(rasterLayerId)) map.removeLayer(rasterLayerId);
+          if (map.getSource(rasterSourceId)) map.removeSource(rasterSourceId);
           setTileError(sat.unavailableReason ? `DATA UNAVAILABLE` : 'DATA UNAVAILABLE');
           setLiveOnly(false);
           return;
         }
         try {
-          const probe = await fetch(tileUrl.replace('{z}/{x}/{y}', '0/0/0'), { cache: 'no-store' });
+          const probeTile = getSatelliteProbeTile(satSel) || '0/0/0';
+          const probe = await fetch(tileUrl.replace('{z}/{x}/{y}', probeTile), { cache: 'no-store' });
           if (!probe.ok) {
-            if (map.getLayer(RADAR_LAYER_ID)) map.removeLayer(RADAR_LAYER_ID);
-            if (map.getSource(RADAR_SOURCE_ID)) map.removeSource(RADAR_SOURCE_ID);
+            if (map.getLayer(rasterLayerId)) map.removeLayer(rasterLayerId);
+            if (map.getSource(rasterSourceId)) map.removeSource(rasterSourceId);
             setTileError('DATA UNAVAILABLE');
             setLiveOnly(false);
             return;
           }
         } catch {
-          if (map.getLayer(RADAR_LAYER_ID)) map.removeLayer(RADAR_LAYER_ID);
-          if (map.getSource(RADAR_SOURCE_ID)) map.removeSource(RADAR_SOURCE_ID);
+          if (map.getLayer(rasterLayerId)) map.removeLayer(rasterLayerId);
+          if (map.getSource(rasterSourceId)) map.removeSource(rasterSourceId);
           setTileError('DATA UNAVAILABLE');
           setLiveOnly(false);
           return;
         }
       } else if (mode === 'Models' || mode === 'Outlooks') {
-        if (map.getLayer(RADAR_LAYER_ID)) map.removeLayer(RADAR_LAYER_ID);
-        if (map.getSource(RADAR_SOURCE_ID)) map.removeSource(RADAR_SOURCE_ID);
+        if (map.getLayer(rasterLayerId)) map.removeLayer(rasterLayerId);
+        if (map.getSource(rasterSourceId)) map.removeSource(rasterSourceId);
         setLiveOnly(false);
         setTileError(null);
         return;
@@ -1211,8 +1200,8 @@ export function RadarMap({
             { cache: 'no-store' }
           );
           if (!res.ok) {
-            if (map.getLayer(RADAR_LAYER_ID)) map.removeLayer(RADAR_LAYER_ID);
-            if (map.getSource(RADAR_SOURCE_ID)) map.removeSource(RADAR_SOURCE_ID);
+            if (map.getLayer(rasterLayerId)) map.removeLayer(rasterLayerId);
+            if (map.getSource(rasterSourceId)) map.removeSource(rasterSourceId);
             setTileError(`Product "${product.toUpperCase()}" is unavailable.`);
             setLiveOnly(false);
             return;
@@ -1230,8 +1219,8 @@ export function RadarMap({
             lastFrameRef.current = { time: String(last?.time || last?.label || ''), product, site: site.radarId, tilt };
           }
         } catch {
-          if (map.getLayer(RADAR_LAYER_ID)) map.removeLayer(RADAR_LAYER_ID);
-          if (map.getSource(RADAR_SOURCE_ID)) map.removeSource(RADAR_SOURCE_ID);
+          if (map.getLayer(rasterLayerId)) map.removeLayer(rasterLayerId);
+          if (map.getSource(rasterSourceId)) map.removeSource(rasterSourceId);
           setTileError(`Network error loading ${product.toUpperCase()}.`);
           setLiveOnly(false);
           return;
@@ -1263,10 +1252,9 @@ export function RadarMap({
       }
       setTileError(null);
 
-      const existingSource = map.getSource(RADAR_SOURCE_ID) as any;
+      const existingSource = map.getSource(rasterSourceId) as any;
       const beforeId = map.getLayer(WARNINGS_FILL_ID) ? WARNINGS_FILL_ID : undefined;
 
-      const isSatelliteMode = mode === 'Satellite';
       const renderConfig = getRadarRasterRenderConfig({ mode, product });
       const usesWmsBbox = tileUrl.includes('{bbox-epsg-3857}');
       const rasterPaint: any = {
@@ -1287,28 +1275,28 @@ export function RadarMap({
       if (!needsRebuild && existingSource && typeof existingSource.setTiles === 'function') {
         // Switch raster tiles without rebuilding the map or tearing down layers.
         existingSource.setTiles([tileUrl]);
-        if (!map.getLayer(RADAR_LAYER_ID)) {
+        if (!map.getLayer(rasterLayerId)) {
           map.addLayer(
             {
-              id: RADAR_LAYER_ID,
+              id: rasterLayerId,
               type: 'raster',
-              source: RADAR_SOURCE_ID,
+              source: rasterSourceId,
               paint: rasterPaint,
             },
             beforeId
           );
         } else {
-          map.setPaintProperty(RADAR_LAYER_ID, 'raster-opacity', rasterPaint['raster-opacity']);
-          map.setPaintProperty(RADAR_LAYER_ID, 'raster-resampling', rasterPaint['raster-resampling']);
-          map.setPaintProperty(RADAR_LAYER_ID, 'raster-fade-duration', rasterPaint['raster-fade-duration']);
-          map.setPaintProperty(RADAR_LAYER_ID, 'raster-saturation', rasterPaint['raster-saturation']);
-          map.setPaintProperty(RADAR_LAYER_ID, 'raster-contrast', rasterPaint['raster-contrast']);
-          map.setPaintProperty(RADAR_LAYER_ID, 'raster-brightness-min', rasterPaint['raster-brightness-min']);
-          map.setPaintProperty(RADAR_LAYER_ID, 'raster-brightness-max', rasterPaint['raster-brightness-max']);
+          map.setPaintProperty(rasterLayerId, 'raster-opacity', rasterPaint['raster-opacity']);
+          map.setPaintProperty(rasterLayerId, 'raster-resampling', rasterPaint['raster-resampling']);
+          map.setPaintProperty(rasterLayerId, 'raster-fade-duration', rasterPaint['raster-fade-duration']);
+          map.setPaintProperty(rasterLayerId, 'raster-saturation', rasterPaint['raster-saturation']);
+          map.setPaintProperty(rasterLayerId, 'raster-contrast', rasterPaint['raster-contrast']);
+          map.setPaintProperty(rasterLayerId, 'raster-brightness-min', rasterPaint['raster-brightness-min']);
+          map.setPaintProperty(rasterLayerId, 'raster-brightness-max', rasterPaint['raster-brightness-max']);
         }
       } else {
-        if (map.getLayer(RADAR_LAYER_ID)) map.removeLayer(RADAR_LAYER_ID);
-        if (map.getSource(RADAR_SOURCE_ID)) map.removeSource(RADAR_SOURCE_ID);
+        if (map.getLayer(rasterLayerId)) map.removeLayer(rasterLayerId);
+        if (map.getSource(rasterSourceId)) map.removeSource(rasterSourceId);
 
         const source: any = {
           type: 'raster',
@@ -1318,14 +1306,16 @@ export function RadarMap({
         // NCEP opengeo proxy uses WMS 1.1.1 EPSG:3857 {bbox-epsg-3857}.
         if (!usesWmsBbox) source.scheme = 'xyz';
         if (typeof renderConfig.maxzoom === 'number') source.maxzoom = renderConfig.maxzoom;
+        if (isSatelliteMode && typeof satelliteMaxzoom === 'number') source.maxzoom = satelliteMaxzoom;
+        if (isSatelliteMode && satelliteBounds) source.bounds = satelliteBounds;
 
-        map.addSource(RADAR_SOURCE_ID, source);
+        map.addSource(rasterSourceId, source);
 
         map.addLayer(
           {
-            id: RADAR_LAYER_ID,
+            id: rasterLayerId,
             type: 'raster',
-            source: RADAR_SOURCE_ID,
+            source: rasterSourceId,
             paint: rasterPaint,
           },
           beforeId

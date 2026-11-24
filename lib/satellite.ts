@@ -121,6 +121,67 @@ export function normalizeSatelliteSelection(sel: Partial<SatelliteSelection> | n
   return { bird, sector, productId };
 }
 
+/**
+ * Approximate geographic coverage used to stop MapLibre requesting GOES tiles
+ * outside the selected sector. These are deliberately broad: hiding valid
+ * imagery is worse than requesting a few transparent edge tiles.
+ * Mesoscale sectors move, so they intentionally have no fixed bounds.
+ */
+export function getSatelliteTileBounds(sector: SatelliteSector): [number, number, number, number] | undefined {
+  switch (sector) {
+    case 'conus':
+      return [-130, 20, -60, 55];
+    case 'fulldisk':
+      return [-170, -80, 10, 80];
+    case 'puertorico':
+      return [-90, 5, -50, 35];
+    case 'alaska':
+      return [-180, 45, -110, 75];
+    case 'mesoscale-1':
+    case 'mesoscale-2':
+    default:
+      return undefined;
+  }
+}
+
+/** A representative in-sector tile for availability probing, or null for moving mesoscale sectors. */
+export function getSatelliteProbeTile(sel: SatelliteSelection): string | null {
+  const selection = normalizeSatelliteSelection(sel);
+  const bounds = getSatelliteTileBounds(selection.sector);
+  if (!bounds) return null;
+
+  const z = selection.sector === 'fulldisk' ? 2 : selection.sector === 'alaska' ? 3 : 4;
+  const lng = (bounds[0] + bounds[2]) / 2;
+  const lat = (bounds[1] + bounds[3]) / 2;
+  const scale = 2 ** z;
+  const x = Math.max(0, Math.min(scale - 1, Math.floor(((lng + 180) / 360) * scale)));
+  const latRad = (lat * Math.PI) / 180;
+  const y = Math.max(
+    0,
+    Math.min(
+      scale - 1,
+      Math.floor(((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * scale)
+    )
+  );
+  return `${z}/${x}/${y}`;
+}
+
+/** Native-detail ceiling. Beyond this MapLibre overzooms existing tiles instead of asking IEM for upscaled tiles. */
+export function getSatelliteTileMaxzoom(sector: SatelliteSector): number {
+  switch (sector) {
+    case 'mesoscale-1':
+    case 'mesoscale-2':
+      return 11;
+    case 'fulldisk':
+    case 'alaska':
+      return 9;
+    case 'conus':
+    case 'puertorico':
+    default:
+      return 10;
+  }
+}
+
 export function getSatelliteTileUrl(sel: SatelliteSelection): { url: string | null; unavailableReason?: string } {
   const selection = normalizeSatelliteSelection(sel);
   const product = getSatelliteProductDef(selection.productId);
