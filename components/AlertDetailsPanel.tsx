@@ -94,7 +94,7 @@ function WarningCard({ alert, onSelect }: { alert: WeatherAlert; onSelect: (a: W
             <div className="text-[10px] text-slate-300 whitespace-pre-wrap">{alert.instruction || 'Unavailable from source.'}</div>
           </div>
           <Row label="Affected locations" value={alert.areaDesc || 'Unavailable'} />
-          <button type="button" onClick={() => onSelectAlert(alert)} className="mt-1 w-full rounded-full border border-slate-600 bg-[#111827] px-2 py-1 text-[10px] font-bold text-slate-200 hover:bg-slate-700">Open full alert details</button>
+          <button type="button" onClick={() => onSelect(alert)} className="mt-1 w-full rounded-full border border-slate-600 bg-[#111827] px-2 py-1 text-[10px] font-bold text-slate-200 hover:bg-slate-700">Open full alert details</button>
         </div>
       )}
     </div>
