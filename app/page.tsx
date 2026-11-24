@@ -1023,23 +1023,55 @@ export default function MesoVortexWorkstation() {
           ) : null}
         </div>
 
-        <div className="pointer-events-auto flex items-center gap-1 rounded-full bg-amber-400 px-1.5 py-1 shadow-xl border border-amber-300">
-          <button
-            onClick={() => setAlertsOpen((v) => !v)}
-            className="flex items-center gap-1.5 rounded-full px-2 py-0.5 text-slate-950 font-black text-xs hover:bg-amber-300 transition cursor-pointer"
-            title="Open Fast Alerts"
-          >
-            <span>{alerts.length || 0}</span>
-            <span>alerts</span>
-          </button>
-          <button
-            onClick={() => setAlertSettingsOpen(true)}
-            className="rounded-full px-2 py-0.5 text-[11px] font-black text-slate-900 hover:bg-amber-300 transition cursor-pointer"
-            title="Alert settings"
-            aria-label="Alert settings"
-          >
-            ⚙
-          </button>
+        <div className="pointer-events-auto relative">
+          <div className="flex items-center gap-1 rounded-full bg-amber-400 px-1.5 py-1 shadow-xl border border-amber-300">
+            <button
+              onClick={() => setAlertsOpen((v) => !v)}
+              className="flex items-center gap-1.5 rounded-full px-2 py-0.5 text-slate-950 font-black text-xs hover:bg-amber-300 transition cursor-pointer"
+              title="Open Fast Alerts"
+            >
+              <span>{alerts.length || 0}</span>
+              <span>alerts</span>
+            </button>
+            <button
+              onClick={() => setAlertSettingsOpen(true)}
+              className="rounded-full px-2 py-0.5 text-[11px] font-black text-slate-900 hover:bg-amber-300 transition cursor-pointer"
+              title="Alert settings"
+              aria-label="Alert settings"
+            >
+              ⚙
+            </button>
+          </div>
+
+          {alertsOpen && (
+            <WeatherWiseAlertsPanel
+              alerts={styledFilteredAlerts}
+              counts={alertCounts}
+              filters={alertFilters}
+              onToggleFilter={toggleAlertFilter}
+              onSetAllFilters={setAllAlertFilters}
+              audioEnabled={audioEnabled}
+              audioCategories={audioCategories}
+              onEnableAudio={enableAudio}
+              onDisableAudio={disableAudio}
+              onToggleAudioCategory={toggleAudioCategory}
+              onTestTone={testTone}
+              lastUpdated={lastUpdated}
+              error={alertError}
+              loading={alertsLoading}
+              onRefresh={refreshAlerts}
+              onClose={() => { if (!alertSettings.sidebarPinned) setAlertsOpen(false); }}
+              onOpenSettings={() => setAlertSettingsOpen(true)}
+              onSelectAlert={(a) => { setSelectedAlertId(a.id); setAlertsOpen(true); }}
+              selectedAlertId={selectedAlertId}
+              pinned={alertSettings.sidebarPinned}
+              onTogglePinned={() => setAlertSettings((s) => ({ ...s, sidebarPinned: !s.sidebarPinned }))}
+              sortMode={alertSettings.sortMode}
+              onChangeSortMode={(mode) => setAlertSettings((s) => ({ ...s, sortMode: mode }))}
+              filterMode={alertSettings.filterMode}
+              onChangeFilterMode={(mode) => setAlertSettings((s) => ({ ...s, filterMode: mode }))}
+            />
+          )}
         </div>
       </div>
 
@@ -1204,35 +1236,7 @@ export default function MesoVortexWorkstation() {
         </button>
       )}
 
-      {alertsOpen && (
-        <WeatherWiseAlertsPanel
-          alerts={styledFilteredAlerts}
-          counts={alertCounts}
-          filters={alertFilters}
-          onToggleFilter={toggleAlertFilter}
-          onSetAllFilters={setAllAlertFilters}
-          audioEnabled={audioEnabled}
-          audioCategories={audioCategories}
-          onEnableAudio={enableAudio}
-          onDisableAudio={disableAudio}
-          onToggleAudioCategory={toggleAudioCategory}
-          onTestTone={testTone}
-          lastUpdated={lastUpdated}
-          error={alertError}
-          loading={alertsLoading}
-          onRefresh={refreshAlerts}
-          onClose={() => { if (!alertSettings.sidebarPinned) setAlertsOpen(false); }}
-          onOpenSettings={() => setAlertSettingsOpen(true)}
-          onSelectAlert={(a) => { setSelectedAlertId(a.id); setAlertsOpen(true); }}
-          selectedAlertId={selectedAlertId}
-          pinned={alertSettings.sidebarPinned}
-          onTogglePinned={() => setAlertSettings((s) => ({ ...s, sidebarPinned: !s.sidebarPinned }))}
-          sortMode={alertSettings.sortMode}
-          onChangeSortMode={(mode) => setAlertSettings((s) => ({ ...s, sortMode: mode }))}
-          filterMode={alertSettings.filterMode}
-          onChangeFilterMode={(mode) => setAlertSettings((s) => ({ ...s, filterMode: mode }))}
-        />
-      )}
+
 
       {(selectedAlert || alertLocationContext) && (
         <AlertDetailsPanel

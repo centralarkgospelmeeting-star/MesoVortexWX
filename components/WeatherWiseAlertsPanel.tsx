@@ -75,7 +75,7 @@ export function WeatherWiseAlertsPanel({
   const total = alerts.length;
 
   return (
-    <div className="absolute right-0 top-0 bottom-0 z-40 flex w-[380px] max-w-[100vw] flex-col border-l border-slate-700 bg-[#0b1220] text-slate-100 shadow-2xl font-sans select-none">
+    <div className="absolute right-3 top-full mt-2 z-40 flex w-[380px] max-w-[calc(100vw-1.5rem)] max-h-[min(72vh,calc(100vh-5.5rem))] flex-col rounded-md border border-slate-700 bg-[#111827] text-slate-100 shadow-lg font-sans select-none">
       <div className="flex items-center justify-between border-b border-slate-800 p-4">
         <div className="flex items-center gap-2">
           <span className="text-base font-black text-white">Fast Alerts</span>
