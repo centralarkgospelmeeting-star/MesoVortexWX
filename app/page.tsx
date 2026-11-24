@@ -63,6 +63,7 @@ const PANE_MODES: PaneMode[] = ['Radar', 'Satellite', 'Composite', 'Models'];
 
 type UserPrefs = {
   projectionMode: 'mercator' | 'globe';
+  mapPitch: number;
   showRangeRings: boolean;
   radarOpacity: number;
   smoothing: boolean;
@@ -91,6 +92,7 @@ type UserPrefs = {
 
 const DEFAULT_PREFS: UserPrefs = {
   projectionMode: 'globe',
+  mapPitch: 60,
   showRangeRings: false,
   radarOpacity: 0.88,
   smoothing: false,
@@ -129,10 +131,12 @@ function loadUserPrefs(): UserPrefs {
     const dir = p.playbackDirection === 'backward' ? 'backward' : 'forward';
     const loopPauseMs = Number.isFinite(p.loopPauseMs) ? Math.max(0, Math.min(5000, Number(p.loopPauseMs))) : DEFAULT_PREFS.loopPauseMs;
     const proj = p.projectionMode === 'mercator' || p.projectionMode === 'globe' ? p.projectionMode : DEFAULT_PREFS.projectionMode;
+    const mapPitch = typeof p.mapPitch === 'number' && Number.isFinite(p.mapPitch) ? p.mapPitch : DEFAULT_PREFS.mapPitch;
     return {
       ...DEFAULT_PREFS,
       ...p,
       projectionMode: proj,
+      mapPitch,
       showRangeRings: typeof p.showRangeRings === 'boolean' ? p.showRangeRings : DEFAULT_PREFS.showRangeRings,
       radarOpacity: Number.isFinite(p.radarOpacity) ? Math.max(0.2, Math.min(1, Number(p.radarOpacity))) : DEFAULT_PREFS.radarOpacity,
       smoothing: typeof p.smoothing === 'boolean' ? p.smoothing : DEFAULT_PREFS.smoothing,
@@ -236,7 +240,7 @@ export default function MesoVortexWorkstation() {
   const [showSpotters, setShowSpotters] = useState(initialPrefs.showSpotters);
   const [showHurricanes, setShowHurricanes] = useState(initialPrefs.showHurricanes);
   const [projectionMode, setProjectionMode] = useState<'mercator' | 'globe'>(initialPrefs.projectionMode);
-  const [mapPitch, setMapPitch] = useState(0);
+  const [mapPitch, setMapPitch] = useState(initialPrefs.mapPitch);
   const [showSpotterReports, setShowSpotterReports] = useState(initialPrefs.showSpotterReports);
   const [spotterFilters, setSpotterFilters] = useState({
     tornado: true,
@@ -280,6 +284,7 @@ export default function MesoVortexWorkstation() {
       const prefs: UserPrefs = {
         ...DEFAULT_PREFS,
         projectionMode,
+        mapPitch,
         showRangeRings,
         radarOpacity,
         smoothing,
@@ -307,7 +312,7 @@ export default function MesoVortexWorkstation() {
       };
       localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(prefs));
     } catch {}
-  }, [projectionMode, showRangeRings, radarOpacity, smoothing, playbackSpeed, playbackDirection, loopPauseMs, favoriteProducts, product, radarSite, colorTable, showRadarPills, showLightning, showLSR, showWatches, showWarnings, showMCD, showSpotters, showSpotterReports, showStormTracks, showCounties, showTornadoAnalysis, showHurricanes, alertsOpen]);
+  }, [projectionMode, mapPitch, showRangeRings, radarOpacity, smoothing, playbackSpeed, playbackDirection, loopPauseMs, favoriteProducts, product, radarSite, colorTable, showRadarPills, showLightning, showLSR, showWatches, showWarnings, showMCD, showSpotters, showSpotterReports, showStormTracks, showCounties, showTornadoAnalysis, showHurricanes, alertsOpen]);
   const [alertSettings, setAlertSettings] = useState<AlertSettings>(DEFAULT_ALERT_SETTINGS);
   const [menuOpen, setMenuOpen] = useState(false);
   const [dataSourceFilter, setDataSourceFilter] = useState<'ALL' | DataSourceStatus>('ALL');
