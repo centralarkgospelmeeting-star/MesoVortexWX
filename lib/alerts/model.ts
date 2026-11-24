@@ -10,13 +10,18 @@ export type WeatherAlert = {
   urgency: string;
   certainty: string;
   headline: string;
+  description: string;
+  instruction: string;
   areaDesc: string;
   senderName: string;
   wfo: string;
   sent: string | null;
   effective: string | null;
+  onset: string | null;
+  ends: string | null;
   expires: string | null;
   eventCodes: string[];
+  parameters: Record<string, string[]>;
   color: string;
   lineColor: string;
   geometry: any | null;
@@ -165,6 +170,20 @@ function readEventCodes(value: unknown): string[] {
   return codes.slice(0, 12);
 }
 
+function readParameters(value: unknown): Record<string, string[]> {
+  if (!value || typeof value !== 'object') return {};
+  const out: Record<string, string[]> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (Array.isArray(v)) {
+      const arr = v.filter((x): x is string => typeof x === 'string' && x.trim().length > 0).slice(0, 20);
+      if (arr.length) out[k] = arr;
+    } else if (typeof v === 'string' && v.trim()) {
+      out[k] = [v];
+    }
+  }
+  return out;
+}
+
 function safeIso(value: unknown): string | null {
   if (typeof value !== 'string' || !value) return null;
   const parsed = Date.parse(value);
@@ -179,6 +198,8 @@ export function normalizeNwsAlert(feature: any): WeatherAlert | null {
   const category = classifyAlertEvent(event);
   const colors = alertColors(event, category);
   const id = String(feature?.id || properties.id || `${event}-${properties.sent || ''}-${properties.areaDesc || ''}`);
+  const description = String(properties.description || '');
+  const instruction = String(properties.instruction || '');
 
   return {
     id,
@@ -187,14 +208,19 @@ export function normalizeNwsAlert(feature: any): WeatherAlert | null {
     severity: String(properties.severity || 'Unknown'),
     urgency: String(properties.urgency || 'Unknown'),
     certainty: String(properties.certainty || 'Unknown'),
-    headline: String(properties.headline || properties.description || event).slice(0, 600),
+    headline: String(properties.headline || description || event).slice(0, 600),
+    description: description.slice(0, 12000),
+    instruction: instruction.slice(0, 6000),
     areaDesc: String(properties.areaDesc || ''),
     senderName: String(properties.senderName || ''),
     wfo: String(properties.senderName || '').replace(/^NWS\s+/i, '').slice(0, 40),
     sent: safeIso(properties.sent),
     effective: safeIso(properties.effective) || safeIso(properties.onset),
+    onset: safeIso(properties.onset),
+    ends: safeIso(properties.ends),
     expires: safeIso(properties.expires) || safeIso(properties.ends),
     eventCodes: readEventCodes(properties.eventCode),
+    parameters: readParameters(properties.parameters),
     color: colors.color,
     lineColor: colors.lineColor,
     geometry: feature?.geometry || null,

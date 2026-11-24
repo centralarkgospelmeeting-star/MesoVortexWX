@@ -29,6 +29,13 @@ type Props = {
   onClose: () => void;
   onOpenSettings?: () => void;
   onSelectAlert: (alert: WeatherAlert) => void;
+  selectedAlertId?: string | null;
+  pinned?: boolean;
+  onTogglePinned?: () => void;
+  sortMode?: 'priority' | 'newest' | 'expiring';
+  onChangeSortMode?: (mode: 'priority' | 'newest' | 'expiring') => void;
+  filterMode?: 'all' | 'warnings' | 'watches' | 'statements';
+  onChangeFilterMode?: (mode: 'all' | 'warnings' | 'watches' | 'statements') => void;
 };
 
 function shortTime(iso: string | null): string {
@@ -57,6 +64,13 @@ export function WeatherWiseAlertsPanel({
   onClose,
   onOpenSettings,
   onSelectAlert,
+  selectedAlertId = null,
+  pinned = false,
+  onTogglePinned,
+  sortMode = 'priority',
+  onChangeSortMode,
+  filterMode = 'all',
+  onChangeFilterMode,
 }: Props) {
   const total = alerts.length;
 
@@ -71,6 +85,9 @@ export function WeatherWiseAlertsPanel({
           {loading && <span className="text-[10px] font-semibold text-slate-400">syncing…</span>}
         </div>
         <div className="flex items-center gap-1">
+          {onTogglePinned && (
+            <button type="button" onClick={onTogglePinned} title={pinned ? 'Unpin sidebar' : 'Pin sidebar'} className={`rounded-full px-2 py-1 text-[11px] font-bold transition ${pinned ? 'bg-cyan-500/20 text-cyan-300' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>{pinned ? '📌 Pinned' : 'Pin'}</button>
+          )}
           {onOpenSettings && (
             <button
               type="button"
@@ -101,12 +118,25 @@ export function WeatherWiseAlertsPanel({
 
       <div className="space-y-3 border-b border-slate-800 p-3">
         <div className="flex flex-wrap items-center gap-1.5">
+          {(['all','warnings','watches','statements'] as const).map((mode) => (
+            <button key={mode} type="button" onClick={() => onChangeFilterMode?.(mode)} className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition ${filterMode===mode ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'bg-slate-800 text-slate-200 hover:bg-slate-700 border border-transparent'}`}>{mode === 'all' ? 'All' : mode[0].toUpperCase()+mode.slice(1)}</button>
+          ))}
+          <div className="ml-auto flex items-center gap-1">
+            <span className="text-[10px] text-slate-500">Sort</span>
+            <select value={sortMode} onChange={(e)=>onChangeSortMode?.(e.target.value as any)} className="rounded bg-slate-900 border border-slate-700 px-1.5 py-1 text-[10px] text-slate-200">
+              <option value="priority">Priority</option>
+              <option value="newest">Newest</option>
+              <option value="expiring">Expiring</option>
+            </select>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
           <button
             type="button"
             onClick={() => onSetAllFilters(true)}
             className="rounded-full bg-slate-800 px-2.5 py-1 text-[11px] font-bold text-slate-200 transition hover:bg-slate-700"
           >
-            All
+            Categories
           </button>
           {ALL_ALERT_CATEGORIES.map((category) => {
             const meta = ALERT_CATEGORY_META[category];
@@ -191,12 +221,13 @@ export function WeatherWiseAlertsPanel({
       <div className="flex-1 space-y-2 overflow-y-auto p-3">
         {alerts.map((alert) => {
           const meta = ALERT_CATEGORY_META[alert.category];
+          const selected = selectedAlertId === alert.id;
           return (
             <button
               type="button"
               key={alert.id}
               onClick={() => onSelectAlert(alert)}
-              className="w-full rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-left transition hover:border-slate-600 hover:bg-slate-900"
+              className={`w-full rounded-xl border p-3 text-left transition ${selected ? 'border-cyan-500/60 bg-cyan-500/10' : 'border-slate-800 bg-slate-900/60 hover:border-slate-600 hover:bg-slate-900'}`}
               style={{ borderLeft: `3px solid ${alert.color}` }}
             >
               <div className="flex items-center justify-between gap-2">

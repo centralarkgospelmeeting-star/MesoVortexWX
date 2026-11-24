@@ -94,6 +94,39 @@ export function AlertSettingsPanel({ settings, onChange, onClose }: Props) {
             <ColorRow label="Severe Thunderstorm Watch" value={settings.colors.severeThunderstormWatch} onChange={(v) => setColors({ severeThunderstormWatch: v })} />
             <ColorRow label="Advisory Colors" value={settings.colors.advisory} onChange={(v) => setColors({ advisory: v })} />
             <ColorRow label="Statement Colors" value={settings.colors.statement} onChange={(v) => setColors({ statement: v })} />
+
+            <div className="text-[10px] font-black uppercase tracking-wider text-cyan-400 pt-2">Sidebar / Display</div>
+            <label className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 text-[11px] font-semibold text-slate-200"><span>Sidebar pinned by default</span><input type="checkbox" checked={settings.sidebarPinned} onChange={(e)=>set({sidebarPinned:e.target.checked})} /></label>
+            <label className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 text-[11px] font-semibold text-slate-200"><span>Sidebar auto-hide</span><input type="checkbox" checked={settings.sidebarAutoHide} onChange={(e)=>set({sidebarAutoHide:e.target.checked})} /></label>
+            <label className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 text-[11px] font-semibold text-slate-200 block">
+              <div className="flex items-center justify-between"><span>Alert outline thickness</span><span className="text-slate-400">{settings.outlineThickness}px</span></div>
+              <input type="range" min={1} max={6} step={0.5} value={settings.outlineThickness} onChange={(e)=>set({outlineThickness:Number(e.target.value)})} className="mt-2 w-full" />
+            </label>
+            <label className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 text-[11px] font-semibold text-slate-200 block">
+              <div className="mb-1">Warning display behavior</div>
+              <select value={settings.warningDisplayBehavior} onChange={(e)=>set({warningDisplayBehavior:e.target.value as any})} className="w-full rounded bg-slate-950 border border-slate-700 px-2 py-1 text-[11px]">
+                <option value="banner-and-sidebar">Banner and sidebar</option>
+                <option value="sidebar-only">Sidebar only</option>
+                <option value="banner-only">Banner only</option>
+              </select>
+            </label>
+            <label className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 text-[11px] font-semibold text-slate-200 block">
+              <div className="mb-1">Alert filtering</div>
+              <select value={settings.filterMode} onChange={(e)=>set({filterMode:e.target.value as any})} className="w-full rounded bg-slate-950 border border-slate-700 px-2 py-1 text-[11px]">
+                <option value="all">All alerts</option>
+                <option value="warnings">Warnings</option>
+                <option value="watches">Watches</option>
+                <option value="statements">Statements</option>
+              </select>
+            </label>
+            <label className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 text-[11px] font-semibold text-slate-200 block">
+              <div className="mb-1">Sidebar sorting</div>
+              <select value={settings.sortMode} onChange={(e)=>set({sortMode:e.target.value as any})} className="w-full rounded bg-slate-950 border border-slate-700 px-2 py-1 text-[11px]">
+                <option value="priority">Highest priority first</option>
+                <option value="newest">Newest first</option>
+                <option value="expiring">Expiring soonest</option>
+              </select>
+            </label>
           </section>
 
           <section className="space-y-3">

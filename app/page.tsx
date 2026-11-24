@@ -13,8 +13,13 @@ import { DATA_SOURCES, DATA_SOURCE_STATUS_LABEL, type DataSourceStatus } from '.
 import {
   ALERT_CATEGORY_META,
   alertsToFeatureCollection,
+  alertPriority,
+  formatAlertTime,
+  alertExpiryLabel,
   type AlertCategory,
+  type WeatherAlert,
 } from '../lib/alerts/model';
+import { AlertDetailsPanel, buildLocationContext } from '../components/AlertDetailsPanel';
 import {
   DEFAULT_SATELLITE_SELECTION,
   SATELLITE_BIRDS,
@@ -257,6 +262,10 @@ export default function MesoVortexWorkstation() {
   const [alertsOpen, setAlertsOpen] = useState(initialPrefs.alertsOpen);
   const [alertSettingsOpen, setAlertSettingsOpen] = useState(false);
   const [favoriteProducts, setFavoriteProducts] = useState<string[]>(initialPrefs.favorites);
+  const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
+  const [locationContext, setLocationContext] = useState<{ lat: number; lon: number; ts: number } | null>(null);
+  const [spotterReportsForContext, setSpotterReportsForContext] = useState<any[]>([]);
+  const [mcdFeaturesForContext, setMcdFeaturesForContext] = useState<any[]>([]);
 
   useEffect(() => {
     try {
@@ -295,7 +304,11 @@ export default function MesoVortexWorkstation() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [dataSourceFilter, setDataSourceFilter] = useState<'ALL' | DataSourceStatus>('ALL');
 
-  useEffect(() => { setAlertSettings(loadAlertSettings()); }, []);
+  useEffect(() => {
+    const loaded = loadAlertSettings();
+    setAlertSettings(loaded);
+    if (loaded.sidebarPinned) setAlertsOpen(true);
+  }, []);
   useEffect(() => { saveAlertSettings(alertSettings); }, [alertSettings]);
 
   const {
@@ -469,7 +482,20 @@ export default function MesoVortexWorkstation() {
     }
   };
 
-  const styledFilteredAlerts = useMemo(() => filteredAlerts.map((a) => applyAlertSettingsToAlert(a, alertSettings)), [filteredAlerts, alertSettings]);
+  const styledAlerts = useMemo(() => alerts.map((a) => applyAlertSettingsToAlert(a, alertSettings)), [alerts, alertSettings]);
+  const styledFilteredAlertsBase = useMemo(() => filteredAlerts.map((a) => applyAlertSettingsToAlert(a, alertSettings)), [filteredAlerts, alertSettings]);
+  const styledFilteredAlerts = useMemo(() => {
+    const mode = alertSettings.filterMode;
+    let out = styledFilteredAlertsBase;
+    if (mode === 'warnings') out = out.filter((a) => a.category === 'warning');
+    else if (mode === 'watches') out = out.filter((a) => a.category === 'watch');
+    else if (mode === 'statements') out = out.filter((a) => a.category === 'statement' || a.category === 'advisory' || a.category === 'other');
+    const sorted = [...out];
+    if (alertSettings.sortMode === 'newest') sorted.sort((a,b)=>Date.parse(b.sent||'') - Date.parse(a.sent||''));
+    else if (alertSettings.sortMode === 'expiring') sorted.sort((a,b)=>Date.parse(a.expires||'9999') - Date.parse(b.expires||'9999'));
+    else sorted.sort((a,b)=>alertPriority(b)-alertPriority(a) || Date.parse(b.sent||'')-Date.parse(a.sent||''));
+    return sorted;
+  }, [styledFilteredAlertsBase, alertSettings.filterMode, alertSettings.sortMode]);
   const styledBanner = useMemo(() => (banner ? applyAlertSettingsToAlert(banner, alertSettings) : null), [banner, alertSettings]);
 
   // Alerts rendered on the map honor the category filters and visibility toggles.
@@ -481,6 +507,36 @@ export default function MesoVortexWorkstation() {
     });
     return alertsToFeatureCollection(visible);
   }, [styledFilteredAlerts, showWarnings, showWatches]);
+
+  const selectedAlert = useMemo(() => styledAlerts.find((a) => a.id === selectedAlertId) || null, [styledAlerts, selectedAlertId]);
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const [repRes, mcdRes] = await Promise.all([
+          fetch('/api/spotters/reports', { cache: 'no-store' }).catch(() => null),
+          fetch('/api/spc/mcd', { cache: 'no-store' }).catch(() => null),
+        ]);
+        if (cancelled) return;
+        if (repRes?.ok) {
+          const d = await repRes.json().catch(() => null);
+          setSpotterReportsForContext(Array.isArray(d?.features) ? d.features : []);
+        }
+        if (mcdRes?.ok) {
+          const d = await mcdRes.json().catch(() => null);
+          setMcdFeaturesForContext(Array.isArray(d?.features) ? d.features : []);
+        }
+      } catch {}
+    };
+    load();
+    const t = setInterval(load, 120000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, []);
+
+  const alertLocationContext = useMemo(() => {
+    if (!locationContext) return null;
+    return buildLocationContext(locationContext.lat, locationContext.lon, styledAlerts, RADAR_SITES as any, spotterReportsForContext, mcdFeaturesForContext);
+  }, [locationContext, styledAlerts, spotterReportsForContext, mcdFeaturesForContext]);
 
   const paneProps = {
     radarSite,
@@ -512,6 +568,16 @@ export default function MesoVortexWorkstation() {
     flashRange,
     inspectionMode,
     alertFeatures: mapAlertFeatures,
+    alertOutlineThickness: alertSettings.outlineThickness,
+    onSelectWarningFromMap: (w: any) => {
+      const id = String(w?.id || '');
+      if (id) { setSelectedAlertId(id); setAlertsOpen(true); }
+    },
+    onMapContextClick: (lat: number, lon: number) => {
+      setLocationContext({ lat, lon, ts: Date.now() });
+      if (alertSettings.sidebarAutoHide && !alertSettings.sidebarPinned) setAlertsOpen(false);
+      else setAlertsOpen(true);
+    },
     focusTarget,
     onSelectSite: (id: string) => setRadarSite(id),
   } as const;
@@ -1104,9 +1170,11 @@ export default function MesoVortexWorkstation() {
         <button type="button" onClick={() => setBottomBarOpen(true)} className="absolute bottom-14 left-3 z-30 rounded-2xl border border-slate-700 bg-slate-950/94 px-3 py-2 text-[11px] font-bold text-slate-200 shadow-xl backdrop-blur hover:bg-slate-900">Controls ▴</button>
       )}
 
-      {styledBanner && warningPopup && (
-        <div
-          className={`absolute left-1/2 top-24 z-50 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border bg-slate-950/95 p-4 shadow-2xl backdrop-blur ${warningFlash ? 'animate-pulse' : ''}`}
+      {styledBanner && warningPopup && alertSettings.warningDisplayBehavior !== 'sidebar-only' && (
+        <button
+          type="button"
+          onClick={() => { setSelectedAlertId(styledBanner.id); setAlertsOpen(true); }}
+          className={`absolute left-1/2 top-24 z-50 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border bg-slate-950/95 p-4 text-left shadow-2xl backdrop-blur ${warningFlash ? 'animate-pulse' : ''}`}
           style={{ borderColor: styledBanner.color }}
         >
           <div className="flex items-start justify-between gap-3">
@@ -1121,17 +1189,19 @@ export default function MesoVortexWorkstation() {
               <div className="mt-1 text-sm font-black text-white">{styledBanner.event}</div>
               <div className="mt-1 line-clamp-2 text-xs text-slate-300">{styledBanner.headline}</div>
               <div className="mt-1 truncate text-[11px] text-slate-500">{styledBanner.areaDesc}</div>
+              <div className="mt-2 text-[10px] font-bold text-cyan-300">Click for detailed warning panel</div>
             </div>
-            <button
-              type="button"
-              onClick={dismissBanner}
+            <span
+              onClick={(e) => { e.stopPropagation(); dismissBanner(); }}
               className="rounded-full p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
               aria-label="Dismiss alert banner"
+              role="button"
+              tabIndex={0}
             >
               ✕
-            </button>
+            </span>
           </div>
-        </div>
+        </button>
       )}
 
       {alertsOpen && (
@@ -1151,11 +1221,25 @@ export default function MesoVortexWorkstation() {
           error={alertError}
           loading={alertsLoading}
           onRefresh={refreshAlerts}
-          onClose={() => setAlertsOpen(false)}
+          onClose={() => { if (!alertSettings.sidebarPinned) setAlertsOpen(false); }}
           onOpenSettings={() => setAlertSettingsOpen(true)}
-          onSelectAlert={() => {
-            setAlertsOpen(true);
-          }}
+          onSelectAlert={(a) => { setSelectedAlertId(a.id); setAlertsOpen(true); }}
+          selectedAlertId={selectedAlertId}
+          pinned={alertSettings.sidebarPinned}
+          onTogglePinned={() => setAlertSettings((s) => ({ ...s, sidebarPinned: !s.sidebarPinned }))}
+          sortMode={alertSettings.sortMode}
+          onChangeSortMode={(mode) => setAlertSettings((s) => ({ ...s, sortMode: mode }))}
+          filterMode={alertSettings.filterMode}
+          onChangeFilterMode={(mode) => setAlertSettings((s) => ({ ...s, filterMode: mode }))}
+        />
+      )}
+
+      {(selectedAlert || alertLocationContext) && (
+        <AlertDetailsPanel
+          alert={selectedAlert}
+          context={alertLocationContext}
+          onClose={() => { setSelectedAlertId(null); setLocationContext(null); }}
+          onSelectAlert={(a) => { setSelectedAlertId(a.id); setAlertsOpen(true); }}
         />
       )}
 

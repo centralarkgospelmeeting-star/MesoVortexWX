@@ -25,11 +25,19 @@ export type AlertColorSettings = {
   statement: string;
 };
 
+export type AlertDisplayBehavior = 'banner-and-sidebar' | 'sidebar-only' | 'banner-only';
+
 export type AlertSettings = {
   colors: AlertColorSettings;
   soundProfile: AlertSoundProfile;
   speech: AlertSpeechSettings;
   customSounds: AlertCustomSounds;
+  sidebarPinned: boolean;
+  sidebarAutoHide: boolean;
+  outlineThickness: number;
+  filterMode: 'all' | 'warnings' | 'watches' | 'statements';
+  sortMode: 'priority' | 'newest' | 'expiring';
+  warningDisplayBehavior: AlertDisplayBehavior;
 };
 
 export const ALERT_SETTINGS_KEY = 'mesovortex_alert_settings_v1';
@@ -53,6 +61,12 @@ export const DEFAULT_ALERT_SETTINGS: AlertSettings = {
     watches: false,
   },
   customSounds: {},
+  sidebarPinned: false,
+  sidebarAutoHide: false,
+  outlineThickness: 2,
+  filterMode: 'all',
+  sortMode: 'priority',
+  warningDisplayBehavior: 'banner-and-sidebar',
 };
 
 export function loadAlertSettings(): AlertSettings {
@@ -61,6 +75,9 @@ export function loadAlertSettings(): AlertSettings {
     const raw = window.localStorage.getItem(ALERT_SETTINGS_KEY);
     if (!raw) return DEFAULT_ALERT_SETTINGS;
     const parsed = JSON.parse(raw);
+    const filterMode = ['all','warnings','watches','statements'].includes(parsed?.filterMode) ? parsed.filterMode : DEFAULT_ALERT_SETTINGS.filterMode;
+    const sortMode = ['priority','newest','expiring'].includes(parsed?.sortMode) ? parsed.sortMode : DEFAULT_ALERT_SETTINGS.sortMode;
+    const warningDisplayBehavior = ['banner-and-sidebar','sidebar-only','banner-only'].includes(parsed?.warningDisplayBehavior) ? parsed.warningDisplayBehavior : DEFAULT_ALERT_SETTINGS.warningDisplayBehavior;
     return {
       ...DEFAULT_ALERT_SETTINGS,
       ...parsed,
@@ -68,6 +85,12 @@ export function loadAlertSettings(): AlertSettings {
       speech: { ...DEFAULT_ALERT_SETTINGS.speech, ...(parsed?.speech || {}) },
       customSounds: { ...DEFAULT_ALERT_SETTINGS.customSounds, ...(parsed?.customSounds || {}) },
       soundProfile: parsed?.soundProfile || DEFAULT_ALERT_SETTINGS.soundProfile,
+      sidebarPinned: typeof parsed?.sidebarPinned === 'boolean' ? parsed.sidebarPinned : DEFAULT_ALERT_SETTINGS.sidebarPinned,
+      sidebarAutoHide: typeof parsed?.sidebarAutoHide === 'boolean' ? parsed.sidebarAutoHide : DEFAULT_ALERT_SETTINGS.sidebarAutoHide,
+      outlineThickness: Number.isFinite(parsed?.outlineThickness) ? Math.max(1, Math.min(6, Number(parsed.outlineThickness))) : DEFAULT_ALERT_SETTINGS.outlineThickness,
+      filterMode,
+      sortMode,
+      warningDisplayBehavior,
     } as AlertSettings;
   } catch {
     return DEFAULT_ALERT_SETTINGS;

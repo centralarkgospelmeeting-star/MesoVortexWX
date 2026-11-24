@@ -43,3 +43,34 @@ export function formatArea(m2: number): string {
   const acres = m2 / 4046.8564224;
   return `${sqMi.toFixed(sqMi < 10 ? 2 : 1)} sq mi / ${sqKm.toFixed(sqKm < 10 ? 2 : 1)} sq km / ${acres.toFixed(acres < 100 ? 1 : 0)} ac`;
 }
+
+export function pointInRing(point: LngLat, ring: number[][]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    const intersect = yi > point[1] !== yj > point[1] && point[0] < ((xj - xi) * (point[1] - yi)) / ((yj - yi) || 1e-12) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+export function pointInGeometry(point: LngLat, geometry: any): boolean {
+  if (!geometry) return false;
+  if (geometry.type === 'Polygon') {
+    const rings = geometry.coordinates || [];
+    if (!rings.length) return false;
+    if (!pointInRing(point, rings[0])) return false;
+    for (let i = 1; i < rings.length; i++) if (pointInRing(point, rings[i])) return false;
+    return true;
+  }
+  if (geometry.type === 'MultiPolygon') {
+    return (geometry.coordinates || []).some((poly: any[]) => {
+      if (!poly?.length) return false;
+      if (!pointInRing(point, poly[0])) return false;
+      for (let i = 1; i < poly.length; i++) if (pointInRing(point, poly[i])) return false;
+      return true;
+    });
+  }
+  return false;
+}

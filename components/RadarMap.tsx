@@ -113,6 +113,8 @@ export interface RadarMapProps {
   onNewScan?: (info: { latencySec: number; timestamp: string; site: string }) => void;
   onSelectSite?: (siteId: string) => void;
   onSelectWarningFromMap?: (w: any) => void;
+  onMapContextClick?: (lat: number, lon: number) => void;
+  alertOutlineThickness?: number;
   onCrossSectionComplete?: (pointA: [number, number], pointB: [number, number]) => void;
   onToolMeasurementsChange?: (items: MapToolMeasurement[]) => void;
   onToolDrawingsChange?: (items: MapToolDrawing[]) => void;
@@ -364,6 +366,8 @@ export function RadarMap({
   onNewScan,
   onSelectSite,
   onSelectWarningFromMap,
+  onMapContextClick,
+  alertOutlineThickness = 2,
   onCrossSectionComplete,
   onToolMeasurementsChange,
   onToolDrawingsChange,
@@ -471,6 +475,8 @@ export function RadarMap({
   const showWarningsRef = useRef(showWarnings);
   const alertFeaturesRef = useRef<any>(alertFeatures);
   const onSelectWarningRef = useRef(onSelectWarningFromMap);
+  const onMapContextClickRef = useRef(onMapContextClick);
+  const alertOutlineThicknessRef = useRef(alertOutlineThickness);
   const towerPillMarkersRef = useRef<maplibregl.Marker[]>([]);
   const showRadarPillsRef = useRef(showRadarPills);
   const selectedRadarSiteRef = useRef(radarSite);
@@ -608,12 +614,16 @@ export function RadarMap({
         paint: {
           'line-color': ['coalesce', ['get', 'color'], '#1d4ed8'],
           'line-width': [
-            'match',
-            ['get', 'category'],
-            'warning', 3.5,
-            'watch', 2.8,
-            'advisory', 2.2,
-            2,
+            '*',
+            alertOutlineThicknessRef.current,
+            [
+              'match',
+              ['get', 'category'],
+              'warning', 1.75,
+              'watch', 1.4,
+              'advisory', 1.1,
+              1,
+            ],
           ],
           'line-dasharray': [
             'match',
@@ -637,12 +647,16 @@ export function RadarMap({
         paint: {
           'line-color': ['coalesce', ['get', 'lineColor'], '#60a5fa'],
           'line-width': [
-            'match',
-            ['get', 'category'],
-            'warning', 1.8,
-            'watch', 1.2,
-            'advisory', 1,
-            0.8,
+            '*',
+            Math.max(0.5, alertOutlineThicknessRef.current * 0.5),
+            [
+              'match',
+              ['get', 'category'],
+              'warning', 1.8,
+              'watch', 1.2,
+              'advisory', 1,
+              0.8,
+            ],
           ],
           'line-opacity': 0.9,
         },
@@ -1884,6 +1898,19 @@ export function RadarMap({
     onSelectWarningRef.current = onSelectWarningFromMap;
   }, [onSelectWarningFromMap]);
 
+  useEffect(() => { onMapContextClickRef.current = onMapContextClick; }, [onMapContextClick]);
+  useEffect(() => {
+    alertOutlineThicknessRef.current = alertOutlineThickness;
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    if (map.getLayer(WARNINGS_LINE_OUTER_ID)) {
+      map.setPaintProperty(WARNINGS_LINE_OUTER_ID, 'line-width', ['*', alertOutlineThickness, ['match', ['get', 'category'], 'warning', 1.75, 'watch', 1.4, 'advisory', 1.1, 1]]);
+    }
+    if (map.getLayer(WARNINGS_LINE_INNER_ID)) {
+      map.setPaintProperty(WARNINGS_LINE_INNER_ID, 'line-width', ['*', Math.max(0.5, alertOutlineThickness * 0.5), ['match', ['get', 'category'], 'warning', 1.8, 'watch', 1.2, 'advisory', 1, 0.8]]);
+    }
+  }, [alertOutlineThickness, mapReady]);
+
   useEffect(() => {
     showRadarPillsRef.current = showRadarPills && radarVisualsEnabled;
     selectedRadarSiteRef.current = radarSite;
@@ -2062,7 +2089,12 @@ export function RadarMap({
     };
     const onClick = (e: any) => {
       const mode = toolModeRef.current;
-      if (!mode || mode === 'none' || inspectionMode) return;
+      if (!mode || mode === 'none' || inspectionMode) {
+        const warningFeatures = map.queryRenderedFeatures(e.point, { layers: [WARNINGS_FILL_ID].filter((id) => map.getLayer(id)) });
+        if (warningFeatures.length > 0) return;
+        if (onMapContextClickRef.current) onMapContextClickRef.current(e.lngLat.lat, e.lngLat.lng);
+        return;
+      }
       const pt: LngLat = [e.lngLat.lng, e.lngLat.lat];
       if (mode === 'draw-point') {
         setToolDrawings(prev => [...prev, { id: makeToolId(), kind:'point', points:[pt], color: toolColor('point') }]);
