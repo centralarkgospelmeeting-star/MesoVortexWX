@@ -49,6 +49,7 @@ type SpcDay = 'Day 1' | 'Day 2' | 'Day 3';
 type PaneMode = 'Radar' | 'Satellite' | 'Composite' | 'Models';
 
 const BASEMAP_STORAGE_KEY = 'mesovortex_basemap_preference';
+const PROJECTION_STORAGE_KEY = 'mesovortex_projection_mode';
 const PANE_MODES: PaneMode[] = ['Radar', 'Satellite', 'Composite', 'Models'];
 
 export default function MesoVortexWorkstation() {
@@ -131,7 +132,7 @@ export default function MesoVortexWorkstation() {
   const [showMCD, setShowMCD] = useState(true);
   const [showSpotters, setShowSpotters] = useState(true);
   const [showHurricanes, setShowHurricanes] = useState(true);
-  const [projectionMode, setProjectionMode] = useState<'mercator' | 'globe'>('mercator');
+  const [projectionMode, setProjectionMode] = useState<'mercator' | 'globe'>('globe');
   const [mapPitch, setMapPitch] = useState(0);
   const [showSpotterReports, setShowSpotterReports] = useState(true);
   const [spotterFilters, setSpotterFilters] = useState({
@@ -236,6 +237,10 @@ export default function MesoVortexWorkstation() {
         setBasemap(saved);
         setBasemapStatus(saved === 'satellite-streets' ? 'Satellite Streets (Default)' : 'Custom Weather');
       }
+      const savedProjection = localStorage.getItem(PROJECTION_STORAGE_KEY);
+      if (savedProjection === 'mercator' || savedProjection === 'globe') {
+        setProjectionMode(savedProjection);
+      }
       const spotterSaved = localStorage.getItem('mesovortex_spotters_enabled');
       if (spotterSaved === '0' || spotterSaved === '1') setShowSpotters(spotterSaved === '1');
       const reportsSaved = localStorage.getItem('mesovortex_spotter_reports_enabled');
@@ -302,6 +307,15 @@ export default function MesoVortexWorkstation() {
     setBasemapStatus(selected === 'satellite-streets' ? 'Satellite Streets (Default)' : 'Custom Weather');
     try {
       localStorage.setItem(BASEMAP_STORAGE_KEY, selected);
+    } catch {
+      // fallback
+    }
+  };
+
+  const handleSelectProjection = (selected: 'mercator' | 'globe') => {
+    setProjectionMode(selected);
+    try {
+      localStorage.setItem(PROJECTION_STORAGE_KEY, selected);
     } catch {
       // fallback
     }
@@ -1257,8 +1271,8 @@ export default function MesoVortexWorkstation() {
               <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-2">
                 <div className="mb-1 text-[10px] font-black uppercase tracking-wider text-slate-500">Map Projection</div>
                 <div className="grid grid-cols-2 gap-1">
-                  <button type="button" onClick={()=>setProjectionMode('mercator')} className={`rounded-lg px-2 py-1.5 text-[11px] font-black ${projectionMode==='mercator'?'bg-slate-100 text-slate-900':'bg-slate-800 text-slate-200'}`}>Flat Map</button>
-                  <button type="button" onClick={()=>setProjectionMode('globe')} className={`rounded-lg px-2 py-1.5 text-[11px] font-black ${projectionMode==='globe'?'bg-cyan-600 text-white':'bg-slate-800 text-slate-200'}`}>Globe</button>
+                  <button type="button" onClick={()=>handleSelectProjection('mercator')} className={`rounded-lg px-2 py-1.5 text-[11px] font-black ${projectionMode==='mercator'?'bg-slate-100 text-slate-900':'bg-slate-800 text-slate-200'}`}>Flat Map</button>
+                  <button type="button" onClick={()=>handleSelectProjection('globe')} className={`rounded-lg px-2 py-1.5 text-[11px] font-black ${projectionMode==='globe'?'bg-cyan-600 text-white':'bg-slate-800 text-slate-200'}`}>Globe</button>
                 </div>
                 <div className="mt-2"><div className="mb-1 flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-500"><span>3D Pitch/Tilt</span><span>{mapPitch}°</span></div><input type="range" min={0} max={60} step={5} value={mapPitch} onChange={(e)=>setMapPitch(Number(e.target.value))} className="w-full" /></div>
               </div>
