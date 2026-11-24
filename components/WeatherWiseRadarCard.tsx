@@ -100,6 +100,8 @@ export type Props = {
   onSelectSpcDay?: (day: string) => void;
   compositeProduct?: string;
   onSelectCompositeProduct?: (id: string) => void;
+  favorites?: string[];
+  onToggleFavorite?: (key: string) => void;
   [key: string]: any;
 };
 
@@ -142,12 +144,15 @@ export function WeatherWiseRadarCard({
   onSelectSpcDay,
   compositeProduct = 'ref',
   onSelectCompositeProduct,
+  favorites: favoritesProp,
+  onToggleFavorite,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
-  const [favorites, setFavorites] = useState<string[]>(() => {
+  const [favoritesLocal, setFavoritesLocal] = useState<string[]>(() => {
     if (typeof window === 'undefined') return ['ref', 'vel', 'srvel', 'cc'];
     try { const raw = localStorage.getItem(FAVORITES_KEY); const parsed = raw ? JSON.parse(raw) : null; return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : ['ref', 'vel', 'srvel', 'cc']; } catch { return ['ref', 'vel', 'srvel', 'cc']; }
   });
+  const favorites = favoritesProp ?? favoritesLocal;
   const isRadarMode = mode === 'Radar' || mode === '3D Radar';
   const isSatellite = mode === 'Satellite';
   const isModels = mode === 'Models';
@@ -155,7 +160,8 @@ export function WeatherWiseRadarCard({
   const isOutlooks = mode === 'Outlooks';
 
   const toggleFavorite = (key: string) => {
-    setFavorites((prev) => {
+    if (onToggleFavorite) { onToggleFavorite(key); return; }
+    setFavoritesLocal((prev) => {
       const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
       try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(next)); } catch {}
       return next;
