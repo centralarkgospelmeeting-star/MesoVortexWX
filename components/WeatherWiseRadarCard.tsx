@@ -15,46 +15,50 @@ type ProductItem = {
   warning?: string;
 };
 
-const PRODUCT_KEYS: Array<{ key: string; capId: string; short: string; label: string }> = [
-  { key: 'ref', capId: 'ref', short: 'REF', label: 'Super-Resolution Reflectivity' },
-  { key: 'vel', capId: 'vel', short: 'VEL', label: 'Super-Resolution Velocity' },
-  { key: 'srvel', capId: 'srvel', short: 'SRV', label: 'Storm-Relative Velocity' },
-  { key: 'cc', capId: 'cc', short: 'CC', label: 'Correlation Coefficient (CC)' },
-  { key: 'zdr', capId: 'zdr', short: 'ZDR', label: 'Differential Reflectivity (ZDR)' },
-  { key: 'kdp', capId: 'kdp', short: 'KDP', label: 'Specific Differential Phase (KDP)' },
-  { key: 'hhc', capId: 'hhc', short: 'HHC', label: 'Hydrometeor Classification (HCA)' },
-  { key: 'sw', capId: 'sw', short: 'SW', label: 'Spectrum Width' },
-  { key: 'norm_vel', capId: 'nrot', short: 'NROT', label: 'Normalized Rotation (NROT)' },
-  { key: 'azshear', capId: 'azshear', short: 'AZ', label: 'Azimuthal Shear' },
-  { key: 'rotation_tracks', capId: 'rotation_tracks', short: 'TRK', label: 'Rotation Tracks' },
-  { key: 'cross_section', capId: 'cross_section', short: 'XSEC', label: 'Reflectivity Cross Sections' },
-  { key: 'max_ref', capId: 'max_ref', short: 'MAX', label: 'Maximum Reflectivity' },
-  { key: 'min_cc', capId: 'min_cc', short: 'MCC', label: 'Minimum Correlation Coefficient' },
-  { key: 'tops', capId: 'tops', short: 'ET', label: 'Echo Tops' },
-  { key: 'vil', capId: 'vil', short: 'VIL', label: 'Vertically Integrated Liquid (VIL)' },
-  { key: 'vil_density', capId: 'vil_density', short: 'VILD', label: 'VIL Density' },
-  { key: 'hail_detection', capId: 'hail_detection', short: 'HAIL', label: 'Hail Detection and Hail Swaths' },
-  { key: 'mesh', capId: 'mesh', short: 'MESH', label: 'MESH' },
-  { key: 'gate_filter', capId: 'gate_filter', short: 'GATE', label: 'Reflectivity Gate Filtering' },
-  { key: 'qpe', capId: 'qpe', short: 'QPE', label: 'Precipitation Rate / QPE' },
-  { key: 'precip_rate', capId: 'precip_rate', short: 'RATE', label: 'Precipitation Rate' },
-  { key: 'rain_mix_snow', capId: 'rain_mix_snow', short: 'RMS', label: 'Rain/Mix/Snow Intensity' },
-  { key: 'storm_analysis', capId: 'storm_analysis', short: 'ANLZ', label: 'Radar-Derived Storm Analysis' },
-  { key: 'volume_scan', capId: 'volume_scan', short: 'VOL', label: 'Radar Volume Scans / Elevation-Angle Selection' },
-  { key: 'tilt_selection', capId: 'tilt_selection', short: 'TILT', label: 'Individual Radar Tilt Selection' },
+type RadarProductDef = { key: string; capId: string; short: string; label: string; category: 'Reflectivity' | 'Velocity' | 'Dual-Pol' | 'Severe Weather' | 'Derived Products' | 'Research' };
+
+const PRODUCT_KEYS: RadarProductDef[] = [
+  { key: 'ref', capId: 'ref', short: 'REF', label: 'Super-Resolution Reflectivity', category: 'Reflectivity' },
+  { key: 'max_ref', capId: 'max_ref', short: 'MAX', label: 'Maximum Reflectivity', category: 'Reflectivity' },
+  { key: 'vel', capId: 'vel', short: 'VEL', label: 'Super-Resolution Velocity', category: 'Velocity' },
+  { key: 'srvel', capId: 'srvel', short: 'SRV', label: 'Storm-Relative Velocity', category: 'Velocity' },
+  { key: 'sw', capId: 'sw', short: 'SW', label: 'Spectrum Width', category: 'Velocity' },
+  { key: 'cc', capId: 'cc', short: 'CC', label: 'Correlation Coefficient', category: 'Dual-Pol' },
+  { key: 'zdr', capId: 'zdr', short: 'ZDR', label: 'Differential Reflectivity', category: 'Dual-Pol' },
+  { key: 'kdp', capId: 'kdp', short: 'KDP', label: 'Specific Differential Phase', category: 'Dual-Pol' },
+  { key: 'hhc', capId: 'hhc', short: 'HHC', label: 'Hydrometeor Classification', category: 'Dual-Pol' },
+  { key: 'min_cc', capId: 'min_cc', short: 'MCC', label: 'Minimum Correlation Coefficient', category: 'Dual-Pol' },
+  { key: 'norm_vel', capId: 'nrot', short: 'NROT', label: 'Normalized Rotation', category: 'Severe Weather' },
+  { key: 'azshear', capId: 'azshear', short: 'AZ', label: 'Azimuthal Shear', category: 'Severe Weather' },
+  { key: 'rotation_tracks', capId: 'rotation_tracks', short: 'TRK', label: 'Rotation Tracks', category: 'Severe Weather' },
+  { key: 'hail_detection', capId: 'hail_detection', short: 'HAIL', label: 'Hail Detection / Swaths', category: 'Severe Weather' },
+  { key: 'mesh', capId: 'mesh', short: 'MESH', label: 'Maximum Estimated Size of Hail', category: 'Severe Weather' },
+  { key: 'tops', capId: 'tops', short: 'ET', label: 'Echo Tops', category: 'Derived Products' },
+  { key: 'vil', capId: 'vil', short: 'VIL', label: 'Vertically Integrated Liquid', category: 'Derived Products' },
+  { key: 'vil_density', capId: 'vil_density', short: 'VILD', label: 'VIL Density', category: 'Derived Products' },
+  { key: 'qpe', capId: 'qpe', short: 'QPE', label: 'Precipitation Rate / QPE', category: 'Derived Products' },
+  { key: 'precip_rate', capId: 'precip_rate', short: 'RATE', label: 'Precipitation Rate', category: 'Derived Products' },
+  { key: 'rain_mix_snow', capId: 'rain_mix_snow', short: 'RMS', label: 'Rain/Mix/Snow Intensity', category: 'Derived Products' },
+  { key: 'cross_section', capId: 'cross_section', short: 'XSEC', label: 'Reflectivity Cross Sections', category: 'Research' },
+  { key: 'gate_filter', capId: 'gate_filter', short: 'GATE', label: 'Reflectivity Gate Filtering', category: 'Research' },
+  { key: 'storm_analysis', capId: 'storm_analysis', short: 'ANLZ', label: 'Radar-Derived Storm Analysis', category: 'Research' },
+  { key: 'volume_scan', capId: 'volume_scan', short: 'VOL', label: 'Volume Scans / Elevation Selection', category: 'Research' },
+  { key: 'tilt_selection', capId: 'tilt_selection', short: 'TILT', label: 'Individual Tilt Selection', category: 'Research' },
 ];
 
-function buildRadarProducts(): ProductItem[] {
+const RADAR_CATEGORIES: Array<RadarProductDef['category']> = ['Reflectivity', 'Velocity', 'Dual-Pol', 'Severe Weather', 'Derived Products', 'Research'];
+
+function buildRadarProducts(): Array<ProductItem & { category: RadarProductDef['category'] }> {
   return PRODUCT_KEYS.map((p) => {
     const cap: RadarProductCapability | undefined = getRadarCapability(p.capId);
     const available = cap?.availability === 'WORKING' || cap?.availability === 'PARTIAL';
     const reason = !available ? (cap?.unavailableReason || 'DATA UNAVAILABLE - No verified source.') : undefined;
     const warning = cap?.availability === 'PARTIAL' ? (cap.dataHonesty.reason || 'PARTIAL - Limited verification or archive support.') : undefined;
-    return { key: p.key, short: p.short, label: p.label, available, reason, warning };
+    return { key: p.key, short: p.short, label: p.label, category: p.category, available, reason, warning };
   });
 }
 
-const RADAR_PRODUCTS: ProductItem[] = buildRadarProducts();
+const RADAR_PRODUCTS = buildRadarProducts();
 
 const TILTS = ['0.5', '0.9', '1.3', '1.8'];
 
@@ -144,10 +148,11 @@ export function WeatherWiseRadarCard({
   const isComposite = mode === 'Composite';
   const isOutlooks = mode === 'Outlooks';
 
-  const activeProduct = useMemo(
-    () => RADAR_PRODUCTS.find((p) => p.key === product) || { key: product, short: product.toUpperCase(), label: product, available: false, reason: 'DATA UNAVAILABLE - Unknown radar product.' },
-    [product]
-  );
+  const activeProduct = useMemo(() => {
+    const found = RADAR_PRODUCTS.find((p) => p.key === product);
+    if (found) return found;
+    return { key: product, short: product.toUpperCase(), label: product, category: 'Research' as const, available: false, reason: 'DATA UNAVAILABLE - Unknown radar product.', warning: undefined };
+  }, [product]);
 
   return (
     <div className="pointer-events-auto absolute bottom-14 left-3 z-30 font-sans text-slate-100 select-none">
@@ -162,17 +167,28 @@ export function WeatherWiseRadarCard({
               <>
                 <div>
                   <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Product</div>
-                  <div className="max-h-56 overflow-auto rounded-lg border border-slate-800 bg-slate-900/40">
-                    {RADAR_PRODUCTS.map((p) => {
-                      const active = p.key === product;
-                      const unavailable = !p.available;
+                  <div className="max-h-64 overflow-auto rounded-lg border border-slate-800 bg-slate-900/30">
+                    {RADAR_CATEGORIES.map((category) => {
+                      const items = RADAR_PRODUCTS.filter((p) => p.category === category);
+                      if (!items.length) return null;
                       return (
-                        <button key={p.key} type="button" disabled={unavailable} onClick={() => !unavailable && onSelectProduct(p.key)}
-                          title={unavailable ? p.reason : p.warning ? `PARTIAL: ${p.warning}` : p.label}
-                          className={`flex w-full items-center justify-between px-2.5 py-1.5 text-left text-[11px] border-b border-slate-800/60 last:border-b-0 ${active ? 'bg-cyan-500/15 text-cyan-200' : unavailable ? 'text-slate-500 cursor-not-allowed' : 'text-slate-200 hover:bg-slate-800'}`}>
-                          <span>{unavailable ? '⛔ ' : p.warning ? '⚠ ' : ''}{p.label}</span>
-                          <span className="text-[10px] text-slate-500">{p.short}</span>
-                        </button>
+                        <div key={category} className="border-b border-slate-800/80 last:border-b-0">
+                          <div className="px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-slate-500 bg-slate-950/60 sticky top-0">{category}</div>
+                          {items.map((p) => {
+                            const active = p.key === product;
+                            const unavailable = !p.available;
+                            const status = unavailable ? 'DATA UNAVAILABLE' : p.warning ? 'PARTIAL' : 'AVAILABLE';
+                            return (
+                              <button key={p.key} type="button" disabled={unavailable} onClick={() => !unavailable && onSelectProduct(p.key)}
+                                title={unavailable ? p.reason : p.warning ? `PARTIAL: ${p.warning}` : `${p.label} (${p.short})`}
+                                className={`grid w-full grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-2 px-2.5 py-1 text-left text-[11px] border-t border-slate-800/40 first:border-t-0 ${active ? 'bg-cyan-500/12 text-cyan-100' : unavailable ? 'text-slate-500 cursor-not-allowed' : 'text-slate-200 hover:bg-slate-800/70'}`}>
+                                <span className={`font-mono text-[10px] ${active ? 'text-cyan-300' : 'text-slate-400'}`}>{p.short}</span>
+                                <span className="truncate">{p.label}</span>
+                                <span className={`text-[9px] font-bold uppercase tracking-wide ${unavailable ? 'text-slate-500' : p.warning ? 'text-amber-300' : 'text-emerald-400'}`}>{status}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
                       );
                     })}
                   </div>
