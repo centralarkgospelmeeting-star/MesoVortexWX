@@ -581,8 +581,8 @@ export default function MesoVortexWorkstation() {
     },
     onMapContextClick: (lat: number, lon: number) => {
       setLocationContext({ lat, lon, ts: Date.now() });
+      // Do not force-open alerts panel during map interaction; details panel provides context.
       if (alertSettings.sidebarAutoHide && !alertSettings.sidebarPinned) setAlertsOpen(false);
-      else setAlertsOpen(true);
     },
     focusTarget,
     onSelectSite: (id: string) => setRadarSite(id),
