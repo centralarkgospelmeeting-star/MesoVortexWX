@@ -813,6 +813,8 @@ export default function MesoVortexWorkstation() {
           onChangeColorTable={(tbl) => setColorTable(tbl)}
           showFastScan={showFastScan}
           onToggleFastScan={() => setShowFastScan((v) => !v)}
+          showRangeRings={showRangeRings}
+          onToggleRangeRings={() => setShowRangeRings((v) => !v)}
           showRadarPills={showRadarPills}
           onToggleRadarPills={() => { setShowRadarPills((v) => !v); setShowRadarSites((v) => !v); }}
           inspectionMode={inspectionMode}

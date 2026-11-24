@@ -79,6 +79,8 @@ export type Props = {
   onChangeColorTable?: (table: string) => void;
   showFastScan?: boolean;
   onToggleFastScan?: () => void;
+  showRangeRings?: boolean;
+  onToggleRangeRings?: () => void;
   satelliteBird?: string;
   satelliteProductId?: string;
   onSelectSatelliteBird?: (bird: string) => void;
@@ -117,6 +119,8 @@ export function WeatherWiseRadarCard({
   onChangeColorTable,
   showFastScan = false,
   onToggleFastScan,
+  showRangeRings = true,
+  onToggleRangeRings,
   satelliteBird,
   satelliteProductId,
   onSelectSatelliteBird,
@@ -194,6 +198,7 @@ export function WeatherWiseRadarCard({
                   </div>
                 )}
                 <label className="flex items-center gap-2 text-[11px] text-slate-300"><input type="checkbox" checked={showFastScan} onChange={onToggleFastScan} />Fast Scan (ingest indicator)</label>
+                <label className="flex items-center gap-2 text-[11px] text-slate-300"><input type="checkbox" checked={showRangeRings} onChange={onToggleRangeRings} />Range rings</label>
               </>
             )}
 
