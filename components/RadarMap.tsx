@@ -1644,13 +1644,12 @@ export function RadarMap({
         const openReportPopup = (e: any) => {
           const props = e.features?.[0]?.properties;
           if (!props) return;
-          const when = props.timeIso ? new Date(props.timeIso).toISOString().replace('T', ' ').slice(0, 19) + ' UTC' : 'Unavailable';
-          const age = typeof props.ageMinutes === 'number' && props.ageMinutes >= 0 ? `${props.ageMinutes} min` : 'Unavailable';
+          const when = props.timeIso ? new Date(props.timeIso).toISOString().replace('T', ' ').slice(0, 16) + 'Z' : 'Unavailable';
+          const age = typeof props.ageMinutes === 'number' && props.ageMinutes >= 0 ? `${props.ageMinutes}m` : 'N/A';
           const coords = e.features?.[0]?.geometry?.coordinates;
           const lon = Array.isArray(coords) ? Number(coords[0]) : NaN;
           const lat = Array.isArray(coords) ? Number(coords[1]) : NaN;
           const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
-          const posText = hasCoords ? `${Math.abs(lat).toFixed(4)}°${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon).toFixed(4)}°${lon >= 0 ? 'E' : 'W'}` : 'Unavailable';
           let distanceText = 'Unavailable';
           if (hasCoords && Number.isFinite(site?.lat) && Number.isFinite(site?.lon)) {
             const toRad = (d: number) => (d * Math.PI) / 180;
@@ -1666,38 +1665,25 @@ export function RadarMap({
           const rawUrl = typeof props.url === 'string' ? props.url : '';
           const safeUrl = /^https:\/\/(www\.)?spotternetwork\.org\//i.test(rawUrl) || /^https:\/\/mesonet\.agron\.iastate\.edu\//i.test(rawUrl) ? rawUrl : null;
           const sourceLabel = escapeHtml(props.source || props.network || 'Unknown');
-          const row = (label: string, value: string) => `<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid rgba(255,255,255,0.08);font-size:11px;"><span style="color:#94a3b8;font-weight:600;">${label}</span><span style="color:#e2e8f0;font-weight:600;text-align:right;word-break:break-word;">${value}</span></div>`;
-          const linkLabel = /^https:\/\/(www\.)?spotternetwork\.org\//i.test(rawUrl) ? 'View on Spotter Network ↗' : /^https:\/\/mesonet\.agron\.iastate\.edu\//i.test(rawUrl) ? 'View NWS/LSR Source ↗' : 'View Source ↗';
-          const link = safeUrl ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:10px;font-size:11px;font-weight:700;color:#38bdf8;">${linkLabel}</a>` : '';
-          new maplibregl.Popup({ closeButton: true, offset: 12, maxWidth: '360px', className: 'mv-spotter-popup' })
+          const linkLabel = /^https:\/\/(www\.)?spotternetwork\.org\//i.test(rawUrl) ? 'Spotter Network ↗' : /^https:\/\/mesonet\.agron\.iastate\.edu\//i.test(rawUrl) ? 'NWS/LSR ↗' : 'Source ↗';
+          const link = safeUrl ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer" style="font-size:10px;font-weight:700;color:#38bdf8;text-decoration:none;">${linkLabel}</a>` : '';
+          const row = (label: string, value: string) => `<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-top:1px solid #243244;font-size:10px;"><span style="color:#94a3b8;">${label}</span><span style="color:#e2e8f0;font-weight:600;text-align:right;">${value}</span></div>`;
+          new maplibregl.Popup({ closeButton: true, offset: 10, maxWidth: '280px', className: 'mv-spotter-popup' })
             .setLngLat(e.lngLat)
-            .setHTML(`<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:rgba(8,14,24,0.96);color:#f8fafc;padding:0;border-radius:14px;min-width:300px;max-width:350px;box-shadow:0 20px 35px -5px rgba(0,0,0,0.85);border:1px solid rgba(239,68,68,0.35);overflow:hidden;backdrop-filter:blur(10px);">
-              <div style="background:linear-gradient(90deg,#7f1d1d,#b91c1c);padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.08);">
-                <div style="font-size:10px;font-weight:900;letter-spacing:0.08em;color:#fecaca;text-transform:uppercase;">REPORT</div>
-                <div style="font-size:18px;font-weight:800;color:#fff;margin-top:4px;line-height:1.2;">${reportType}</div>
-                <div style="font-size:11px;color:#fee2e2;margin-top:2px;">${name}</div>
+            .setHTML(`<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#111827;color:#f8fafc;border-radius:10px;min-width:240px;max-width:280px;border:1px solid #334155;overflow:hidden;">
+              <div style="background:#7f1d1d;padding:8px 10px;border-bottom:1px solid #334155;">
+                <div style="font-size:9px;font-weight:900;letter-spacing:0.08em;color:#fecaca;text-transform:uppercase;">Report</div>
+                <div style="font-size:13px;font-weight:800;color:#fff;line-height:1.2;margin-top:1px;">${reportType}</div>
+                <div style="font-size:10px;color:#fee2e2;">${name}</div>
               </div>
-              <div style="padding:12px 14px;max-height:340px;overflow-y:auto;">
-                <div style="background:#0f172a;border-radius:10px;padding:10px;margin-bottom:10px;border:1px solid rgba(255,255,255,0.08);">
-                  ${row('Reported', escapeHtml(when))}
-                  ${row('Age', escapeHtml(age))}
-                  ${row('Position', escapeHtml(posText))}
-                </div>
-                <div style="margin-bottom:10px;">
-                  <div style="font-size:10px;font-weight:800;color:#f87171;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Report</div>
-                  ${row('Report Type', reportType)}
-                  ${row('Source', sourceLabel)}
-                </div>
-                <div style="margin-bottom:10px;">
-                  <div style="font-size:10px;font-weight:800;color:#f87171;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Remarks</div>
-                  <div style="font-size:11px;color:#cbd5e1;line-height:1.5;background:#111827;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:8px;">${remarks}</div>
-                </div>
-                <div>
-                  <div style="font-size:10px;font-weight:800;color:#f87171;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Storm Context</div>
-                  ${row('Nearest Radar', escapeHtml(site?.radarId || 'Unavailable'))}
-                  ${row('Distance From Radar', escapeHtml(distanceText))}
-                </div>
-                ${link}
+              <div style="padding:8px 10px;">
+                ${row('Time', escapeHtml(when))}
+                ${row('Age', escapeHtml(age))}
+                ${row('Source', sourceLabel)}
+                ${row('Nearest Radar', escapeHtml(site?.radarId || 'Unavailable'))}
+                ${row('Distance', escapeHtml(distanceText))}
+                <div style="margin-top:6px;padding-top:6px;border-top:1px solid #243244;font-size:10px;color:#cbd5e1;line-height:1.35;max-height:72px;overflow:auto;">${remarks}</div>
+                ${link ? `<div style="margin-top:6px;">${link}</div>` : ''}
               </div>
             </div>`)
             .addTo(map);
@@ -1722,13 +1708,12 @@ export function RadarMap({
         const openSpotterPopup = (e: any) => {
           const props = e.features?.[0]?.properties;
           if (!props) return;
-          const when = props.timeIso ? new Date(props.timeIso).toISOString().replace('T', ' ').slice(0, 19) + ' UTC' : 'Unavailable';
-          const age = typeof props.ageMinutes === 'number' && props.ageMinutes >= 0 ? `${props.ageMinutes} min` : 'Unavailable';
+          const when = props.timeIso ? new Date(props.timeIso).toISOString().replace('T', ' ').slice(0, 16) + 'Z' : 'Unavailable';
+          const age = typeof props.ageMinutes === 'number' && props.ageMinutes >= 0 ? `${props.ageMinutes}m` : 'N/A';
           const coords = e.features?.[0]?.geometry?.coordinates;
           const lon = Array.isArray(coords) ? Number(coords[0]) : NaN;
           const lat = Array.isArray(coords) ? Number(coords[1]) : NaN;
           const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
-          const posText = hasCoords ? `${Math.abs(lat).toFixed(4)}°${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon).toFixed(4)}°${lon >= 0 ? 'E' : 'W'}` : 'Unavailable';
           let distanceText = 'Unavailable';
           if (hasCoords && Number.isFinite(site?.lat) && Number.isFinite(site?.lon)) {
             const toRad = (d: number) => (d * Math.PI) / 180;
@@ -1745,35 +1730,24 @@ export function RadarMap({
           const rawSpeed = typeof props.speedMph === 'number' ? props.speedMph : Number(props.speedMph);
           const speedText = movementKnown && Number.isFinite(rawSpeed) ? `${rawSpeed.toFixed(1)} mph` : 'Unavailable';
           const movementStatus = movementKnown ? (isMobile ? 'MOBILE' : 'STATIONARY') : 'MOVEMENT UNKNOWN';
-          const movementBadge = movementKnown ? `[${movementStatus}]` : '[MOVEMENT UNKNOWN]';
-          const movementBg = !movementKnown ? '#334155' : isMobile ? '#b91c1c' : '#1e293b';
-          const movementColor = isMobile ? '#fecaca' : '#cbd5e1';
-          const movementDetail = movementKnown
-            ? `${movementStatus} · ${speedText}`
-            : 'Movement unknown — waiting for a second position fix';
-          const row = (label: string, value: string) => `<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid rgba(255,255,255,0.08);font-size:11px;"><span style="color:#94a3b8;font-weight:600;">${label}</span><span style="color:#e2e8f0;font-weight:600;text-align:right;word-break:break-word;">${value}</span></div>`;
-          new maplibregl.Popup({ closeButton: true, offset: 12, maxWidth: '340px', className: 'mv-spotter-popup' })
+          const movementColor = !movementKnown ? '#94a3b8' : isMobile ? '#fca5a5' : '#cbd5e1';
+          const row = (label: string, value: string) => `<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-top:1px solid #243244;font-size:10px;"><span style="color:#94a3b8;">${label}</span><span style="color:#e2e8f0;font-weight:600;text-align:right;">${value}</span></div>`;
+          new maplibregl.Popup({ closeButton: true, offset: 10, maxWidth: '260px', className: 'mv-spotter-popup' })
             .setLngLat(e.lngLat)
-            .setHTML(`<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:rgba(8,14,24,0.96);color:#f8fafc;padding:14px;border-radius:12px;min-width:280px;max-width:330px;box-shadow:0 20px 35px -5px rgba(0,0,0,0.85);border:1px solid rgba(239,68,68,0.35);backdrop-filter:blur(10px);">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.08);">
-                <div style="display:flex;align-items:center;gap:6px;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 8px #ef4444;"></span><span style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;color:#f87171;">SPOTTER NETWORK</span></div>
-                <span style="font-size:9px;font-weight:800;background:${movementBg};color:${movementColor};padding:2px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;border:1px solid rgba(255,255,255,0.12);">${movementBadge}</span>
+            .setHTML(`<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#111827;color:#f8fafc;border-radius:10px;min-width:220px;max-width:260px;border:1px solid #334155;overflow:hidden;">
+              <div style="background:#1f2937;padding:8px 10px;border-bottom:1px solid #334155;">
+                <div style="font-size:9px;font-weight:900;letter-spacing:0.08em;color:#93c5fd;text-transform:uppercase;">Spotter</div>
+                <div style="font-size:13px;font-weight:800;color:#fff;line-height:1.2;margin-top:1px;">${name}</div>
+                <div style="font-size:10px;font-weight:700;color:${movementColor};">${movementStatus}</div>
               </div>
-              <div style="font-size:16px;font-weight:800;color:#ffffff;line-height:1.2;margin-bottom:2px;">${name}</div>
-              <div style="font-size:11px;color:#94a3b8;margin-bottom:8px;">Live spotter position</div>
-              <div style="background:#0f172a;border-radius:8px;padding:10px;margin:8px 0;border:1px solid rgba(255,255,255,0.08);">
-                <div style="font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Location</div>
-                ${row('Position', escapeHtml(posText))}
-                ${row('Reported', escapeHtml(when))}
+              <div style="padding:8px 10px;">
+                ${row('ID', spotterId)}
+                ${row('Updated', escapeHtml(when))}
                 ${row('Age', escapeHtml(age))}
+                ${row('Speed', escapeHtml(speedText))}
+                ${row('Nearest Radar', escapeHtml(site?.radarId || 'Unavailable'))}
+                ${row('Distance', escapeHtml(distanceText))}
               </div>
-              <div style="margin-top:4px;">
-                ${row('Spotter ID', spotterId)}
-                ${row('Network', 'Spotter Network')}
-                ${row('Movement', escapeHtml(movementDetail))}
-                ${row('Distance From Radar', escapeHtml(distanceText))}
-              </div>
-              <div style="margin-top:8px;font-size:10px;color:#64748b;line-height:1.4;">Movement status is derived from consecutive public position fixes. Contact details (phone/email/web) are not shown because public feeds do not expose them.</div>
             </div>`)
             .addTo(map);
         };

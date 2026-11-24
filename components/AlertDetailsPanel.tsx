@@ -84,7 +84,17 @@ export function AlertDetailsPanel({ alert, context, onClose, onSelectAlert }: Pr
               </div>
               <div>
                 <div className="text-[10px] font-bold text-sky-300 mb-1">Nearest radar sites</div>
-                {context.nearestRadarSites.length ? context.nearestRadarSites.map((s) => <div key={s.id} className="text-[10px] text-slate-300">{s.id} - {s.name} <span className="text-slate-500">({formatDistance(s.distanceM)})</span></div>) : <div className="text-[10px] text-slate-500">Unavailable.</div>}
+                {context.nearestRadarSites.length ? (
+                  <div className="space-y-1">
+                    {context.nearestRadarSites.slice(0,3).map((s, i) => (
+                      <button key={s.id} type="button" onClick={() => (window as any).__mvSelectRadarSite?.(s.id)} className="flex w-full items-center justify-between rounded-full border border-slate-700 bg-[#0f172a] px-2.5 py-1 text-left hover:border-sky-600 hover:bg-[#162033]">
+                        <span className="text-[10px] text-slate-200"><span className="font-bold text-sky-300">{i===0?'Nearest':i===1?'2nd':'3rd'}</span> {s.id} - {s.name}</span>
+                        <span className="text-[10px] text-slate-500">{formatDistance(s.distanceM)}</span>
+                      </button>
+                    ))}
+                    <div className="text-[9px] text-slate-500">Click to load radar data from that site.</div>
+                  </div>
+                ) : <div className="text-[10px] text-slate-500">Unavailable.</div>}
               </div>
               <div>
                 <div className="text-[10px] font-bold text-emerald-300 mb-1">Nearby spotter reports</div>

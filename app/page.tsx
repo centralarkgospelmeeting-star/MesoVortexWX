@@ -265,6 +265,11 @@ export default function MesoVortexWorkstation() {
   const [favoriteProducts, setFavoriteProducts] = useState<string[]>(initialPrefs.favorites);
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
   const [locationContext, setLocationContext] = useState<{ lat: number; lon: number; ts: number } | null>(null);
+
+  useEffect(() => {
+    (window as any).__mvSelectRadarSite = (id: string) => { if (id) setRadarSite(id); };
+    return () => { try { delete (window as any).__mvSelectRadarSite; } catch {} };
+  }, []);
   const [spotterReportsForContext, setSpotterReportsForContext] = useState<any[]>([]);
   const [mcdFeaturesForContext, setMcdFeaturesForContext] = useState<any[]>([]);
 

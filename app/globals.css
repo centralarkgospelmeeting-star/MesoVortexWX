@@ -41,23 +41,23 @@ html, body {
   outline: none;
 }
 
-/* WeatherWise On-Map Radar Tower Pills */
+/* Radar tower selection pills - fully rounded */
 .ww-radar-pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 7px;
-  border-radius: 4px;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 9999px;
   background: #101826;
-  border: 1px solid #334155;
-  color: #cbd5e1;
+  border: 1px solid #475569;
+  color: #e2e8f0;
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.03em;
-  box-shadow: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
   cursor: pointer;
   user-select: none;
-  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease, transform 0.12s ease;
   transform: translate(-50%, -50%);
   white-space: nowrap;
 }
@@ -66,14 +66,14 @@ html, body {
   background: #162033;
   border-color: #60a5fa;
   color: #ffffff;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(1.03);
   z-index: 50;
 }
 
 .ww-radar-pill.active {
-  background: #0f1f33;
+  background: #0f2744;
   border: 1px solid #60a5fa;
-  color: #93c5fd;
+  color: #bfdbfe;
   z-index: 60;
 }
 
