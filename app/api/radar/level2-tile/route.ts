@@ -54,7 +54,8 @@ function integerParam(value: string | null): number | undefined {
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const siteId = (params.get('site') || '').toUpperCase();
-  const product = (params.get('product') || '').toLowerCase() as PolarMoment;
+  const requestedProduct = (params.get('product') || '').toLowerCase();
+  const product = (requestedProduct === 'gate_to_gate_shear' ? 'gate' : requestedProduct) as PolarMoment;
   const tilt = Number(params.get('tilt') || '0.5');
   const z = integerParam(params.get('z'));
   const x = integerParam(params.get('x'));
@@ -62,7 +63,7 @@ export async function GET(request: Request) {
   const site = RADAR_SITES.find((item) => item.network === 'NEXRAD' && (item.id === siteId || item.radarId === siteId || item.radarId === siteId.replace(/^K/, '')));
 
   if (!site) return problem(`Unknown NEXRAD radar site "${siteId}".`);
-  if (!['cc', 'zdr', 'kdp'].includes(product)) return problem(`Unsupported Level II dual-polarization product "${product}".`);
+  if (!['cc', 'zdr', 'kdp', 'sw', 'gate'].includes(product)) return problem(`Unsupported Level II radar moment "${product}".`);
   if (!Number.isFinite(tilt) || tilt < 0 || tilt > 20) return problem('Invalid elevation angle.');
   if (z === undefined || x === undefined || y === undefined || z > 16 || x >= 2 ** z || y >= 2 ** z) {
     return problem('Invalid XYZ tile coordinates.');
@@ -81,6 +82,7 @@ export async function GET(request: Request) {
         'X-MesoVortex-Time': frame.time,
         'X-MesoVortex-Tilt': String(tilt),
         'X-MesoVortex-KDP-Method': product === 'kdp' ? '7-gate-linear-fit-of-unwrapped-PHI/2; RHO>=0.80' : 'not-applicable',
+        'X-MesoVortex-GATE-Method': product === 'gate' ? 'absolute adjacent-range-gate velocity difference, m/s converted to knots' : 'not-applicable',
       },
     });
   } catch (error) {

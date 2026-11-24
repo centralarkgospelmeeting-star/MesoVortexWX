@@ -23,6 +23,7 @@ export type RadarProductKey =
   | 'rotation_tracks'
   | 'cross_section'
   | 'gate_filter'
+  | 'gate_to_gate_shear'
   | 'rain_mix_snow'
   | 'storm_analysis'
   | 'volume_scan'
@@ -95,6 +96,7 @@ export const RADAR_PRODUCTS: readonly RadarProductDef[] = [
   toDef('vil_density', 'vil_density', 'VIL density'),
   toDef('cross_section', 'cross_section', 'Reflectivity cross sections'),
   toDef('gate_filter', 'gate_filter', 'Reflectivity gate filtering'),
+  toDef('gate_to_gate_shear', 'gate_to_gate_shear', 'Adjacent-gate velocity difference'),
   toDef('rain_mix_snow', 'rain_mix_snow', 'Rain/mix/snow intensity'),
   toDef('storm_analysis', 'storm_analysis', 'Radar-derived storm analysis'),
   toDef('volume_scan', 'volume_scan', 'Radar volume scans and elevation-angle selection'),

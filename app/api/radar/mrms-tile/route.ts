@@ -1,5 +1,5 @@
 import { getRadarCapability } from '../../../../lib/radar/capability-matrix';
-import { fetchMrmsGrid, type MrmsGrid } from '../../../../lib/radar/mrms-grib2';
+import { fetchMrmsGrid, type MrmsGrid, type MrmsGridProduct } from '../../../../lib/radar/mrms-grib2';
 import zlib from 'node:zlib';
 
 export const dynamic = 'force-dynamic';
@@ -67,8 +67,90 @@ function colorFor(product: string, v: number): [number,number,number,number] {
     if (v >= -1) return [100,100,255,150];
     return [150,150,150,140];
   }
+  if (product === 'MergedAzShear_0-2kmAGL' || product === 'RotationTrack30min') {
+    const magnitude = Math.abs(v);
+    // NSSL's MRMS table expresses these values in 0.001/s units.
+    if (magnitude < 2) return [0,0,0,0];
+    if (magnitude < 4) return v < 0 ? [0,150,255,155] : [0,220,80,155];
+    if (magnitude < 6) return v < 0 ? [0,90,230,180] : [0,180,0,180];
+    if (magnitude < 10) return v < 0 ? [170,0,220,195] : [255,220,0,195];
+    return v < 0 ? [220,0,180,210] : [255,70,0,210];
+  }
+  if (product === 'EchoTop_18') {
+    if (v < 2) return [0,0,0,0];
+    if (v < 4) return [60,120,255,155];
+    if (v < 6) return [0,210,220,170];
+    if (v < 8) return [0,210,70,180];
+    if (v < 10) return [240,230,0,190];
+    if (v < 12) return [255,130,0,200];
+    if (v < 15) return [230,20,20,205];
+    return [190,0,200,210];
+  }
+  if (product === 'VIL' || product === 'MultiSensor_QPE_01H_Pass1' || product === 'MESH') {
+    if (v <= 0) return [0,0,0,0];
+    if (product === 'MESH') {
+      if (v < 12.7) return [40,150,255,160];
+      if (v < 25.4) return [0,210,90,175];
+      if (v < 50.8) return [255,230,0,190];
+      if (v < 76.2) return [255,120,0,200];
+      return [220,0,20,210];
+    }
+    if (v < 5) return [40,150,255,150];
+    if (v < 15) return [0,210,220,165];
+    if (v < 30) return [0,210,70,180];
+    if (v < 50) return [245,230,0,190];
+    if (v < 75) return [255,125,0,200];
+    return [220,0,20,210];
+  }
+  if (product === 'VIL_Density') {
+    if (v < 0.5) return [0,0,0,0];
+    if (v < 1.5) return [0,160,255,160];
+    if (v < 2.5) return [0,220,80,175];
+    if (v < 3.5) return [255,230,0,190];
+    if (v < 4.5) return [255,120,0,200];
+    return [220,0,20,210];
+  }
+  if (product === 'SHI') {
+    if (v < 10) return [0,0,0,0];
+    if (v < 20) return [0,160,255,155];
+    if (v < 40) return [0,210,80,175];
+    if (v < 80) return [255,230,0,190];
+    if (v < 130) return [255,120,0,200];
+    return [220,0,20,210];
+  }
+  if (product === 'PrecipRate') {
+    if (v <= 0) return [0,0,0,0];
+    if (v < 1) return [50,130,255,150];
+    if (v < 2.5) return [0,210,220,165];
+    if (v < 5) return [0,210,70,180];
+    if (v < 10) return [245,230,0,190];
+    if (v < 25) return [255,125,0,200];
+    return [220,0,20,210];
+  }
+  if (product === 'PrecipFlag') {
+    if (v === 1) return [230,30,30,200]; // warm stratiform rain
+    if (v === 3) return [255,230,0,205]; // snow
+    if (v === 6) return [0,210,70,205]; // convective rain
+    if (v === 7) return [0,220,230,210]; // rain mixed with hail
+    if (v === 10) return [30,90,230,200]; // cold stratiform rain
+    if (v === 91) return [150,80,210,200]; // tropical/stratiform rain
+    if (v === 96) return [255,120,0,210]; // tropical/convective rain
+    return [0,0,0,0]; // no precip or no coverage
+  }
   return [0,0,0,0];
 }
+
+const MRMS_CAPABILITIES: Record<string, { id: string; grid: MrmsGridProduct }> = {
+  cc: { id: 'cc', grid: 'MergedRhoHV' }, rhohv: { id: 'cc', grid: 'MergedRhoHV' },
+  zdr: { id: 'zdr', grid: 'MergedZdr' },
+  azshear: { id: 'azshear', grid: 'MergedAzShear_0-2kmAGL' }, az: { id: 'azshear', grid: 'MergedAzShear_0-2kmAGL' },
+  rotation_tracks: { id: 'rotation_tracks', grid: 'RotationTrack30min' }, trk: { id: 'rotation_tracks', grid: 'RotationTrack30min' },
+  tops: { id: 'tops', grid: 'EchoTop_18' }, et: { id: 'tops', grid: 'EchoTop_18' },
+  vil: { id: 'vil', grid: 'VIL' }, vild: { id: 'vil_density', grid: 'VIL_Density' }, vil_density: { id: 'vil_density', grid: 'VIL_Density' },
+  mesh: { id: 'mesh', grid: 'MESH' }, hail_detection: { id: 'hail_detection', grid: 'SHI' }, hail: { id: 'hail_detection', grid: 'SHI' },
+  qpe: { id: 'qpe', grid: 'MultiSensor_QPE_01H_Pass1' }, precip_rate: { id: 'precip_rate', grid: 'PrecipRate' }, rate: { id: 'precip_rate', grid: 'PrecipRate' },
+  rain_mix_snow: { id: 'rain_mix_snow', grid: 'PrecipFlag' }, rms: { id: 'rain_mix_snow', grid: 'PrecipFlag' },
+};
 
 function sample(grid: MrmsGrid, lat: number, lon: number): number {
   // MRMS 2D latlon grid: la1 north, lo1 west, di/dj deg, row 0 is north
@@ -106,15 +188,21 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const product = String(searchParams.get('product') || '').toLowerCase();
   const z = Number(searchParams.get('z')); const x = Number(searchParams.get('x')); const y = Number(searchParams.get('y'));
-  const capId = product === 'cc' || product === 'rhohv' ? 'cc' : product === 'zdr' ? 'zdr' : '';
+  const mapping = MRMS_CAPABILITIES[product];
+  const capId = mapping?.id || '';
   const cap = capId ? getRadarCapability(capId) : null;
   if (!cap) return unavailable(`DATA UNAVAILABLE - Unknown MRMS tile product "${product}".`);
   if (cap.availability === 'UNAVAILABLE' || cap.availability === 'RESTRICTED') return unavailable(cap.unavailableReason || 'DATA UNAVAILABLE', cap);
   if (![z,x,y].every(Number.isFinite)) return unavailable('DATA UNAVAILABLE - Missing tile coordinates.', cap);
 
-  const gridProduct = capId === 'cc' ? 'MergedRhoHV' : 'MergedZdr';
+  const gridProduct = mapping.grid;
   try {
-    const grid = await fetchMrmsGrid(gridProduct as any);
+    const grid = await fetchMrmsGrid(gridProduct);
+    const maxAgeMs = gridProduct === 'MultiSensor_QPE_01H_Pass1' ? 3 * 60 * 60_000 : 15 * 60_000;
+    const observedAt = Date.parse(grid.time);
+    if (!Number.isFinite(observedAt) || Date.now() - observedAt > maxAgeMs) {
+      return unavailable(`DATA UNAVAILABLE - NOAA MRMS ${gridProduct} latest grid is stale; refusing to display old data.`, cap);
+    }
     const rgba = new Uint8Array(TILE*TILE*4);
     for (let py=0; py<TILE; py++) {
       const lat = tileToLat(y + py/TILE, z);

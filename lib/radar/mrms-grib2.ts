@@ -27,24 +27,30 @@ function readU32(b: Buffer, o: number) { return b.readUInt32BE(o); }
 function readI16(b: Buffer, o: number) { return b.readInt16BE(o); }
 function readF32(b: Buffer, o: number) { return b.readFloatBE(o); }
 
-function decodePngRgb(buf: Buffer): { w: number; h: number; data: Uint8Array; alpha?: Uint8Array } {
+function decodePngSamples(buf: Buffer): { w: number; h: number; samples: Uint32Array; alpha?: Uint8Array } {
   if (buf.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') throw new Error('GRIB2 sec7 not PNG');
   let i = 8, w = 0, h = 0, bit = 0, ct = 0, interlace = 0;
   const idats: Buffer[] = [];
+  let paletteAlpha: Buffer | undefined;
   while (i < buf.length) {
     const len = readU32(buf, i); const type = buf.subarray(i + 4, i + 8).toString('ascii');
     const data = buf.subarray(i + 8, i + 8 + len);
     if (type === 'IHDR') { w = readU32(data, 0); h = readU32(data, 4); bit = data[8]; ct = data[9]; interlace = data[12]; }
     else if (type === 'IDAT') idats.push(Buffer.from(data));
+    else if (type === 'tRNS') paletteAlpha = Buffer.from(data);
     else if (type === 'IEND') break;
     i += 12 + len;
   }
   if (interlace !== 0) throw new Error('Interlaced PNG unsupported');
-  if (bit !== 8 || (ct !== 2 && ct !== 6)) throw new Error(`Unsupported PNG format bit=${bit} ct=${ct}`);
-  const channels = ct === 6 ? 4 : 3;
+  if (![8, 16].includes(bit) || ![0, 2, 3, 4, 6].includes(ct) || (ct === 2 || ct === 6) && bit === 16) {
+    throw new Error(`Unsupported PNG format bit=${bit} ct=${ct}`);
+  }
+  const channels = ct === 0 ? 1 : ct === 2 ? 3 : ct === 3 ? 1 : ct === 4 ? 2 : 4;
+  const bytesPerSample = bit / 8;
+  const bytesPerPixel = channels * bytesPerSample;
   const raw = zlib.inflateSync(Buffer.concat(idats));
-  const stride = w * channels;
-  const out = new Uint8Array(w * h * channels);
+  const stride = w * bytesPerPixel;
+  const out = new Uint8Array(w * h * bytesPerPixel);
   let src = 0, dst = 0;
   const prev = new Uint8Array(stride);
   const cur = new Uint8Array(stride);
@@ -53,9 +59,9 @@ function decodePngRgb(buf: Buffer): { w: number; h: number; data: Uint8Array; al
     for (let x = 0; x < stride; x++) cur[x] = raw[src++];
     const recon = new Uint8Array(stride);
     for (let x = 0; x < stride; x++) {
-      const a = x >= channels ? recon[x - channels] : 0;
+      const a = x >= bytesPerPixel ? recon[x - bytesPerPixel] : 0;
       const b = prev[x];
-      const c = x >= channels ? prev[x - channels] : 0;
+      const c = x >= bytesPerPixel ? prev[x - bytesPerPixel] : 0;
       let p = 0;
       if (filter === 0) p = cur[x];
       else if (filter === 1) p = (cur[x] + a) & 255;
@@ -70,18 +76,34 @@ function decodePngRgb(buf: Buffer): { w: number; h: number; data: Uint8Array; al
     }
     out.set(recon, dst); dst += stride; prev.set(recon);
   }
-  if (channels === 4) {
-    const rgb = new Uint8Array(w * h * 3);
-    const alpha = new Uint8Array(w * h);
-    for (let p = 0, q = 0, a = 0; p < out.length; p += 4, q += 3, a++) {
-      rgb[q] = out[p]; rgb[q+1]=out[p+1]; rgb[q+2]=out[p+2]; alpha[a] = out[p+3];
+  const samples = new Uint32Array(w * h);
+  const alpha = ct === 4 || ct === 6 || (ct === 3 && paletteAlpha) ? new Uint8Array(w * h) : undefined;
+  const readSample = (offset: number) => bit === 16 ? (out[offset] << 8) | out[offset + 1] : out[offset];
+  for (let pixel = 0; pixel < samples.length; pixel++) {
+    const offset = pixel * bytesPerPixel;
+    if (ct === 0 || ct === 3) {
+      samples[pixel] = readSample(offset);
+      if (alpha) alpha[pixel] = ct === 3 ? (paletteAlpha?.[out[offset]] ?? 255) : 255;
+    } else if (ct === 2 || ct === 6) {
+      samples[pixel] = (out[offset] << 16) | (out[offset + 1] << 8) | out[offset + 2];
+      if (alpha) alpha[pixel] = out[offset + 3];
+    } else {
+      samples[pixel] = readSample(offset);
+      if (alpha) alpha[pixel] = readSample(offset + bytesPerSample) > 0 ? 255 : 0;
     }
-    return { w, h, data: rgb, alpha };
   }
-  return { w, h, data: out };
+  return { w, h, samples, alpha };
 }
 
-export async function fetchMrmsGrid(product: 'MergedRhoHV' | 'MergedZdr'): Promise<MrmsGrid> {
+export const MRMS_GRID_PRODUCTS = [
+  'MergedRhoHV', 'MergedZdr', 'MergedAzShear_0-2kmAGL', 'RotationTrack30min',
+  'EchoTop_18', 'VIL', 'VIL_Density', 'MESH', 'SHI',
+  'MultiSensor_QPE_01H_Pass1', 'PrecipRate',
+  'PrecipFlag',
+] as const;
+export type MrmsGridProduct = typeof MRMS_GRID_PRODUCTS[number];
+
+export async function fetchMrmsGrid(product: MrmsGridProduct): Promise<MrmsGrid> {
   const key = product;
   const cached = CACHE.get(key);
   if (cached && Date.now() - cached.at < TTL_MS) return cached.promise;
@@ -135,13 +157,13 @@ export function parseMrmsGrib2(grib: Buffer, product: string): MrmsGrid {
   }
   if (!sec7 || !ni || !nj) throw new Error('Incomplete GRIB2');
   if (tpl !== 41) throw new Error(`Unsupported GRIB2 data template ${tpl} (expected 41 PNG)`);
-  const png = decodePngRgb(sec7);
+  const png = decodePngSamples(sec7);
   if (png.w !== ni || png.h !== nj) throw new Error(`PNG/grid size mismatch ${png.w}x${png.h} != ${ni}x${nj}`);
   const n = ni*nj;
   const values = new Float32Array(n);
   const d10 = Math.pow(10, -scale10);
   const d2 = Math.pow(2, scale2);
-  for (let p=0, q=0; p<n; p++, q+=3) {
+  for (let p=0; p<n; p++) {
     // PNG alpha marks missing/transparent cells in some MRMS GRIB2 products.
     // Dropping it turns those cells into valid packed values and creates a noisy
     // full-map overlay, especially for CC and ZDR.
@@ -149,7 +171,7 @@ export function parseMrmsGrib2(grib: Buffer, product: string): MrmsGrid {
       values[p] = NaN;
       continue;
     }
-    const raw = (png.data[q]<<16) | (png.data[q+1]<<8) | png.data[q+2];
+    const raw = png.samples[p];
     // MRMS missing is commonly -999/-99 encoded in scaled space or special value. Use threshold.
     const v = (ref + raw * d2) * d10;
     values[p] = (v < -900 || v > 1e5) ? NaN : v;

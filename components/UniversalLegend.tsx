@@ -14,9 +14,18 @@ export type LegendType =
   | 'min_cc'
   | 'zdr'
   | 'kdp'
+  | 'sw'
   | 'tops'
   | 'vil'
+  | 'vil_density'
   | 'mesh'
+  | 'azshear'
+  | 'rotation_tracks'
+  | 'qpe'
+  | 'precip_rate'
+  | 'hail_detection'
+  | 'gate_to_gate_shear'
+  | 'rain_mix_snow'
   | 'satellite'
   | 'spc'
   | 'cape'
@@ -94,13 +103,29 @@ const LEGENDS: Record<string, LegendStep[]> = {
     { color: '#ff6400', label: '3–5°/km', value: 'High KDP · Heavy rain' },
     { color: '#dc0000', label: '5+°/km', value: 'Very high KDP · Intense precipitation' },
   ],
+  sw: [
+    { color: '#285ad2', label: '0–1 m/s', value: 'Low spectrum width · Narrow velocity distribution' },
+    { color: '#00bedc', label: '1–2 m/s', value: 'Moderate spectrum width' },
+    { color: '#00c850', label: '2–4 m/s', value: 'Elevated spectrum width' },
+    { color: '#dcdc00', label: '4–8 m/s', value: 'High spectrum width · Turbulent or mixed velocities' },
+    { color: '#ff8c00', label: '8–12 m/s', value: 'Very high spectrum width' },
+    { color: '#e61e14', label: '12–20 m/s', value: 'Extreme spectrum width' },
+  ],
+  gate_to_gate_shear: [
+    { color: '#00bedc', label: '10–20 kt', value: 'Adjacent-gate velocity difference' },
+    { color: '#00c850', label: '20–30 kt', value: 'Elevated gate-to-gate velocity difference' },
+    { color: '#e6dc00', label: '30–40 kt', value: 'Strong gate-to-gate velocity difference' },
+    { color: '#ff8200', label: '40–50 kt', value: 'Very strong gate-to-gate velocity difference' },
+    { color: '#e61414', label: '50–60 kt', value: 'Extreme gate-to-gate velocity difference' },
+    { color: '#be00c8', label: '60+ kt', value: 'Extreme gate-to-gate velocity difference' },
+  ],
   tops: [
-    { color: '#04e9e7', label: '15 kft', value: '15 kft · Shallow Convection' },
-    { color: '#02fd02', label: '25 kft', value: '25 kft · Developing Thunderstorm' },
-    { color: '#fdf802', label: '35 kft', value: '35 kft · Mature Storm Cell' },
-    { color: '#fd0000', label: '45 kft', value: '45 kft · Severe Convective Core' },
-    { color: '#f800fd', label: '55 kft', value: '55 kft · Tropopause Penetration' },
-    { color: '#ffffff', label: '65+ kft', value: '65+ kft · Intense Overshooting Top' },
+    { color: '#3c78ff', label: '4 km MSL', value: '4 km MSL · 18 dBZ echo-top height' },
+    { color: '#00d2dc', label: '6 km MSL', value: '6 km MSL · 18 dBZ echo-top height' },
+    { color: '#00d246', label: '8 km MSL', value: '8 km MSL · 18 dBZ echo-top height' },
+    { color: '#f0e600', label: '10 km MSL', value: '10 km MSL · 18 dBZ echo-top height' },
+    { color: '#ff8200', label: '12 km MSL', value: '12 km MSL · 18 dBZ echo-top height' },
+    { color: '#e61414', label: '15+ km MSL', value: '15+ km MSL · 18 dBZ echo-top height' },
   ],
   vil: [
     { color: '#04e9e7', label: '10 kg/m²', value: '10 kg/m² · Light Water Mass' },
@@ -110,11 +135,63 @@ const LEGENDS: Record<string, LegendStep[]> = {
     { color: '#f800fd', label: '75+ kg/m²', value: '75+ kg/m² · Extreme Hail Mass / Supercell Core' },
   ],
   mesh: [
-    { color: '#02fd02', label: '0.50"', value: '0.50 in · Sub-Severe Pea Hail' },
-    { color: '#fdf802', label: '1.00"', value: '1.00 in · Quarter Size (Severe Threshold)' },
-    { color: '#fd9500', label: '1.75"', value: '1.75 in · Golf Ball Size' },
-    { color: '#fd0000', label: '2.50"', value: '2.50 in · Tennis Ball Size (Significant)' },
-    { color: '#f800fd', label: '3.50"+', value: '3.50+ in · Soft Ball to Grapefruit Destructive Hail' },
+    { color: '#2896ff', label: '< 0.5 in', value: 'Lower MESH estimate' },
+    { color: '#00d25a', label: '0.5–1 in', value: 'MESH estimated hail size' },
+    { color: '#ffe600', label: '1–2 in', value: 'MESH estimated hail size' },
+    { color: '#ff7800', label: '2–3 in', value: 'MESH estimated hail size' },
+    { color: '#dc0014', label: '3+ in', value: 'MESH estimated hail size' },
+  ],
+  vil_density: [
+    { color: '#00a0ff', label: '0.5–1.5 g/m³', value: 'MRMS VIL density' },
+    { color: '#00dc50', label: '1.5–2.5 g/m³', value: 'MRMS VIL density' },
+    { color: '#ffe600', label: '2.5–3.5 g/m³', value: 'Higher VIL density' },
+    { color: '#ff7800', label: '3.5–4.5 g/m³', value: 'Very high VIL density' },
+    { color: '#dc0014', label: '4.5+ g/m³', value: 'Extreme VIL density' },
+  ],
+  azshear: [
+    { color: '#00dc50', label: '+0.004 s⁻¹', value: 'Positive MRMS 0–2 km azimuthal shear' },
+    { color: '#ffe600', label: '+0.006 s⁻¹', value: 'Stronger positive azimuthal shear' },
+    { color: '#ff7800', label: '+0.010 s⁻¹', value: 'Strong positive azimuthal shear' },
+    { color: '#005ae6', label: '−0.004 s⁻¹', value: 'Negative MRMS 0–2 km azimuthal shear' },
+    { color: '#dc00b4', label: '−0.010 s⁻¹', value: 'Strong negative azimuthal shear' },
+  ],
+  rotation_tracks: [
+    { color: '#00dc50', label: '+0.004 s⁻¹', value: 'Positive 30-minute rotation track signal' },
+    { color: '#ffe600', label: '+0.006 s⁻¹', value: 'Stronger rotation track signal' },
+    { color: '#ff7800', label: '+0.010 s⁻¹', value: 'Strong rotation track signal' },
+    { color: '#005ae6', label: '−0.004 s⁻¹', value: 'Negative rotation track signal' },
+  ],
+  qpe: [
+    { color: '#2896ff', label: '0–5 mm', value: 'MRMS MultiSensor QPE · 1-hour Pass 1 accumulation' },
+    { color: '#00d2dc', label: '5–15 mm', value: '1-hour precipitation accumulation' },
+    { color: '#00d246', label: '15–30 mm', value: '1-hour precipitation accumulation' },
+    { color: '#f0e600', label: '30–50 mm', value: '1-hour precipitation accumulation' },
+    { color: '#ff8200', label: '50–75 mm', value: '1-hour precipitation accumulation' },
+    { color: '#e61414', label: '75+ mm', value: '1-hour precipitation accumulation' },
+  ],
+  precip_rate: [
+    { color: '#3282ff', label: '0–1 mm/hr', value: 'MRMS radar precipitation rate' },
+    { color: '#00bedc', label: '1–2.5 mm/hr', value: 'MRMS radar precipitation rate' },
+    { color: '#00d246', label: '2.5–5 mm/hr', value: 'MRMS radar precipitation rate' },
+    { color: '#f5e600', label: '5–10 mm/hr', value: 'MRMS radar precipitation rate' },
+    { color: '#ff7d00', label: '10–25 mm/hr', value: 'MRMS radar precipitation rate' },
+    { color: '#dc0014', label: '25+ mm/hr', value: 'MRMS radar precipitation rate' },
+  ],
+  hail_detection: [
+    { color: '#00a0ff', label: 'SHI 10–20', value: 'MRMS Severe Hail Index' },
+    { color: '#00d250', label: 'SHI 20–40', value: 'MRMS Severe Hail Index' },
+    { color: '#ffe600', label: 'SHI 40–80', value: 'MRMS Severe Hail Index' },
+    { color: '#ff7800', label: 'SHI 80–130', value: 'MRMS Severe Hail Index' },
+    { color: '#dc0014', label: 'SHI 130+', value: 'MRMS Severe Hail Index' },
+  ],
+  rain_mix_snow: [
+    { color: '#e61e1e', label: '1 · Warm rain', value: 'Warm stratiform rain' },
+    { color: '#1e5ae6', label: '10 · Cool rain', value: 'Cold stratiform rain' },
+    { color: '#00d246', label: '6 · Convection', value: 'Convective rain' },
+    { color: '#ffe600', label: '3 · Snow', value: 'Snow at the surface' },
+    { color: '#00dce6', label: '7 · Hail mix', value: 'Rain mixed with hail' },
+    { color: '#9650d2', label: '91 · Tropical stratiform', value: 'Tropical/stratiform rain mix' },
+    { color: '#ff7800', label: '96 · Tropical convective', value: 'Tropical/convective rain mix' },
   ],
   satellite: [
     { color: '#0f172a', label: '-80°C', value: '-80°C · Overshooting Convective Tops' },
@@ -151,6 +228,15 @@ const LEGENDS: Record<string, LegendStep[]> = {
 
 function normalizeLegendType(raw: string): string {
   const lower = (raw || '').toLowerCase();
+  if (lower === 'sw') return 'sw';
+  if (lower.includes('vil_density') || lower === 'vild') return 'vil_density';
+  if (lower.includes('rotation_tracks') || lower === 'trk') return 'rotation_tracks';
+  if (lower.includes('azshear') || lower === 'az') return 'azshear';
+  if (lower === 'qpe') return 'qpe';
+  if (lower.includes('precip_rate') || lower === 'rate') return 'precip_rate';
+  if (lower.includes('hail_detection') || lower === 'hail') return 'hail_detection';
+  if (lower.includes('gate_to_gate') || lower === 'gate') return 'gate_to_gate_shear';
+  if (lower.includes('rain_mix_snow') || lower === 'rms') return 'rain_mix_snow';
   if (lower.includes('max_ref') || lower.includes('ref_x') || lower.includes('ref')) return 'ref';
   if (lower.includes('vel') || lower.includes('srvel') || lower.includes('azshear')) return 'vel';
   if (lower.includes('cc')) return 'cc';

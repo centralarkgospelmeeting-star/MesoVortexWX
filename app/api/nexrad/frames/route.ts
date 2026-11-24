@@ -115,6 +115,24 @@ export async function GET(request: Request) {
     productCode = cap.id === 'cc' ? 'RHO' : cap.id === 'zdr' ? 'ZDR' : 'KDP (derived from PHI)';
     provider = 'NOAA NEXRAD Level II (single radar)';
     latestTileUrl = `/api/radar/level2-tile?site=${encodeURIComponent(site.id)}&product=${cap.id}&tilt=${encodeURIComponent(tilt)}&z={z}&x={x}&y={y}`;
+  } else if (cap.id === 'sw') {
+    if (!cap.tiltSupport.includes(tilt)) {
+      return unavailable(`DATA UNAVAILABLE - Elevation ${tilt}° is not supported for ${cap.name}.`, { productKey, capabilityId: cap.id, tilt });
+    }
+    productCode = 'SW (spectrum width moment)';
+    provider = 'NOAA NEXRAD Level II (single radar)';
+    latestTileUrl = `/api/radar/level2-tile?site=${encodeURIComponent(site.id)}&product=sw&tilt=${encodeURIComponent(tilt)}&z={z}&x={x}&y={y}`;
+  } else if (cap.id === 'gate_to_gate_shear') {
+    if (!cap.tiltSupport.includes(tilt)) {
+      return unavailable(`DATA UNAVAILABLE - Elevation ${tilt}° is not supported for ${cap.name}.`, { productKey, capabilityId: cap.id, tilt });
+    }
+    productCode = 'Gate-to-gate velocity difference (derived)';
+    provider = 'NOAA NEXRAD Level II velocity moment (derived)';
+    latestTileUrl = `/api/radar/level2-tile?site=${encodeURIComponent(site.id)}&product=gate_to_gate_shear&tilt=${encodeURIComponent(tilt)}&z={z}&x={x}&y={y}`;
+  } else if (cap.source.type === 'NOAA_AWS_MRMS') {
+    productCode = cap.source.productCode || cap.id;
+    provider = cap.source.provider;
+    latestTileUrl = `/api/radar/mrms-tile?product=${encodeURIComponent(cap.id)}&z={z}&x={x}&y={y}`;
   } else {
     const verifiedTiltCodes: Record<string, Partial<Record<string, string>>> = {
       ref: { '0.5': 'N0B', '0.9': 'N1B', '1.3': 'N2B', '1.8': 'N3B' },

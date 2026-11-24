@@ -1,9 +1,9 @@
 import { RADAR_SITES, type RadarSite } from '../radar-config';
 
-export type PolarMoment = 'cc' | 'zdr' | 'kdp';
+export type PolarMoment = 'cc' | 'zdr' | 'kdp' | 'sw' | 'gate';
 
 type Moment = { moment_data?: Array<number | null>; gate_size?: number; first_gate?: number };
-type Radial = { azimuth?: number; elevation_angle?: number; rho?: Moment; zdr?: Moment; phi?: Moment };
+type Radial = { azimuth?: number; elevation_angle?: number; rho?: Moment; zdr?: Moment; phi?: Moment; spectrum?: Moment; velocity?: Moment };
 type Level2Volume = {
   data: Array<Array<{ record?: Radial }> | undefined>;
   listElevations(): number[];
@@ -103,7 +103,11 @@ function bestElevation(volume: Level2Volume, degrees: number): Radial[] {
 }
 
 function momentFor(radial: Radial, product: PolarMoment): Moment | undefined {
-  return product === 'cc' ? radial.rho : product === 'zdr' ? radial.zdr : radial.phi;
+  if (product === 'cc') return radial.rho;
+  if (product === 'zdr') return radial.zdr;
+  if (product === 'sw') return radial.spectrum;
+  if (product === 'gate') return radial.velocity;
+  return radial.phi;
 }
 
 function unwrapPhase(data: Array<number | null>): Float64Array {
@@ -220,12 +224,36 @@ export function level2RgbaTile(frame: PolarTileFrame, product: PolarMoment, tilt
         // poorly correlated; KDP from clear-air/noise gates is not useful.
         if (rho == null || !Number.isFinite(rho) || rho < 0.8) continue;
       }
-      const color = product === 'cc' ? ccColor(value) : product === 'zdr' ? zdrColor(value) : kdpColor(value);
+      const gateShearKt = product === 'gate' && Number.isFinite(values[gate + 1])
+        ? Math.abs(values[gate + 1] - value) * 1.94384
+        : Number.NaN;
+      const color = product === 'cc' ? ccColor(value) : product === 'zdr' ? zdrColor(value) : product === 'sw' ? spectrumWidthColor(value) : product === 'gate' ? gateShearColor(gateShearKt) : kdpColor(value);
       const offset = (py * size + px) * 4;
       rgba[offset] = color[0]; rgba[offset + 1] = color[1]; rgba[offset + 2] = color[2]; rgba[offset + 3] = color[3];
     }
   }
   return rgba;
+}
+
+function spectrumWidthColor(value: number): [number, number, number, number] {
+  if (!Number.isFinite(value) || value < 0 || value > 30) return [0, 0, 0, 0];
+  if (value < 1) return [40, 90, 210, 150];
+  if (value < 2) return [0, 190, 220, 170];
+  if (value < 4) return [0, 200, 80, 180];
+  if (value < 8) return [220, 220, 0, 190];
+  if (value < 12) return [255, 140, 0, 195];
+  if (value < 20) return [230, 30, 20, 200];
+  return [190, 0, 200, 205];
+}
+
+function gateShearColor(value: number): [number, number, number, number] {
+  if (!Number.isFinite(value) || value < 10) return [0, 0, 0, 0];
+  if (value < 20) return [0, 190, 220, 170];
+  if (value < 30) return [0, 200, 80, 185];
+  if (value < 40) return [230, 220, 0, 195];
+  if (value < 50) return [255, 130, 0, 205];
+  if (value < 60) return [230, 20, 20, 210];
+  return [190, 0, 200, 215];
 }
 
 function ccColor(value: number): [number, number, number, number] {
