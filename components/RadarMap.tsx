@@ -89,8 +89,6 @@ export interface RadarMapProps {
     wind?: boolean;
     flooding?: boolean;
   };
-  showSweepAnimation?: boolean;
-  sweepAnimation?: boolean;
   showFastScan?: boolean;
   fastScan?: boolean;
   showFlashReflectivity?: boolean;
@@ -134,9 +132,12 @@ export interface RadarMapProps {
 
 const RADAR_SOURCE_ID = 'mv-radar-source';
 const RADAR_LAYER_ID = 'mv-radar-layer';
+const RADAR_PREVIOUS_SOURCE_ID = 'mv-radar-previous-source';
+const RADAR_PREVIOUS_LAYER_ID = 'mv-radar-previous-layer';
 const SATELLITE_SOURCE_ID = 'mv-satellite-source';
 const SATELLITE_LAYER_ID = 'mv-satellite-layer';
-const RASTER_SOURCE_IDS = [RADAR_SOURCE_ID, SATELLITE_SOURCE_ID];
+const RASTER_SOURCE_IDS = [RADAR_SOURCE_ID, RADAR_PREVIOUS_SOURCE_ID, SATELLITE_SOURCE_ID];
+const FASTSCAN_REVEAL_MS = 6000;
 const WARNINGS_SOURCE_ID = 'mv-warnings-source';
 const WARNINGS_FILL_ID = 'mv-warnings-fill';
 const WARNINGS_LINE_OUTER_ID = 'mv-warnings-line-outer';
@@ -315,8 +316,6 @@ export function RadarMap({
     wind: true,
     flooding: true,
   },
-  showSweepAnimation = true,
-  sweepAnimation: sweepAnimationProp,
   showFastScan = false,
   fastScan: fastScanProp,
   showFlashReflectivity = false,
@@ -349,6 +348,7 @@ export function RadarMap({
 }: RadarMapProps) {
   const [scanIngesting, setScanIngesting] = useState(false);
   const [scanIngestDismissed, setScanIngestDismissed] = useState(false);
+  const [fastScanStatus, setFastScanStatus] = useState<{ available: boolean; scanTime: string | null; source: string | null }>({ available: false, scanTime: null, source: null });
   const [inspectionResult, setInspectionResult] = useState<{ lat: number; lon: number; product: string; site: string; tilt: string; time: string; value: string; note?: string } | null>(null);
   const [toolMeasurements, setToolMeasurements] = useState<MapToolMeasurement[]>([]);
   const [toolDrawings, setToolDrawings] = useState<MapToolDrawing[]>([]);
@@ -362,7 +362,8 @@ export function RadarMap({
   const isRadarMode = mode === 'Radar' || mode === '3D Radar';
   const radarVisualsEnabled = isRadarMode; // beam/sweep/towers/pills/range rings/scan-ingest visuals
   const fastScanEnabled = radarVisualsEnabled && (fastScanProp ?? showFastScan);
-  const sweepEnabled = radarVisualsEnabled && ((sweepAnimationProp ?? showSweepAnimation) || fastScanEnabled);
+  // The beam is not decoration: it only exists during a verified scan reveal.
+  const sweepEnabled = radarVisualsEnabled && scanIngesting;
   const flashEnabled = radarVisualsEnabled && (flashReflectivityProp ?? showFlashReflectivity);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -371,6 +372,11 @@ export function RadarMap({
   const sweepAngleRef = useRef<number>(0);
   const paintInBoostRef = useRef<number>(0);
   const prevTileUrlRef = useRef<string>('');
+  const lastScanKeyRef = useRef<string>('');
+  const lastScanContextRef = useRef<string>('');
+  const pendingScanKeyRef = useRef<string>('');
+  const revealFrameRef = useRef<number | null>(null);
+  const revealLastFadeRef = useRef<number | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [tileError, setTileError] = useState<string | null>(null);
   const [sweepAngle, setSweepAngle] = useState(0);
@@ -384,7 +390,6 @@ export function RadarMap({
   const [flashDismissed, setFlashDismissed] = useState(false);
   useEffect(() => { if (liveOnly) setLiveOnlyDismissed(false); }, [liveOnly]);
   useEffect(() => { if (flashEnabled) setFlashDismissed(false); }, [flashEnabled]);
-  useEffect(() => { if (!scanIngesting) return; setScanIngestDismissed(false); const t = setTimeout(() => setScanIngesting(false), 90000); return () => clearTimeout(t); }, [scanIngesting]);
   useEffect(() => { toolModeRef.current = toolMode; }, [toolMode]);
   useEffect(() => { onToolMeasurementsChangeRef.current = onToolMeasurementsChange; }, [onToolMeasurementsChange]);
   useEffect(() => { onToolDrawingsChangeRef.current = onToolDrawingsChange; }, [onToolDrawingsChange]);
@@ -419,15 +424,81 @@ export function RadarMap({
     try { map.setPitch(Math.max(0, Math.min(75, Number(mapPitch) || 0))); } catch {}
   }, [mapReady, mapPitch]);
 
+  const stopReveal = useCallback((map?: MapLibreMap | null) => {
+    if (revealFrameRef.current !== null) cancelAnimationFrame(revealFrameRef.current);
+    revealFrameRef.current = null;
+    setScanIngesting(false);
+    setSweepAngle(0);
+    const target = map || mapRef.current;
+    if (!target) return;
+    if (target.getLayer(RADAR_PREVIOUS_LAYER_ID)) target.removeLayer(RADAR_PREVIOUS_LAYER_ID);
+    if (target.getSource(RADAR_PREVIOUS_SOURCE_ID)) target.removeSource(RADAR_PREVIOUS_SOURCE_ID);
+    const fade = revealLastFadeRef.current;
+    if (fade !== null && target.getLayer(RADAR_LAYER_ID)) {
+      try { target.setPaintProperty(RADAR_LAYER_ID, 'raster-fade-duration', fade); } catch {}
+    }
+    revealLastFadeRef.current = null;
+  }, []);
+
   useEffect(() => {
-    if (!sweepEnabled) return;
+    if (!fastScanEnabled && mapRef.current) stopReveal(mapRef.current);
+  }, [fastScanEnabled, stopReveal]);
 
-    const timer = setInterval(() => {
-      setSweepAngle((prev) => (prev + 3) % 360);
-    }, 16);
+  useEffect(() => () => {
+    if (mapRef.current) stopReveal(mapRef.current);
+  }, [product, tilt, radarSite, mode, stopReveal]);
 
-    return () => clearInterval(timer);
-  }, [sweepEnabled]);
+  const startReveal = useCallback((map: MapLibreMap, previousTileUrl: string) => {
+    stopReveal(map);
+    if (!previousTileUrl || !map.getLayer(RADAR_LAYER_ID)) return false;
+    const renderConfig = getRadarRasterRenderConfig({ mode, product });
+    if (map.getLayer(RADAR_PREVIOUS_LAYER_ID)) map.removeLayer(RADAR_PREVIOUS_LAYER_ID);
+    if (map.getSource(RADAR_PREVIOUS_SOURCE_ID)) map.removeSource(RADAR_PREVIOUS_SOURCE_ID);
+    map.addSource(RADAR_PREVIOUS_SOURCE_ID, {
+      type: 'raster',
+      tiles: [previousTileUrl],
+      tileSize: renderConfig.tileSize,
+      scheme: 'xyz',
+      ...(typeof renderConfig.maxzoom === 'number' ? { maxzoom: renderConfig.maxzoom } : {}),
+    } as any);
+    map.addLayer({
+      id: RADAR_PREVIOUS_LAYER_ID,
+      type: 'raster',
+      source: RADAR_PREVIOUS_SOURCE_ID,
+      paint: {
+        'raster-opacity': radarOpacity,
+        'raster-fade-duration': 0,
+        'raster-resampling': renderConfig.rasterResampling,
+      },
+    }, map.getLayer(WARNINGS_FILL_ID) ? WARNINGS_FILL_ID : undefined);
+
+    revealLastFadeRef.current = renderConfig.rasterFadeDuration;
+    map.setPaintProperty(RADAR_LAYER_ID, 'raster-fade-duration', 0);
+    map.setPaintProperty(RADAR_LAYER_ID, 'raster-opacity', 0);
+    setScanIngestDismissed(false);
+    setScanIngesting(true);
+
+    const startedAt = performance.now();
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - startedAt) / FASTSCAN_REVEAL_MS);
+      setSweepAngle(progress * 360);
+      if (map.getLayer(RADAR_LAYER_ID)) {
+        map.setPaintProperty(RADAR_LAYER_ID, 'raster-opacity', radarOpacity * progress);
+        if (map.getLayer(RADAR_PREVIOUS_LAYER_ID)) {
+          map.setPaintProperty(RADAR_PREVIOUS_LAYER_ID, 'raster-opacity', radarOpacity * (1 - progress));
+        }
+      }
+      if (progress < 1) {
+        revealFrameRef.current = requestAnimationFrame(tick);
+      } else {
+        revealFrameRef.current = null;
+        stopReveal(map);
+      }
+    };
+    revealFrameRef.current = requestAnimationFrame(tick);
+    return true;
+  }, [mode, product, radarOpacity, stopReveal]);
+
   // True once the radar tile source has reported a successful load. Used to
   // suppress false-positive 503/404 banners (e.g. historical frames or
   // unrelated map sources failing while the live product renders fine).
@@ -1209,6 +1280,11 @@ export function RadarMap({
           const data = await res.json();
           archiveAvailable = Boolean(data.loopAvailable);
           const frames = Array.isArray(data.frames) ? data.frames : [];
+          // A reveal is only legitimate when the API resolved a verified IEM
+          // volume-scan timestamp. "LIVE ONLY" URLs are static latest pointers.
+          const scanKey = data.scanTimeAvailable
+            ? `${product}|${site.radarId}|${tilt}|${String(data.scanTime || '')}|${String(data.latestTileStamp || '')}`
+            : '';
           if (playbackActive && archiveAvailable && frames.length > 0) {
             const idx = Math.max(0, Math.min(playbackIndex, frames.length - 1));
             tileUrl = String(frames[idx]?.tileUrl || data.latestTileUrl);
@@ -1218,6 +1294,12 @@ export function RadarMap({
             const last = frames[frames.length - 1];
             lastFrameRef.current = { time: String(last?.time || last?.label || ''), product, site: site.radarId, tilt };
           }
+          setFastScanStatus({
+            available: Boolean(scanKey),
+            scanTime: data.scanTime ? String(data.scanTime) : null,
+            source: data.scanTimeSource ? String(data.scanTimeSource) : null,
+          });
+          pendingScanKeyRef.current = scanKey;
         } catch {
           if (map.getLayer(rasterLayerId)) map.removeLayer(rasterLayerId);
           if (map.getSource(rasterSourceId)) map.removeSource(rasterSourceId);
@@ -1231,17 +1313,25 @@ export function RadarMap({
 
       if (!tileUrl) return;
 
-      if (tileUrl !== prevTileUrlRef.current) {
-        if (prevTileUrlRef.current && fastScanEnabled) {
-          setScanIngesting(true);
+      const scanKey = pendingScanKeyRef.current;
+      const scanContext = `${product}|${site.radarId}|${tilt}`;
+      const sameContext = scanContext === lastScanContextRef.current;
+      const hasNewVerifiedScan = Boolean(scanKey && sameContext && scanKey !== lastScanKeyRef.current);
+      if (tileUrl !== prevTileUrlRef.current && hasNewVerifiedScan && prevTileUrlRef.current && fastScanEnabled) {
+        if (startReveal(map, prevTileUrlRef.current)) {
           onNewScan?.({
             latencySec: 0,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
             site: site.radarId,
           });
         }
-        prevTileUrlRef.current = tileUrl;
       }
+      if (scanKey) {
+        lastScanKeyRef.current = scanKey;
+        lastScanContextRef.current = scanContext;
+      }
+      prevTileUrlRef.current = tileUrl;
+      pendingScanKeyRef.current = '';
 
       // New/changed source: clear prior banner state and health flag so a
       // genuinely unavailable product still reports its own failure.
@@ -1322,7 +1412,7 @@ export function RadarMap({
         );
       }
     },
-    [mode, product, tilt, maxRefWindow, site.radarId, radarOpacity, fastScanEnabled, onNewScan, playbackIndex, playbackActive, satelliteSelection?.bird, satelliteSelection?.sector, satelliteSelection?.productId]
+    [mode, product, tilt, maxRefWindow, site.radarId, radarOpacity, fastScanEnabled, onNewScan, playbackIndex, playbackActive, startReveal, satelliteSelection?.bird, satelliteSelection?.sector, satelliteSelection?.productId]
   );
 
   const updateRangeRings = useCallback((map: MapLibreMap, lat: number, lon: number) => {
@@ -2159,8 +2249,15 @@ export function RadarMap({
         <div className="absolute top-28 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-xl border border-emerald-500/60 bg-[#0b1220] px-4 py-2 font-mono text-xs font-bold text-emerald-300 shadow-2xl">
           <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
           <span>SCAN INGEST FRONTIER</span>
-          <span className="font-normal text-slate-400">New scan detected; sweep indicates ingest window</span>
+          <span className="font-normal text-slate-400">Verified new scan; new data is replacing old tiles behind the beam</span>
           <button type="button" onClick={() => setScanIngestDismissed(true)} className="ml-1 text-slate-400 hover:text-white" aria-label="Dismiss scan ingest">×</button>
+        </div>
+      )}
+      {fastScanEnabled && !scanIngesting && !tileError && (
+        <div className={`absolute bottom-24 left-3 z-30 rounded border px-2 py-1 font-mono text-[10px] ${fastScanStatus.available ? 'border-emerald-500/40 bg-[#0b1220]/90 text-emerald-300' : 'border-amber-500/40 bg-[#0b1220]/90 text-amber-300'}`}>
+          {fastScanStatus.available
+            ? `FASTSCAN READY · VERIFIED ${fastScanStatus.scanTime?.replace('T', ' ').replace('Z', ' UTC') || 'SCAN'}`
+            : 'FASTSCAN LIVE ONLY · NO VERIFIED SCAN TIME'}
         </div>
       )}
 

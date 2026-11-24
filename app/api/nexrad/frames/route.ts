@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { RADAR_SITES } from '../../../../lib/radar-config';
 import { canonicalRadarProductId, getRadarCapability } from '../../../../lib/radar/capability-matrix';
+import { fetchLatestIemScan } from '../../../../lib/radar/iem-scan-time';
 
 export const dynamic = 'force-dynamic';
 
@@ -86,12 +87,17 @@ export async function GET(request: Request) {
   let productCode = 'N0B';
   let latestTileUrl = '';
   let provider = isTdwr ? 'FAA TDWR / IEM RIDGE' : 'NOAA NEXRAD Level III / IEM RIDGE';
+  // Only sources with a verified IEM volume-scan index can prove new scans.
+  // All other sources stay LIVE ONLY and must not drive a reveal animation.
+  let iemScanTarget: { radar: string; product: string } | null = null;
 
   if (isTdwr) {
     if (cap.id === 'ref') {
       productCode = 'TZL';
+      iemScanTarget = { radar: sector, product: productCode };
     } else if (cap.id === 'vel') {
       productCode = 'TV0';
+      iemScanTarget = { radar: sector, product: productCode };
     } else {
       return unavailable(`DATA UNAVAILABLE - ${cap.name} is not supported for TDWR site ${site.id}.`, {
         productKey,
@@ -163,6 +169,7 @@ export async function GET(request: Request) {
             tilt,
           });
         }
+        iemScanTarget = { radar: sector, product: productCode };
         break;
       default:
         return unavailable(cap.unavailableReason || `DATA UNAVAILABLE - ${cap.name} is not available.`, {
@@ -173,17 +180,37 @@ export async function GET(request: Request) {
     latestTileUrl = `${IEM_TILE}/ridge::${sector}-${productCode}-0/{z}/{x}/{y}.png`;
   }
 
-  // The active route serves live tiles only until a real scan-time index is wired in.
   const playbackSupport = 'LIVE_ONLY' as const;
   const compositeTileUrl = `${IEM_TILE}/nexrad-n0q-900913/{z}/{x}/{y}.png`;
 
-  const now = new Date();
-  // No archive scan-time index is verified in this active route yet. Return only
-  // the live source so playback never points at guessed, usually-empty timestamps.
-  const frames = [{ time: now.toISOString(), label: 'LIVE', tileUrl: latestTileUrl, ageMinutes: 0 }];
+  let scanTime: string | null = null;
+  let scanTimeSource: string | null = null;
+  let tileStamp: string | null = null;
+  if (iemScanTarget) {
+    const scan = await fetchLatestIemScan({ radar: iemScanTarget.radar, product: iemScanTarget.product });
+    if (scan) {
+      scanTime = scan.scanTime;
+      tileStamp = scan.tileStamp;
+      scanTimeSource = 'IEM RIDGE volume scan list (json/radar.py operation=list)';
+      // Pin the live tile to the verified volume scan. The "-0" URL is latest
+      // only and cannot prove that a new scan actually arrived.
+      latestTileUrl = latestTileUrl.replace(`-${iemScanTarget.product}-0/`, `-${iemScanTarget.product}-${tileStamp}/`);
+    }
+  }
+
+  const frames = [
+    {
+      time: scanTime || '',
+      label: scanTime ? `VERIFIED SCAN ${scanTime.replace('T', ' ').replace('Z', ' UTC')}` : 'LIVE ONLY',
+      tileUrl: latestTileUrl,
+      ageMinutes: 0,
+    },
+  ];
 
   const notes: string[] = [
-    `LIVE ONLY - No verified scan-time index exists in the active route for ${cap.name} (${productCode}); no historical frames are fabricated.`,
+    scanTime
+      ? `SCAN SYNCHRONIZED - FastScan reveal is tied to IEM volume scan ${scanTime} for ${cap.name} (${productCode}).`
+      : `LIVE ONLY - No verified scan-time index is available for ${cap.name} (${productCode}); FastScan reveal is disabled and no historical frames are fabricated.`,
   ];
   if (cap.availability === 'PARTIAL') {
     notes.push(`PARTIAL - ${cap.name} is available with limited verification.`);
@@ -208,13 +235,17 @@ export async function GET(request: Request) {
       tilt,
       loopAvailable: false,
       notes: notes.length ? notes : undefined,
+      scanTime,
+      scanTimeSource,
+      scanTimeAvailable: Boolean(scanTime),
+      latestTileStamp: tileStamp,
       frames,
       latestTileUrl,
       compositeTileUrl,
     },
     {
       headers: {
-        'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=30',
+        'Cache-Control': 'no-store',
         'Access-Control-Allow-Origin': '*',
       },
     }

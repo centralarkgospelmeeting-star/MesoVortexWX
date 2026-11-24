@@ -268,7 +268,7 @@ export function WeatherWiseRadarCard({
                     <div className="flex gap-1">{[5, 10, 20, 30].map((w) => <button key={w} type="button" onClick={() => onSelectMaxRefWindow(w)} className={`rounded-full px-2 py-1 text-[11px] font-bold ${maxRefWindow === w ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-300'}`}>{w}</button>)}</div>
                   </div>
                 )}
-                <label className="flex items-center gap-2 text-[11px] text-slate-300"><input type="checkbox" checked={showFastScan} onChange={onToggleFastScan} />Fast Scan (ingest indicator)</label>
+                <label className="flex items-center gap-2 text-[11px] text-slate-300"><input type="checkbox" checked={showFastScan} onChange={onToggleFastScan} />Fast Scan (verified scan reveal)</label>
                 <label className="flex items-center gap-2 text-[11px] text-slate-300"><input type="checkbox" checked={showRangeRings} onChange={onToggleRangeRings} />Range rings</label>
               </>
             )}

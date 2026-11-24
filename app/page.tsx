@@ -250,7 +250,6 @@ export default function MesoVortexWorkstation() {
     wind: true,
     flooding: true,
   });
-  const [showSweepAnimation, setShowSweepAnimation] = useState(true);
   const [showFastScan, setShowFastScan] = useState(false);
   const [showFlashReflectivity, setShowFlashReflectivity] = useState(false);
   const [flashRange, setFlashRange] = useState<[number, number]>([60, 80]);
@@ -575,7 +574,6 @@ export default function MesoVortexWorkstation() {
     modelRun,
     modelForecastHour,
     spotterFilters,
-    showSweepAnimation,
     showFastScan,
     showFlashReflectivity,
     flashRange,
