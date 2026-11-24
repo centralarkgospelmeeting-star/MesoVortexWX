@@ -104,20 +104,17 @@ export async function GET(request: Request) {
     productCode = 'BDHC';
     provider = 'NOAA NCEP opengeo WMS (RIDGEII BDHC)';
     latestTileUrl = `/api/radar/ncep-wms?product=hhc&site=${encodeURIComponent(sector)}&bbox={bbox-epsg-3857}&width=256&height=256`;
-  } else if (cap.id === 'cc' || cap.id === 'zdr') {
-    const mergedTilt = cap.tiltSupport[0];
-    if (tilt !== '0.5' && tilt !== mergedTilt) {
-      return unavailable(`DATA UNAVAILABLE - ${cap.name} is a merged 0.5 km product and has no elevation tilts.`, {
+  } else if (cap.id === 'cc' || cap.id === 'zdr' || cap.id === 'kdp') {
+    if (!cap.tiltSupport.includes(tilt)) {
+      return unavailable(`DATA UNAVAILABLE - Elevation ${tilt}° is not supported for ${cap.name}.`, {
         productKey,
         capabilityId: cap.id,
         tilt,
       });
     }
-    productCode = cap.id === 'cc' ? 'MergedRhoHV' : 'MergedZdr';
-    provider = cap.id === 'cc'
-      ? 'NOAA NCEP MRMS MergedRhoHV (2D 0.5km)'
-      : 'NOAA NCEP MRMS MergedZdr (2D 0.5km)';
-    latestTileUrl = `/api/radar/mrms-tile?product=${cap.id}&z={z}&x={x}&y={y}`;
+    productCode = cap.id === 'cc' ? 'RHO' : cap.id === 'zdr' ? 'ZDR' : 'KDP (derived from PHI)';
+    provider = 'NOAA NEXRAD Level II (single radar)';
+    latestTileUrl = `/api/radar/level2-tile?site=${encodeURIComponent(site.id)}&product=${cap.id}&tilt=${encodeURIComponent(tilt)}&z={z}&x={x}&y={y}`;
   } else {
     const verifiedTiltCodes: Record<string, Partial<Record<string, string>>> = {
       ref: { '0.5': 'N0B', '0.9': 'N1B', '1.3': 'N2B', '1.8': 'N3B' },

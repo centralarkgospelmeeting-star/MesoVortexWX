@@ -8,6 +8,24 @@ export const dynamic = 'force-dynamic';
 // no synthetic data, no fake archive; only live latest grid. Unknown/missing = transparent.
 const TILE = 256;
 
+// Keep PNG encoding compatible with the project's Node 20 types/runtime.
+// zlib.crc32 is only available in newer Node releases.
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < table.length; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(data: Buffer): number {
+  let crc = 0xffffffff;
+  for (let i = 0; i < data.length; i++) crc = CRC32_TABLE[(crc ^ data[i]) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
 function unavailable(reason: string, cap?: any) {
   return new Response(JSON.stringify({ data: null, available: false, reason, error: reason, playbackSupport: cap?.playbackSupport ?? 'NONE', archiveSupport: cap?.archiveSupport ?? 'UNKNOWN', verificationLevel: cap?.verification?.level ?? 'UNVERIFIED' }), {
     status: 404, headers: { 'Cache-Control': 'no-store', 'Content-Type': 'application/json' },
@@ -69,7 +87,7 @@ function encodePngRgba(w: number, h: number, rgba: Uint8Array): Buffer {
     const len = Buffer.alloc(4); len.writeUInt32BE(data.length, 0);
     const t = Buffer.from(type, 'ascii');
     const crc = Buffer.alloc(4);
-    const c = zlib.crc32(Buffer.concat([t, Buffer.from(data)]));
+    const c = crc32(Buffer.concat([t, Buffer.from(data)]));
     crc.writeUInt32BE(c >>> 0, 0);
     return Buffer.concat([len, t, Buffer.from(data), crc]);
   }

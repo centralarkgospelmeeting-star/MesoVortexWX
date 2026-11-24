@@ -27,7 +27,7 @@ function readU32(b: Buffer, o: number) { return b.readUInt32BE(o); }
 function readI16(b: Buffer, o: number) { return b.readInt16BE(o); }
 function readF32(b: Buffer, o: number) { return b.readFloatBE(o); }
 
-function decodePngRgb(buf: Buffer): { w: number; h: number; data: Uint8Array } {
+function decodePngRgb(buf: Buffer): { w: number; h: number; data: Uint8Array; alpha?: Uint8Array } {
   if (buf.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') throw new Error('GRIB2 sec7 not PNG');
   let i = 8, w = 0, h = 0, bit = 0, ct = 0, interlace = 0;
   const idats: Buffer[] = [];
@@ -72,8 +72,11 @@ function decodePngRgb(buf: Buffer): { w: number; h: number; data: Uint8Array } {
   }
   if (channels === 4) {
     const rgb = new Uint8Array(w * h * 3);
-    for (let p = 0, q = 0; p < out.length; p += 4, q += 3) { rgb[q] = out[p]; rgb[q+1]=out[p+1]; rgb[q+2]=out[p+2]; }
-    return { w, h, data: rgb };
+    const alpha = new Uint8Array(w * h);
+    for (let p = 0, q = 0, a = 0; p < out.length; p += 4, q += 3, a++) {
+      rgb[q] = out[p]; rgb[q+1]=out[p+1]; rgb[q+2]=out[p+2]; alpha[a] = out[p+3];
+    }
+    return { w, h, data: rgb, alpha };
   }
   return { w, h, data: out };
 }
@@ -139,6 +142,13 @@ export function parseMrmsGrib2(grib: Buffer, product: string): MrmsGrid {
   const d10 = Math.pow(10, -scale10);
   const d2 = Math.pow(2, scale2);
   for (let p=0, q=0; p<n; p++, q+=3) {
+    // PNG alpha marks missing/transparent cells in some MRMS GRIB2 products.
+    // Dropping it turns those cells into valid packed values and creates a noisy
+    // full-map overlay, especially for CC and ZDR.
+    if (png.alpha && png.alpha[p] === 0) {
+      values[p] = NaN;
+      continue;
+    }
     const raw = (png.data[q]<<16) | (png.data[q+1]<<8) | png.data[q+2];
     // MRMS missing is commonly -999/-99 encoded in scaled space or special value. Use threshold.
     const v = (ref + raw * d2) * d10;

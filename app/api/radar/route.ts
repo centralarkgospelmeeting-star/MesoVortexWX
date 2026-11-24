@@ -100,13 +100,24 @@ export async function GET(request: NextRequest) {
         productCode = 'N0S';
         archiveSupported = true;
         break;
+      case 'cc':
+      case 'zdr':
+      case 'kdp':
+        if (!cap.tiltSupport.includes(tilt)) {
+          return unavailable(`DATA UNAVAILABLE - Elevation ${tilt}° is not supported for ${cap.name}.`, { productKey, capabilityId: cap.id, tilt });
+        }
+        productCode = cap.id === 'cc' ? 'RHO' : cap.id === 'zdr' ? 'ZDR' : 'KDP (derived from PHI)';
+        break;
       default:
         return unavailable(cap.unavailableReason || `DATA UNAVAILABLE - ${cap.name} is not available.`, { productKey, capabilityId: cap.id });
     }
   }
 
   const playbackSupport = archiveSupported ? (cap.archiveSupport === 'PARTIAL' || cap.archiveSupport === 'PARTIAL_ARCHIVE' ? 'PARTIAL_ARCHIVE' : 'REAL_ARCHIVE') : 'LIVE_ONLY';
-  const latestTileUrl = `${IEM_TILE}/ridge::${sector}-${productCode}-0/{z}/{x}/{y}.png`;
+  const dualPol = normalized.id === 'cc' || normalized.id === 'zdr' || normalized.id === 'kdp';
+  const latestTileUrl = dualPol
+    ? `/api/radar/level2-tile?site=${encodeURIComponent(site.id)}&product=${normalized.id}&tilt=${encodeURIComponent(tilt)}&z={z}&x={x}&y={y}`
+    : `${IEM_TILE}/ridge::${sector}-${productCode}-0/{z}/{x}/{y}.png`;
   const compositeTileUrl = `${IEM_TILE}/nexrad-n0q-900913/{z}/{x}/{y}.png`;
   const now = new Date();
   const frames: { time: string; label: string; tileUrl: string; ageMinutes: number; source: string }[] = [];
@@ -135,7 +146,7 @@ export async function GET(request: NextRequest) {
       archiveSupport: cap.archiveSupport,
       verificationLevel: cap.verification.level,
       status: 'LIVE',
-      provider: isTdwr ? 'FAA TDWR / IEM RIDGE' : 'NOAA NEXRAD Level III via IEM RIDGE',
+      provider: isTdwr ? 'FAA TDWR / IEM RIDGE' : dualPol ? 'NOAA NEXRAD Level II (single radar)' : 'NOAA NEXRAD Level III via IEM RIDGE',
       station: site.radarId,
       siteId: site.id,
       product: productCode,
