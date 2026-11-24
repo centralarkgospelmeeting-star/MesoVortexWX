@@ -33,7 +33,8 @@ function colorFor(product: string, v: number): [number,number,number,number] {
     if (v >= 0.70) return [0,200,0,180];
     if (v >= 0.60) return [0,128,255,170];
     if (v >= 0.50) return [0,0,200,160];
-    return [100,100,100,140];
+    // Below 0.50 is typically no-echo/noise in MRMS CC; keep transparent to avoid a grey film.
+    return [0,0,0,0];
   }
   if (product === 'MergedZdr') {
     // Differential Reflectivity -2..6 dB (typical)
