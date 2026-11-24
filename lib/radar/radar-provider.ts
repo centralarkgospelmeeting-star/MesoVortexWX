@@ -1,5 +1,5 @@
 import { RADAR_SITES } from '../radar-config';
-import { getRadarCapability, isRadarProductAvailable } from './capability-matrix';
+import { canonicalRadarProductId, getRadarCapability, isRadarProductAvailable } from './capability-matrix';
 
 export type RadarNetwork = 'nexrad' | 'tdwr' | 'mrms' | 'research' | 'private' | 'mobile' | 'spotter';
 export type RadarNetworkType = RadarNetwork;
@@ -37,23 +37,7 @@ class NoaaWsR88DDriver implements RadarDriver {
   private baseUrl = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0';
 
   private resolveProduct(product: string, network: RadarNetwork): { code: string; capabilityId: string; archiveSupported: boolean } | null {
-    const p = product.toLowerCase();
-    const capId = (p === 'ref' || p === 'max_ref' || p === 'ref_x') ? 'ref'
-      : p === 'vel' ? 'vel'
-      : p === 'srvel' ? 'srvel'
-      : (p === 'cc' || p === 'correlation' || p === 'correlation_coefficient') ? 'cc'
-      : (p === 'zdr' || p === 'differential_reflectivity') ? 'zdr'
-      : (p === 'kdp' || p === 'specific_differential_phase') ? 'kdp'
-      : (p === 'sw' || p === 'spectrum_width') ? 'sw'
-      : p === 'hhc' ? 'hhc'
-      : (p === 'trk' || p === 'storm_track' || p === 'storm_tracking') ? 'trk'
-      : (p === 'mcc' || p === 'mesocyclone') ? 'mcc'
-      : (p === 'et' || p === 'echo_tops' || p === 'enhanced_echo_tops') ? 'et'
-      : p === 'vil' ? 'vil'
-      : (p === 'hail' || p === 'hail_index') ? 'hail'
-      : (p === 'qpe' || p === 'precipitation_array') ? 'qpe'
-      : (p === 'rate' || p === 'precipitation_rate') ? 'rate'
-      : p;
+    const capId = canonicalRadarProductId(product);
     const cap = getRadarCapability(capId);
     if (!cap || !isRadarProductAvailable(capId)) return null;
     if (network === 'tdwr' && !cap.networks.includes('TDWR')) return null;
@@ -68,35 +52,22 @@ class NoaaWsR88DDriver implements RadarDriver {
     if (capId === 'ref') return { code: 'N0B', capabilityId: capId, archiveSupported: true };
     if (capId === 'vel') return { code: 'N0U', capabilityId: capId, archiveSupported: false };
     if (capId === 'srvel') return { code: 'N0S', capabilityId: capId, archiveSupported: true };
-    if (capId === 'cc') return { code: 'N0C', capabilityId: capId, archiveSupported: true };
-    if (capId === 'zdr') return { code: 'N0X', capabilityId: capId, archiveSupported: true };
-    if (capId === 'kdp') return { code: 'N0K', capabilityId: capId, archiveSupported: true };
-    if (capId === 'sw') return { code: 'NSP', capabilityId: capId, archiveSupported: true };
-    if (capId === 'hhc') return { code: 'HHC', capabilityId: capId, archiveSupported: true };
-    if (capId === 'trk') return { code: 'NST', capabilityId: capId, archiveSupported: true };
-    if (capId === 'mcc') return { code: 'NMD', capabilityId: capId, archiveSupported: true };
-    if (capId === 'et') return { code: 'EET', capabilityId: capId, archiveSupported: true };
-    if (capId === 'vil') return { code: 'NVL', capabilityId: capId, archiveSupported: true };
-    if (capId === 'hail') return { code: 'NHI', capabilityId: capId, archiveSupported: true };
-    if (capId === 'qpe') return { code: 'DPA', capabilityId: capId, archiveSupported: true };
-    if (capId === 'rate') return { code: 'DPR', capabilityId: capId, archiveSupported: true };
     return null;
   }
 
   getTileUrl(req: RadarTileRequest): string {
+    const resolved = this.resolveProduct(req.product, req.station.network);
+    if (!resolved) return '';
+
     const national =
       !req.station?.callsign ||
       req.station.id === 'US' ||
       req.station.callsign === 'US' ||
       req.station.callsign.length < 3;
-    if (national) return `${this.baseUrl}/nexrad-n0q-900913/{z}/{x}/{y}.png`;
-
-    const resolved = this.resolveProduct(req.product, req.station.network);
-    if (!resolved) {
-      // Data honesty: do not silently fall back to unrelated product.
-      return '';
-    }
+    // The capability matrix has no verified national mosaic capability.
+    if (national) return '';
     const id = req.station.network === 'tdwr' ? req.station.id : req.station.callsign;
+    if (!id) return '';
     return `${this.baseUrl}/ridge::${id}-${resolved.code}-0/{z}/{x}/{y}.png`;
   }
 
@@ -165,7 +136,7 @@ export class RadarSiteRegistry {
       network: 'nexrad',
       country: 'US',
       isOnline: false,
-      supportedProducts: ['ref', 'vel', 'srvel', 'cc', 'zdr', 'kdp', 'sw', 'hhc', 'trk', 'mcc', 'et', 'vil', 'hail', 'qpe', 'rate'],
+      supportedProducts: ['ref', 'vel', 'srvel'],
       supportedTilts: ['0.5'],
     };
   }
@@ -201,7 +172,7 @@ export class RadarSiteRegistry {
         country: 'US',
         state: stateMatch?.[1],
         isOnline: true,
-        supportedProducts: ['ref', 'vel', 'srvel', 'cc', 'zdr', 'kdp', 'sw', 'hhc', 'trk', 'mcc', 'et', 'vil', 'hail', 'qpe', 'rate'],
+        supportedProducts: ['ref', 'vel', 'srvel'],
         supportedTilts: ['0.5', '0.9', '1.3', '1.8'],
         vcpMode: 'VCP 212 Convective',
       });

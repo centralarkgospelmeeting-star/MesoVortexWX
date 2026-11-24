@@ -97,12 +97,7 @@ function radarProductsWithAvailability() {
 const RADAR_PRODUCTS = radarProductsWithAvailability();
 
 const COMPOSITE_PRODUCTS = [
-  { key: 'comp_ref', label: 'Composite Reflectivity (CONUS N0Q)' },
-  { key: 'max_ref', label: 'Max Composite Reflectivity Swath' },
-  { key: 'qpe', label: 'Precipitation Composite' },
-  { key: 'rot_comp', label: 'Rotation Composite' },
-  { key: 'hail_comp', label: 'Hail Composite' },
-  { key: 'tops', label: 'Echo Tops Composite' },
+  { key: 'comp_ref', label: 'Composite Reflectivity (N0Q)' },
 ];
 
 const SATELLITE_PRODUCTS = [
@@ -219,6 +214,8 @@ export function FloatingProductPanel({
   const [selectedVariable, setSelectedVariable] = useState('ref');
   const [selectedPressure, setSelectedPressure] = useState('Surface');
   const [forecastHour, setForecastHour] = useState(0);
+  const productTilts = getRadarCapability(product)?.tiltSupport;
+  const supportedTilts = productTilts?.length ? productTilts : ['0.5'];
 
   return (
     <div className="absolute bottom-4 left-4 z-30 w-80 sm:w-84 max-h-[82vh] flex flex-col rounded-3xl border border-slate-800 bg-slate-950/95 font-sans text-slate-100 shadow-2xl backdrop-blur-2xl select-none overflow-hidden transition-all">
@@ -357,8 +354,8 @@ export function FloatingProductPanel({
                 <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   Elevation Beam Tilt
                 </label>
-                <div className="grid grid-cols-6 gap-1 font-mono text-[11px] font-bold">
-                  {['0.5', '0.9', '1.3', '1.8', '2.4', '3.1'].map((t) => (
+                <div className="grid grid-cols-4 gap-1 font-mono text-[11px] font-bold">
+                  {supportedTilts.map((t) => (
                     <button
                       key={t}
                       onClick={() => onSelectTilt(t)}

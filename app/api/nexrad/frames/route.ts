@@ -1,35 +1,10 @@
 import { NextResponse } from 'next/server';
 import { RADAR_SITES } from '../../../../lib/radar-config';
-import { getRadarCapability } from '../../../../lib/radar/capability-matrix';
+import { canonicalRadarProductId, getRadarCapability } from '../../../../lib/radar/capability-matrix';
 
 export const dynamic = 'force-dynamic';
 
 const IEM_TILE = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0';
-
-type ProductAlias = {
-  id: string;
-  archiveAllowed?: boolean; // override when we know archive is real for this exact code
-};
-
-function normalizeProduct(productKey: string): ProductAlias | null {
-  const key = productKey.toLowerCase();
-  if (key === 'ref' || key === 'max_ref' || key === 'ref_x') return { id: 'ref' };
-  if (key === 'vel') return { id: 'vel' };
-  if (key === 'srvel') return { id: 'srvel' };
-  if (key === 'norm_vel' || key === 'nrot') return { id: 'nrot' };
-  if (key === 'min_cc') return { id: 'min_cc' };
-  if (key === 'cc') return { id: 'cc' };
-  if (key === 'zdr') return { id: 'zdr' };
-  if (key === 'kdp') return { id: 'kdp' };
-  if (key === 'sw') return { id: 'sw' };
-  if (key === 'hhc') return { id: 'hhc' };
-  if (key === 'qpe') return { id: 'qpe' };
-  if (key === 'azshear') return { id: 'azshear' };
-  if (key === 'mesh') return { id: 'mesh' };
-  if (key === 'tops') return { id: 'tops' };
-  if (key === 'vil') return { id: 'vil' };
-  return null;
-}
 
 function unavailable(reason: string, extra: Record<string, unknown> = {}) {
   const capId = typeof extra.capabilityId === 'string' ? extra.capabilityId : undefined;
@@ -57,18 +32,26 @@ export async function GET(request: Request) {
 
   const site =
     RADAR_SITES.find((s) => s.id === siteId || s.radarId === siteId) ||
-    RADAR_SITES.find((s) => s.radarId === siteId.replace(/^K/, '')) ||
-    RADAR_SITES[0];
+    RADAR_SITES.find((s) => s.radarId === siteId.replace(/^K/, ''));
+
+  if (!site) {
+    return unavailable(`DATA UNAVAILABLE - Unknown radar site "${siteId}".`, { siteId });
+  }
 
   const isTdwr = site.network === 'TDWR';
   const sector = isTdwr ? `T${site.radarId}` : site.radarId;
 
-  const normalized = normalizeProduct(productKey);
-  if (!normalized) {
-    return unavailable(`DATA UNAVAILABLE - Unknown radar product "${productKey}".`, { productKey });
+  const canonicalId = canonicalRadarProductId(productKey);
+  // These are derived UI products. The map deliberately requests the real REF
+  // input when it computes them, but the raw frames API must not alias them to REF.
+  if (canonicalId === 'max_ref' || canonicalId === 'ref_x') {
+    return unavailable(`DATA UNAVAILABLE - ${canonicalId} is derived in the map from real REF frames.`, {
+      productKey,
+      capabilityId: canonicalId,
+    });
   }
 
-  const cap = getRadarCapability(normalized.id);
+  const cap = getRadarCapability(canonicalId);
   if (!cap) {
     return unavailable(`DATA UNAVAILABLE - Unknown radar product "${productKey}".`, { productKey });
   }
@@ -98,17 +81,17 @@ export async function GET(request: Request) {
     });
   }
 
-  // Resolve actual IEM product code. Only verified mappings allowed.
+  // Resolve an explicitly verified source. Products with separate providers
+  // keep their distinct semantics; they are never aliased to REF or N0Q.
   let productCode = 'N0B';
-  let archiveSupported = false;
+  let latestTileUrl = '';
+  let provider = isTdwr ? 'FAA TDWR / IEM RIDGE' : 'NOAA NEXRAD Level III / IEM RIDGE';
 
   if (isTdwr) {
-    if (normalized.id === 'ref') {
+    if (cap.id === 'ref') {
       productCode = 'TZL';
-      archiveSupported = false; // not verified as archived in this pipeline
-    } else if (normalized.id === 'vel') {
+    } else if (cap.id === 'vel') {
       productCode = 'TV0';
-      archiveSupported = false;
     } else {
       return unavailable(`DATA UNAVAILABLE - ${cap.name} is not supported for TDWR site ${site.id}.`, {
         productKey,
@@ -116,32 +99,51 @@ export async function GET(request: Request) {
         network: 'TDWR',
       });
     }
+    latestTileUrl = `${IEM_TILE}/ridge::${sector}-${productCode}-0/{z}/{x}/{y}.png`;
+  } else if (cap.id === 'hhc') {
+    productCode = 'BDHC';
+    provider = 'NOAA NCEP opengeo WMS (RIDGEII BDHC)';
+    latestTileUrl = `/api/radar/ncep-wms?product=hhc&site=${encodeURIComponent(sector)}&bbox={bbox-epsg-3857}&width=256&height=256`;
+  } else if (cap.id === 'cc' || cap.id === 'zdr') {
+    const mergedTilt = cap.tiltSupport[0];
+    if (tilt !== '0.5' && tilt !== mergedTilt) {
+      return unavailable(`DATA UNAVAILABLE - ${cap.name} is a merged 0.5 km product and has no elevation tilts.`, {
+        productKey,
+        capabilityId: cap.id,
+        tilt,
+      });
+    }
+    productCode = cap.id === 'cc' ? 'MergedRhoHV' : 'MergedZdr';
+    provider = cap.id === 'cc'
+      ? 'NOAA NCEP MRMS MergedRhoHV (2D 0.5km)'
+      : 'NOAA NCEP MRMS MergedZdr (2D 0.5km)';
+    latestTileUrl = `/api/radar/mrms-tile?product=${cap.id}&z={z}&x={x}&y={y}`;
   } else {
-    switch (normalized.id) {
+    const verifiedTiltCodes: Record<string, Partial<Record<string, string>>> = {
+      ref: { '0.5': 'N0B', '0.9': 'N1B', '1.3': 'N2B', '1.8': 'N3B' },
+      vel: { '0.5': 'N0U', '0.9': 'N1U', '1.3': 'N2U', '1.8': 'N3U' },
+      srvel: { '0.5': 'N0S' },
+    };
+    if (!cap.tiltSupport.includes(tilt)) {
+      return unavailable(`DATA UNAVAILABLE - Tilt ${tilt} is not supported for ${cap.name}.`, {
+        productKey,
+        capabilityId: cap.id,
+        tilt,
+      });
+    }
+
+    switch (cap.id) {
       case 'ref':
-        productCode = tilt === '0.9' ? 'N1B' : tilt === '1.3' ? 'N2B' : tilt === '1.8' ? 'N3B' : 'N0B';
-        archiveSupported = productCode === 'N0B';
-        break;
       case 'vel':
-        productCode = tilt === '0.9' ? 'N1U' : tilt === '1.3' ? 'N2U' : tilt === '1.8' ? 'N3U' : 'N0U';
-        archiveSupported = false; // not verified as reliable archived ridge tiles in this pipeline
-        break;
       case 'srvel':
-        productCode = 'N0S';
-        archiveSupported = true;
-        break;
-      case 'hhc':
-        // Verified live NCEP opengeo BDHC WMS via internal proxy. Archive TIME exists upstream but
-        // is not yet wired into MesoVortexWX playback; expose LIVE_ONLY honestly.
-        productCode = 'BDHC';
-        archiveSupported = false;
-        break;
-      case 'cc':
-      case 'zdr':
-        // Verified live MRMS MergedRhoHV/MergedZdr GRIB2 decoded server-side to tiles.
-        // Not single-site Level III N0C/N0X; LIVE_ONLY, no fake archive.
-        productCode = normalized.id === 'cc' ? 'MergedRhoHV' : 'MergedZdr';
-        archiveSupported = false;
+        productCode = verifiedTiltCodes[cap.id]?.[tilt] ?? '';
+        if (!productCode) {
+          return unavailable(`DATA UNAVAILABLE - No verified IEM code for ${cap.name} at ${tilt}° tilt.`, {
+            productKey,
+            capabilityId: cap.id,
+            tilt,
+          });
+        }
         break;
       default:
         return unavailable(cap.unavailableReason || `DATA UNAVAILABLE - ${cap.name} is not available.`, {
@@ -149,54 +151,24 @@ export async function GET(request: Request) {
           capabilityId: cap.id,
         });
     }
+    latestTileUrl = `${IEM_TILE}/ridge::${sector}-${productCode}-0/{z}/{x}/{y}.png`;
   }
 
-  // Capability matrix playback rule: if archive not supported, LIVE_ONLY single frame.
-  const playbackSupport = archiveSupported ? (cap.archiveSupport === 'PARTIAL' || cap.archiveSupport === 'PARTIAL_ARCHIVE' ? 'PARTIAL_ARCHIVE' : 'REAL_ARCHIVE') : 'LIVE_ONLY';
-  const latestTileUrl = normalized.id === 'hhc'
-    ? `/api/radar/ncep-wms?product=hhc&site=${encodeURIComponent(sector)}&bbox={bbox-epsg-3857}&width=256&height=256`
-    : (normalized.id === 'cc' || normalized.id === 'zdr')
-    ? `/api/radar/mrms-tile?product=${normalized.id}&z={z}&x={x}&y={y}`
-    : `${IEM_TILE}/ridge::${sector}-${productCode}-0/{z}/{x}/{y}.png`;
+  // The active route serves live tiles only until a real scan-time index is wired in.
+  const playbackSupport = 'LIVE_ONLY' as const;
   const compositeTileUrl = `${IEM_TILE}/nexrad-n0q-900913/{z}/{x}/{y}.png`;
 
   const now = new Date();
-  const frames: { time: string; label: string; tileUrl: string; ageMinutes: number }[] = [];
+  // No archive scan-time index is verified in this active route yet. Return only
+  // the live source so playback never points at guessed, usually-empty timestamps.
+  const frames = [{ time: now.toISOString(), label: 'LIVE', tileUrl: latestTileUrl, ageMinutes: 0 }];
 
-  if (playbackSupport === 'REAL_ARCHIVE' || playbackSupport === 'PARTIAL_ARCHIVE') {
-    for (let i = 10; i >= 1; i--) {
-      const d = new Date(now.getTime() - i * 5 * 60 * 1000);
-      d.setUTCMinutes(Math.floor(d.getUTCMinutes() / 5) * 5, 0, 0);
-      const stamp = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}${String(d.getUTCHours()).padStart(2, '0')}${String(d.getUTCMinutes()).padStart(2, '0')}`;
-      const ageMinutes = Math.round((now.getTime() - d.getTime()) / 60000);
-      frames.push({
-        time: d.toISOString(),
-        label: `-${ageMinutes}m`,
-        tileUrl: `${IEM_TILE}/ridge::${sector}-${productCode}-${stamp}/{z}/{x}/{y}.png`,
-        ageMinutes,
-      });
-    }
-  }
-
-  frames.push({ time: now.toISOString(), label: 'LIVE', tileUrl: latestTileUrl, ageMinutes: 0 });
-
-  const notes: string[] = [];
-  if (playbackSupport === 'LIVE_ONLY') {
-    notes.push(`LIVE ONLY - Historical loop not verified for ${cap.name} (${productCode}) from this source. No fake historical frames generated.`);
-  } else if (playbackSupport === 'PARTIAL_ARCHIVE') {
-    notes.push(`PARTIAL ARCHIVE - Historical frames are real when available, but archive coverage is sparse/unverified across sites/times. No fake frames generated.`);
-  }
+  const notes: string[] = [
+    `LIVE ONLY - No verified scan-time index exists in the active route for ${cap.name} (${productCode}); no historical frames are fabricated.`,
+  ];
   if (cap.availability === 'PARTIAL') {
     notes.push(`PARTIAL - ${cap.name} is available with limited verification.`);
   }
-
-  const provider = normalized.id === 'hhc'
-    ? 'NOAA NCEP opengeo WMS (RIDGEII BDHC)'
-    : normalized.id === 'cc'
-    ? 'NOAA NCEP MRMS MergedRhoHV (2D 0.5km)'
-    : normalized.id === 'zdr'
-    ? 'NOAA NCEP MRMS MergedZdr (2D 0.5km)'
-    : isTdwr ? 'FAA TDWR / IEM RIDGE' : 'NOAA NEXRAD Level III / IEM RIDGE';
 
   return NextResponse.json(
     {
@@ -204,7 +176,7 @@ export async function GET(request: Request) {
       available: true,
       reason: notes.length ? notes.join(' ') : null,
       playbackSupport,
-      archiveSupport: cap.archiveSupport,
+      archiveSupport: 'NONE',
       verificationLevel: cap.verification.level,
       provider,
       station: site.radarId,
@@ -215,7 +187,7 @@ export async function GET(request: Request) {
       productKey,
       capabilityId: cap.id,
       tilt,
-      loopAvailable: playbackSupport === 'REAL_ARCHIVE' || playbackSupport === 'PARTIAL_ARCHIVE',
+      loopAvailable: false,
       notes: notes.length ? notes : undefined,
       frames,
       latestTileUrl,

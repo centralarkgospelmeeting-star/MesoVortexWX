@@ -534,8 +534,36 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
   },
 ] as const;
 
+const RADAR_PRODUCT_ALIASES: Record<string, string> = {
+  ref: 'ref', reflectivity: 'ref', br: 'ref', ref_x: 'ref_x', max_ref: 'max_ref',
+  vel: 'vel', velocity: 'vel', bv: 'vel',
+  srvel: 'srvel', srv: 'srvel', sr_v: 'srvel', storm_relative_velocity: 'srvel',
+  cc: 'cc', correlation: 'cc', correlation_coefficient: 'cc',
+  min_cc: 'min_cc', mcc: 'min_cc',
+  zdr: 'zdr', differential_reflectivity: 'zdr',
+  kdp: 'kdp', specific_differential_phase: 'kdp',
+  sw: 'sw', spectrum_width: 'sw', hhc: 'hhc', qpe: 'qpe',
+  nrot: 'nrot', az: 'azshear', azshear: 'azshear', mesh: 'mesh',
+  trk: 'rotation_tracks', rotation_tracks: 'rotation_tracks',
+  et: 'tops', echo_tops: 'tops', enhanced_echo_tops: 'tops',
+  vil: 'vil', vild: 'vil_density',
+  hail: 'hail_detection', hail_detection: 'hail_detection',
+  xsec: 'cross_section', cross_section: 'cross_section',
+  gate: 'gate_to_gate_shear', gate_to_gate_shear: 'gate_to_gate_shear', gate_filter: 'gate_filter',
+  rate: 'precip_rate', precip_rate: 'precip_rate',
+  rms: 'rain_mix_snow', rain_mix_snow: 'rain_mix_snow',
+  anlz: 'storm_analysis', storm_analysis: 'storm_analysis',
+  vol: 'volume_scan', volume_scan: 'volume_scan',
+};
+
+export function canonicalRadarProductId(id: string): string {
+  const key = id.trim().toLowerCase();
+  return RADAR_PRODUCT_ALIASES[key] ?? key;
+}
+
 export function getRadarCapability(id: string): RadarProductCapability | undefined {
-  return RADAR_CAPABILITY_MATRIX.find((p) => p.id === id);
+  const canonicalId = canonicalRadarProductId(id);
+  return RADAR_CAPABILITY_MATRIX.find((p) => p.id === canonicalId);
 }
 
 export function isRadarProductAvailable(id: string): boolean {
