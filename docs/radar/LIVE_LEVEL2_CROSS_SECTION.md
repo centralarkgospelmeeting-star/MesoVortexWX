@@ -21,7 +21,7 @@ The **XSEC** control selects a geographic transect on the radar map. Click Point
 
 The API decodes the current NOAA Level II volume and samples measured reflectivity gates along the transect for each available elevation sweep. Transect columns are now spaced at equal great-circle distance intervals, rather than equal increments in latitude and longitude. For each column, the nearest available radial is accepted only when its azimuth is within 1.1° of the point bearing from the radar.
 
-Beam height is calculated with the standard 4/3-earth effective-radius model and is reported as **feet above radar level**. It is not AGL: no terrain elevation model or radar antenna elevation correction is applied. The returned field is named `beamHeightFtAboveRadar` to make that reference explicit. Missing radial/gate samples remain `null`; the API does not fill gaps or synthesize echoes.
+Beam height is calculated with the standard 4/3-earth effective-radius model and is reported as **feet above radar level**. It is not AGL: no terrain elevation model or radar antenna elevation correction is applied. The returned field is named `beamHeightFtAboveRadar` to make that reference explicit. The response also identifies `heightReference: ABOVE_RADAR_LEVEL`, `transectSampling: GREAT_CIRCLE_EQUAL_DISTANCE`, and `beamModel: 4/3_EARTH_EFFECTIVE_RADIUS`. Missing radial/gate samples remain `null`; the API does not fill gaps or synthesize echoes.
 
 ## Verified scope and limitations
 
