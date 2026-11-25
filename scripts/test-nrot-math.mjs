@@ -52,3 +52,24 @@ console.log(JSON.stringify({
   nearRadarExcluded: cyclonic.gatesExcludedNearRadar,
 }));
 console.log('NROT synthetic math tests PASS');
+
+
+const insufficient = calculateNrot(radials.slice(0, 4), 34.836, -92.262);
+if (insufficient.available || insufficient.maxCyclonic !== null) {
+  throw new Error('NROT must fail closed with fewer than five radials');
+}
+const weakEcho = radials.map(radial => ({
+  ...radial,
+  reflect: { ...radial.reflect, moment_data: Array(radial.reflect.moment_data.length).fill(19.9) },
+}));
+const weakEchoResult = calculateNrot(weakEcho, 34.836, -92.262);
+if (weakEchoResult.available || weakEchoResult.gatesAnalyzed !== 0) {
+  throw new Error('NROT must reject gates below the 20 dBZ meteorological-echo threshold');
+}
+const missingVelocity = radials.map((radial, index) => index % 3 === 0
+  ? { ...radial, velocity: { ...radial.velocity, moment_data: radial.velocity.moment_data.map(() => null) } }
+  : radial);
+const missingVelocityResult = calculateNrot(missingVelocity, 34.836, -92.262);
+if (missingVelocityResult.gatesRejected === 0) {
+  throw new Error('NROT missing-velocity gate rejection path was not exercised');
+}
