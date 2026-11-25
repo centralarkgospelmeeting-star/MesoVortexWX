@@ -58,4 +58,4 @@ console.log(JSON.stringify({
   unresolvedGates: result.diagnostics.gatesUnresolved,
   correctionRate: result.diagnostics.correctionRate,
 }));
-console.log('Velocity dealiasing synthetic tests PASS');
+console.log('Velocity dealiasing synthetic tests PASS (folded radial wind field, raw-data immutability, and missing-Nyquist fail-closed checks)');
