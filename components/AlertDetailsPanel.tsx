@@ -27,6 +27,13 @@ type Props = {
   onSelectNearestRadar: (site: { id: string; name: string; lat: number; lon: number }) => void;
 };
 
+function extractStormMotion(text: string): string {
+  const m = text.match(/moving\s+(?:toward\s+)?([A-Z]{1,3}(?:\s+[A-Z]{1,3})?)\s+at\s+(\d+)\s*mph/i);
+  if (m) return `${m[1]} at ${m[2]} mph`;
+  const m2 = text.match(/storm motion[^.]*?(\d+)\s*deg[^.]*?(\d+)\s*kt/i);
+  if (m2) return `${m2[1]}° at ${m2[2]} kt`;
+  return 'DATA UNAVAILABLE';
+}
 function isPds(alert: WeatherAlert): boolean {
   const hay = `${alert.headline} ${alert.description} ${alert.event} ${(alert.parameters?.VTEC || []).join(' ')}`.toLowerCase();
   return hay.includes('particularly dangerous situation') || /\bpds\b/.test(hay);
@@ -152,18 +159,16 @@ export function AlertDetailsPanel({ alert, context, onClose, onSelectAlert, onSe
             </section>
 
             <section data-section="radar" aria-label="Nearest radar" className="rounded-md border border-slate-700 bg-[#0f172a] px-2 py-1.5">
-              <div className="text-[9px] font-black uppercase tracking-wider text-slate-500">Nearest radar</div>
-              {nearest ? (
-                <button
-                  type="button"
-                  onClick={() => onSelectNearestRadar(nearest)}
-                  className="mt-0.5 w-full text-left hover:text-sky-300"
-                  title={`Select ${nearest.id} and center the map`}
-                >
-                  <div className="text-[12px] font-black text-slate-100">{nearest.id} <span className="text-[10px] font-medium text-slate-400">{nearest.name}</span></div>
-                  <div className="text-[10px] text-slate-400">{compactDistance(nearest.distanceM)} · {bearingCardinal(nearest.bearingDeg)} ({Math.round(nearest.bearingDeg)}°)</div>
-                </button>
-              ) : <div className="mt-0.5 text-[10px] text-slate-500">Unavailable</div>}
+              <div className="text-[9px] font-black uppercase tracking-wider text-slate-500">Nearest radar sites</div>
+              <div className="mt-0.5 space-y-0.5">
+                {(context.nearestRadarSites || []).slice(0, 3).map((s) => (
+                  <button key={s.id} type="button" onClick={() => onSelectNearestRadar(s)} className="block w-full text-left hover:text-sky-300">
+                    <span className="text-[12px] font-black text-slate-100">{s.id}</span>
+                    <span className="ml-1 text-[10px] text-slate-400">{s.name} · {compactDistance(s.distanceM)}</span>
+                  </button>
+                ))}
+                {!(context.nearestRadarSites || []).length && <div className="text-[10px] text-slate-500">Unavailable</div>}
+              </div>
             </section>
 
             <section data-section="reports" aria-label="Nearby reports" className="rounded-md border border-slate-700 bg-[#0f172a]">
@@ -188,7 +193,7 @@ export function AlertDetailsPanel({ alert, context, onClose, onSelectAlert, onSe
           </>
         )}
 
-        {alert && !context && (
+        {alert && (
           <section className="rounded-md border border-slate-700 bg-[#0f172a] p-2">
             <div className="text-[11px] font-black text-white">{isPds(alert) ? 'PDS ' : ''}{alert.event}</div>
             <div className="text-[10px] text-slate-500">{alert.wfo || 'Office unavailable'} · {alertExpiryLabel(alert)}</div>
@@ -197,11 +202,35 @@ export function AlertDetailsPanel({ alert, context, onClose, onSelectAlert, onSe
               <div className="mt-2">
                 <Row label="Event type" value={alert.event} />
                 <Row label="Issuing office" value={alert.senderName || alert.wfo || 'Unavailable'} />
+                <Row label="VTEC" value={(alert.parameters?.VTEC || []).join(', ') || 'Unavailable'} />
+                <Row label="Severity" value={alert.severity || 'Unavailable'} />
+                <Row label="Urgency" value={alert.urgency || 'Unavailable'} />
+                <Row label="Certainty" value={alert.certainty || 'Unavailable'} />
                 <Row label="Issue time" value={formatAlertTime(alert.sent)} />
                 <Row label="Expiration time" value={formatAlertTime(alert.expires)} />
-                <Row label="Affected locations" value={alert.areaDesc || 'Unavailable'} />
-                <div className="border-t border-slate-800 pt-1 mt-1 text-[10px] text-slate-300 whitespace-pre-wrap">{alert.description || alert.headline || 'Unavailable'}</div>
-                <div className="border-t border-slate-800 pt-1 mt-1 text-[10px] text-slate-300 whitespace-pre-wrap">{alert.instruction || 'Instructions unavailable from source.'}</div>
+                <Row label="Remaining time" value={alertExpiryLabel(alert)} />
+                <Row label="Affected area" value={alert.areaDesc || 'Unavailable'} />
+                <Row label="Places potentially affected" value={alert.areaDesc ? alert.areaDesc.split(';').map((s) => s.trim()).filter(Boolean).join(', ') : 'Unavailable'} />
+                <Row label="Population in polygon" value="DATA UNAVAILABLE" />
+                <Row label="Population density" value="DATA UNAVAILABLE" />
+                <Row label="Schools" value="DATA UNAVAILABLE" />
+                <Row label="Hospitals" value="DATA UNAVAILABLE" />
+                <Row label="Storm motion" value={extractStormMotion(alert.description || alert.headline)} />
+                <Row label="Storm track" value="DATA UNAVAILABLE" />
+                <div className="border-t border-slate-800 pt-1 mt-1">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">Hazards / Impacts</div>
+                  <div className="text-[10px] text-slate-200 whitespace-pre-wrap">{alert.headline || alert.description || 'Unavailable'}</div>
+                </div>
+                <div className="border-t border-slate-800 pt-1 mt-1">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">Instructions</div>
+                  <div className="text-[10px] text-slate-300 whitespace-pre-wrap">{alert.instruction || 'Instructions unavailable from source.'}</div>
+                </div>
+                {context && (
+                  <div className="border-t border-slate-800 pt-1 mt-1">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">Related information</div>
+                    <div className="text-[10px] text-slate-300">LSR: {context.lsrNearby.length} · Spotter: {context.spotterReportsNearby.length} · MCD: {context.mcdNearby.length} · SPC products: {context.spcProducts.filter((p) => p.status === 'Available').length}</div>
+                  </div>
+                )}
               </div>
             )}
           </section>

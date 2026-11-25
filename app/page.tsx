@@ -845,14 +845,22 @@ export default function MesoVortexWorkstation() {
     onCrossSectionComplete: handleCrossSectionComplete,
     alertFeatures: mapAlertFeatures,
     alertOutlineThickness: alertSettings.outlineThickness,
-    onSelectWarningFromMap: (w: any) => {
-      const id = String(w?.id || '');
-      if (id) { setLocationContext(null); setSelectedAlertId(id); setAlertsOpen(true); }
+    onSelectWarningFromMap: (w: any, lat?: number, lon?: number) => {
+      // WeatherWise-style: clicking inside a warning opens the small
+      // location summary first, not the full warning.
+      if (Number.isFinite(lat) && Number.isFinite(lon)) {
+        setSelectedAlertId(null);
+        setLocationContext({ lat: lat as number, lon: lon as number, ts: Date.now() });
+      } else {
+        const id = String(w?.id || '');
+        if (id) { setLocationContext(null); setSelectedAlertId(id); setAlertsOpen(true); }
+      }
     },
     onMapContextClick: (lat: number, lon: number) => {
+      // Only the warning summary panel is shown, and only inside polygons.
+      // Outside warning polygons: clear context so no summary panel appears.
       setSelectedAlertId(null);
-      setLocationContext({ lat, lon, ts: Date.now() });
-      // Do not force-open alerts panel during map interaction; details panel provides context.
+      setLocationContext(null);
       if (alertSettings.sidebarAutoHide && !alertSettings.sidebarPinned) setAlertsOpen(false);
     },
     focusTarget,
@@ -1598,7 +1606,7 @@ export default function MesoVortexWorkstation() {
           alert={selectedAlert}
           context={alertLocationContext}
           onClose={() => { setSelectedAlertId(null); setLocationContext(null); }}
-          onSelectAlert={(a) => { setLocationContext(null); setSelectedAlertId(a.id); setAlertsOpen(true); }}
+          onSelectAlert={(a) => { setSelectedAlertId(a.id); setAlertsOpen(true); }}
           onSelectNearestRadar={(site) => {
             setRadarSite(site.id);
             setFocusTarget({ lat: site.lat, lon: site.lon, zoom: 8, ts: Date.now() });

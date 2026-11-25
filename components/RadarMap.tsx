@@ -130,7 +130,7 @@ export interface RadarMapProps {
   modelForecastHour?: number;
   onNewScan?: (info: { latencySec: number; timestamp: string; site: string }) => void;
   onSelectSite?: (siteId: string) => void;
-  onSelectWarningFromMap?: (w: any) => void;
+  onSelectWarningFromMap?: (w: any, lat?: number, lon?: number) => void;
   onMapContextClick?: (lat: number, lon: number) => void;
   alertOutlineThickness?: number;
   onCrossSectionComplete?: (pointA: [number, number], pointB: [number, number]) => void;
@@ -817,7 +817,7 @@ export function RadarMap({
         if (!props) return;
         // One compact AlertDetailsPanel owns the workflow; do not open a second
         // raw MapLibre popup for the same warning click.
-        if (onSelectWarningRef.current) onSelectWarningRef.current(props);
+        if (onSelectWarningRef.current) onSelectWarningRef.current(props, e.lngLat?.lat, e.lngLat?.lng);
       });
       map.on('mouseenter', WARNINGS_FILL_ID, () => {
         map.getCanvas().style.cursor = 'pointer';
