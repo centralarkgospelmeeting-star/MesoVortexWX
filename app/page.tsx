@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { RadarMap, BasemapType, ModeTab } from '../components/RadarMap';
+import { CrossSectionModal } from '../components/CrossSectionModal';
+import type { LiveCrossSectionResult } from '../lib/radar/cross-section-types';
 import { VolumeScanInspector } from '../components/radar/VolumeScanInspector';
 import { WeatherWiseRadarCard } from '../components/WeatherWiseRadarCard';
 import { ToolboxPanel } from '../components/map-tools/ToolboxPanel';
@@ -254,6 +256,10 @@ export default function MesoVortexWorkstation() {
   const [showFlashReflectivity, setShowFlashReflectivity] = useState(false);
   const [flashRange, setFlashRange] = useState<[number, number]>([60, 80]);
   const [inspectionMode, setInspectionMode] = useState(false);
+  const [crossSectionMode, setCrossSectionMode] = useState(false);
+  const [crossSectionResult, setCrossSectionResult] = useState<LiveCrossSectionResult | null>(null);
+  const [crossSectionLoading, setCrossSectionLoading] = useState(false);
+  const [crossSectionError, setCrossSectionError] = useState<string | null>(null);
   const [toolMode, setToolMode] = useState<'none'|'measure-distance'|'measure-area'|'draw-point'|'draw-line'|'draw-polygon'|'annotate'>('none');
   const [toolRevision, setToolRevision] = useState(0);
   const [toolMeasurements, setToolMeasurements] = useState<Array<{id:string;kind:'distance'|'area';label:string;value:string;points:Array<[number,number]>}>>([]);
@@ -550,6 +556,43 @@ export default function MesoVortexWorkstation() {
     return buildLocationContext(locationContext.lat, locationContext.lon, styledAlerts, RADAR_SITES as any, spotterReportsForContext, mcdFeaturesForContext);
   }, [locationContext, styledAlerts, spotterReportsForContext, mcdFeaturesForContext]);
 
+  useEffect(() => {
+    if (!crossSectionMode) return;
+    const cancelSelection = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setCrossSectionMode(false);
+    };
+    window.addEventListener('keydown', cancelSelection);
+    return () => window.removeEventListener('keydown', cancelSelection);
+  }, [crossSectionMode]);
+
+  const handleCrossSectionComplete = async (pointA: [number, number], pointB: [number, number]) => {
+    setCrossSectionMode(false);
+    setCrossSectionLoading(true);
+    setCrossSectionError(null);
+    setCrossSectionResult(null);
+    try {
+      const response = await fetch('/api/radar/cross-section', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({
+          site: currentSite.radarId || currentSite.id,
+          start: { lon: pointA[0], lat: pointA[1] },
+          end: { lon: pointB[0], lat: pointB[1] },
+          columns: 150,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error || `Cross-section request failed (HTTP ${response.status}).`);
+      if (!Array.isArray(payload?.sweeps) || !payload.sweeps.length) throw new Error('The live radar volume returned no elevation sweeps for this transect.');
+      setCrossSectionResult(payload as LiveCrossSectionResult);
+    } catch (error) {
+      setCrossSectionError(error instanceof Error ? error.message : 'Unable to load a live radar cross section.');
+    } finally {
+      setCrossSectionLoading(false);
+    }
+  };
+
   const paneProps = {
     radarSite,
     tilt,
@@ -578,6 +621,8 @@ export default function MesoVortexWorkstation() {
     showFlashReflectivity,
     flashRange,
     inspectionMode,
+    crossSectionMode: crossSectionMode && !expertMode && !quadMode,
+    onCrossSectionComplete: handleCrossSectionComplete,
     alertFeatures: mapAlertFeatures,
     alertOutlineThickness: alertSettings.outlineThickness,
     onSelectWarningFromMap: (w: any) => {
@@ -839,6 +884,22 @@ export default function MesoVortexWorkstation() {
             title="Menu & Layer Selector"
           >
             ☰
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setCrossSectionError(null);
+              setCrossSectionResult(null);
+              setCrossSectionMode((active) => !active);
+              setToolMode('none');
+              setExpertMode(false);
+              setQuadMode(false);
+              setTripleMode(false);
+            }}
+            className={`rounded-full border px-3 py-2 text-[10px] font-black tracking-wide transition ${crossSectionMode ? 'border-amber-400 bg-amber-500 text-slate-950' : 'border-sky-700 bg-sky-950/70 text-sky-200 hover:bg-sky-900'}`}
+            title="Select two points on the map to extract a live NEXRAD Level II reflectivity cross section"
+          >
+            {crossSectionMode ? 'XSEC · CLICK A THEN B' : 'XSEC'}
           </button>
 
           <div className="flex items-center rounded-full border border-slate-700 bg-[#181c22] p-0.5 shadow-lg">
@@ -1149,6 +1210,24 @@ export default function MesoVortexWorkstation() {
           />
         )}
       </div>
+
+      {crossSectionMode && (
+        <div className="pointer-events-none absolute left-1/2 top-20 z-40 -translate-x-1/2 rounded-xl border border-amber-400/60 bg-slate-950/95 px-4 py-3 text-center text-xs text-amber-100 shadow-2xl">
+          <div className="font-black tracking-wide">XSEC TRANSECT SELECTION</div>
+          <div className="mt-1 text-[11px] text-slate-300">Click Point A, then click Point B on the map. Press Escape to cancel.</div>
+        </div>
+      )}
+      {crossSectionLoading && (
+        <div className="absolute left-1/2 top-1/2 z-[80] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-sky-700 bg-slate-950 px-5 py-4 text-sm font-bold text-sky-200 shadow-2xl">Extracting measured Level II reflectivity gates…</div>
+      )}
+      {crossSectionError && (
+        <div className="absolute left-1/2 top-20 z-[80] -translate-x-1/2 rounded-xl border border-rose-500/60 bg-slate-950 px-4 py-3 text-xs text-rose-200 shadow-2xl">
+          <div className="font-bold">XSEC unavailable</div>
+          <div className="mt-1">{crossSectionError}</div>
+          <button type="button" className="mt-2 rounded bg-slate-800 px-2 py-1 text-slate-100" onClick={() => setCrossSectionError(null)}>Dismiss</button>
+        </div>
+      )}
+      {crossSectionResult && <CrossSectionModal data={crossSectionResult} onClose={() => setCrossSectionResult(null)} />}
 
       {bottomBarOpen ? (
         <WeatherWiseRadarCard
