@@ -131,6 +131,12 @@ const WARNING_COLORS: Array<[RegExp, string, string]> = [
   [/flood/i, '#22c55e', '#4ade80'],
   [/winter storm|blizzard|ice storm/i, '#38bdf8', '#7dd3fc'],
   [/extreme wind|high wind|wind/i, '#f97316', '#fdba74'],
+  [/heat/i, '#ef4444', '#fca5a5'],
+  [/red flag/i, '#dc2626', '#f87171'],
+  [/dense fog/i, '#94a3b8', '#cbd5e1'],
+  [/dust/i, '#a16207', '#d6d3d1'],
+  [/tropical|hurricane/i, '#dc2626', '#f87171'],
+  [/coastal flood|lakeshore flood/i, '#0ea5e9', '#7dd3fc'],
 ];
 
 export function alertColors(event: string, category: AlertCategory): { color: string; lineColor: string } {

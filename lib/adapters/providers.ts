@@ -114,7 +114,7 @@ export class NwsAlertsAdapter {
       const json = await res.json();
 
       return (json.features || [])
-        .filter((f: any) => f.geometry && (f.properties?.event || '').includes('Warning'))
+        .filter((f: any) => f.geometry)
         .map((f: any) => ({
           id: f.id || f.properties?.id,
           event: f.properties?.event || 'Severe Warning',
