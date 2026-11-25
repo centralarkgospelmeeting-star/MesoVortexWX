@@ -1,6 +1,6 @@
 # Live NEXRAD Level II reflectivity cross sections
 
-The route `POST /api/radar/cross-section` extracts reflectivity gates along a user-supplied geographic transect from the latest available NOAA NEXRAD Level II volume for one radar.
+The application exposes an **XSEC** control in the map toolbar. Select it, click Point A and then Point B on the radar map, and the app calls `POST /api/radar/cross-section` to extract reflectivity gates along that geographic transect from the latest available NOAA NEXRAD Level II volume for one radar. Press Escape or toggle XSEC again to cancel selection.
 
 ## Request
 
