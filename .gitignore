@@ -28,3 +28,6 @@ next-env.d.ts
 .DS_Store
 Thumbs.db
 .aider*
+
+# MesoAI append-only learning data (runtime, never committed)
+data/mesoai/

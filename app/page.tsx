@@ -8,6 +8,7 @@ import { StormAnalysisPanel } from '../components/radar/StormAnalysisPanel';
 import type { LiveCrossSectionResult } from '../lib/radar/cross-section-types';
 import { VolumeScanInspector } from '../components/radar/VolumeScanInspector';
 import { WeatherWiseRadarCard } from '../components/WeatherWiseRadarCard';
+import { MesoAIPanel } from '../components/MesoAIPanel';
 import { ToolboxPanel } from '../components/map-tools/ToolboxPanel';
 import { WeatherWiseAlertsPanel } from '../components/WeatherWiseAlertsPanel';
 import { AlertSettingsPanel } from '../components/AlertSettingsPanel';
@@ -358,6 +359,7 @@ export default function MesoVortexWorkstation() {
   const [alertSettings, setAlertSettings] = useState<AlertSettings>(DEFAULT_ALERT_SETTINGS);
   const [menuOpen, setMenuOpen] = useState(false);
   const [wisOpen, setWisOpen] = useState(true);
+  const [mesoaiOpen, setMesoaiOpen] = useState(false);
   const [dataSourceFilter, setDataSourceFilter] = useState<'ALL' | DataSourceStatus>('ALL');
 
   useEffect(() => {
@@ -558,6 +560,19 @@ export default function MesoVortexWorkstation() {
   };
 
   const styledAlerts = useMemo(() => alerts.map((a) => applyAlertSettingsToAlert(a, alertSettings)), [alerts, alertSettings]);
+  const mesoaiWarning = useMemo(() => {
+    const alert = styledAlerts.find((a) => a.category === 'warning') || null;
+    return alert ? {
+      event: alert.event,
+      headline: alert.headline,
+      description: alert.description,
+      instruction: alert.instruction,
+      areaDesc: alert.areaDesc,
+      category: alert.category,
+      severity: alert.severity,
+      sent: alert.sent,
+    } : null;
+  }, [styledAlerts]);
   const styledFilteredAlertsBase = useMemo(() => filteredAlerts.map((a) => applyAlertSettingsToAlert(a, alertSettings)), [filteredAlerts, alertSettings]);
   const styledFilteredAlerts = useMemo(() => {
     const mode = alertSettings.filterMode;
@@ -1216,6 +1231,13 @@ export default function MesoVortexWorkstation() {
             alerts={styledAlerts}
           />
         )}
+        <MesoAIPanel
+          open={mesoaiOpen}
+          onClose={() => setMesoaiOpen(false)}
+          site={{ id: currentSite.id, name: currentSite.name, lat: currentSite.lat, lon: currentSite.lon }}
+          productKey={product}
+          warning={mesoaiWarning}
+        />
         {quadMode ? (
           <>
             <div className="hidden h-full w-full md:grid md:grid-cols-2 md:grid-rows-2">
@@ -1470,6 +1492,15 @@ export default function MesoVortexWorkstation() {
               ))}
             </div>
             <div className="mt-4 border-t border-slate-800 pt-3">
+              <button
+                key="MesoAI"
+                type="button"
+                data-menu-mesoai="true"
+                onClick={() => { setMesoaiOpen((v) => !v); setMenuOpen(false); }}
+                className="w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white"
+              >
+                {mesoaiOpen ? 'Hide MesoAI Analysis' : 'Show MesoAI Analysis'}
+              </button>
               <button
                 key="WeatherIntensityScore"
                 type="button"
