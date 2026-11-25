@@ -353,6 +353,8 @@ export function RadarMap({
   const [toolMeasurements, setToolMeasurements] = useState<MapToolMeasurement[]>([]);
   const [toolDrawings, setToolDrawings] = useState<MapToolDrawing[]>([]);
   const toolDraftRef = useRef<LngLat[]>([]);
+  const crossSectionStartRef = useRef<LngLat | null>(null);
+  const onCrossSectionCompleteRef = useRef(onCrossSectionComplete);
   const toolModeRef = useRef<MapToolMode>(toolMode);
   const toolRevRef = useRef<number>(toolRevision);
   const onToolMeasurementsChangeRef = useRef(onToolMeasurementsChange);
@@ -1953,6 +1955,8 @@ export function RadarMap({
   }, [onSelectWarningFromMap]);
 
   useEffect(() => { onMapContextClickRef.current = onMapContextClick; }, [onMapContextClick]);
+  useEffect(() => { onCrossSectionCompleteRef.current = onCrossSectionComplete; }, [onCrossSectionComplete]);
+  useEffect(() => { if (!crossSectionMode) crossSectionStartRef.current = null; }, [crossSectionMode]);
   useEffect(() => {
     alertOutlineThicknessRef.current = alertOutlineThickness;
     const map = mapRef.current;
@@ -2142,6 +2146,17 @@ export function RadarMap({
       refreshToolLayers();
     };
     const onClick = (e: any) => {
+      if (crossSectionMode) {
+        const point: LngLat = [e.lngLat.lng, e.lngLat.lat];
+        if (!crossSectionStartRef.current) {
+          crossSectionStartRef.current = point;
+          return;
+        }
+        const start = crossSectionStartRef.current;
+        crossSectionStartRef.current = null;
+        onCrossSectionCompleteRef.current?.(start, point);
+        return;
+      }
       const mode = toolModeRef.current;
       if (!mode || mode === 'none' || inspectionMode) {
         const warningFeatures = map.queryRenderedFeatures(e.point, { layers: [WARNINGS_FILL_ID].filter((id) => map.getLayer(id)) });
@@ -2171,7 +2186,7 @@ export function RadarMap({
     map.on('dblclick', onDblClick);
     window.addEventListener('keydown', onKey);
     return () => { map.off('click', onClick); map.off('dblclick', onDblClick); window.removeEventListener('keydown', onKey); };
-  }, [mapReady, inspectionMode, refreshToolLayers]);
+  }, [mapReady, inspectionMode, refreshToolLayers, crossSectionMode]);
 
   // FastScan: poll real frames endpoint more frequently. Honest: this is faster polling of IEM, not a verified ultra-low-latency feed.
   useEffect(() => {
