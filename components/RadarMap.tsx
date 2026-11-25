@@ -305,6 +305,7 @@ export function RadarMap({
   showRangeRings = true,
   showRadarPills = true,
   showWarnings = true,
+  showWatches = true,
   showMCD = true,
   showSpotters = false,
   showSpotterReports = false,
@@ -375,11 +376,11 @@ export function RadarMap({
   const lastScanKeyRef = useRef<string>('');
   const lastScanContextRef = useRef<string>('');
   const pendingScanKeyRef = useRef<string>('');
+  const satelliteSourceConfigRef = useRef<string>('');
   const revealFrameRef = useRef<number | null>(null);
   const revealLastFadeRef = useRef<number | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [tileError, setTileError] = useState<string | null>(null);
-  const [sweepAngle, setSweepAngle] = useState(0);
   const [liveOnly, setLiveOnly] = useState(false);
   const [hurricaneStatus, setHurricaneStatus] = useState<{ state: 'idle' | 'loading' | 'ready' | 'unavailable'; count: number; message?: string }>({ state: 'idle', count: 0 });
   const hurricaneHandlersBoundRef = useRef(false);
@@ -424,11 +425,17 @@ export function RadarMap({
     try { map.setPitch(Math.max(0, Math.min(75, Number(mapPitch) || 0))); } catch {}
   }, [mapReady, mapPitch]);
 
+  const removeSweepOverlay = useCallback((map: MapLibreMap) => {
+    if (map.getLayer(SWEEP_FILL_ID)) map.removeLayer(SWEEP_FILL_ID);
+    if (map.getLayer(SWEEP_LINE_ID)) map.removeLayer(SWEEP_LINE_ID);
+    if (map.getSource(SWEEP_SOURCE_ID)) map.removeSource(SWEEP_SOURCE_ID);
+  }, []);
+
   const stopReveal = useCallback((map?: MapLibreMap | null) => {
     if (revealFrameRef.current !== null) cancelAnimationFrame(revealFrameRef.current);
     revealFrameRef.current = null;
     setScanIngesting(false);
-    setSweepAngle(0);
+    sweepAngleRef.current = 0;
     const target = map || mapRef.current;
     if (!target) return;
     if (target.getLayer(RADAR_PREVIOUS_LAYER_ID)) target.removeLayer(RADAR_PREVIOUS_LAYER_ID);
@@ -447,6 +454,73 @@ export function RadarMap({
   useEffect(() => () => {
     if (mapRef.current) stopReveal(mapRef.current);
   }, [product, tilt, radarSite, mode, stopReveal]);
+
+  // Tile errors are tracked per raster source. A healthy basemap or a previously
+  // loaded product must never suppress a real failure of the active source.
+  const activeRasterSourceIdRef = useRef<string>(RADAR_SOURCE_ID);
+  const rasterTileErrorsRef = useRef<Set<string>>(new Set());
+  const tileErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const spotterHandlersBoundRef = useRef(false);
+  const reportHandlersBoundRef = useRef(false);
+  const showSpottersRef = useRef(showSpotters);
+  const showSpotterReportsRef = useRef(showSpotterReports);
+  const spotterHistoryRef = useRef<Map<string, SpotterObservation[]>>(new Map());
+  const [spotterStatus, setSpotterStatus] = useState<{
+    state: 'idle' | 'loading' | 'ready' | 'unavailable';
+    positions: number;
+    reports: number;
+    message?: string;
+  }>({ state: 'idle', positions: 0, reports: 0 });
+  const warningHandlersBoundRef = useRef(false);
+  const mcdHandlersBoundRef = useRef(false);
+  const showMCDRef = useRef(showMCD);
+  const showHurricanesRef = useRef(showHurricanes);
+  const showWarningsRef = useRef(showWarnings);
+  const showWatchesRef = useRef(showWatches);
+  const alertFeaturesRef = useRef<any>(alertFeatures);
+  const onSelectWarningRef = useRef(onSelectWarningFromMap);
+  const onMapContextClickRef = useRef(onMapContextClick);
+  const alertOutlineThicknessRef = useRef(alertOutlineThickness);
+  const towerPillMarkersRef = useRef<maplibregl.Marker[]>([]);
+  const showRadarPillsRef = useRef(showRadarPills);
+  const selectedRadarSiteRef = useRef(radarSite);
+  const onSelectSiteRef = useRef(onSelectSite);
+  const [mcdStatus, setMcdStatus] = useState<{
+    state: 'idle' | 'loading' | 'ready' | 'unavailable';
+    count: number;
+    message?: string;
+  }>({ state: 'idle', count: 0 });
+
+  const site =
+    RADAR_SITES.find((s) => s.id === radarSite || s.radarId === radarSite) ||
+    RADAR_SITES[0];
+
+  // Imperative GeoJSON updates keep the reveal animation off React's render
+  // path. Previously every requestAnimationFrame tick set React state, which
+  // re-rendered the entire workstation six times per second.
+  const renderSweep = useCallback((map: MapLibreMap, angle: number) => {
+    const geojson = makeSweepGeoJSON(site.lat, site.lon, angle);
+    const existing = map.getSource(SWEEP_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+    if (existing) {
+      existing.setData(geojson as any);
+      return;
+    }
+    map.addSource(SWEEP_SOURCE_ID, { type: 'geojson', data: geojson as any });
+    map.addLayer({
+      id: SWEEP_FILL_ID,
+      type: 'fill',
+      source: SWEEP_SOURCE_ID,
+      filter: ['==', '$type', 'Polygon'],
+      paint: { 'fill-color': '#22c55e', 'fill-opacity': 0.22 },
+    });
+    map.addLayer({
+      id: SWEEP_LINE_ID,
+      type: 'line',
+      source: SWEEP_SOURCE_ID,
+      filter: ['==', '$type', 'LineString'],
+      paint: { 'line-color': '#4ade80', 'line-width': 2.5, 'line-opacity': 1 },
+    });
+  }, [site.lat, site.lon]);
 
   const startReveal = useCallback((map: MapLibreMap, previousTileUrl: string) => {
     stopReveal(map);
@@ -481,7 +555,8 @@ export function RadarMap({
     const startedAt = performance.now();
     const tick = (now: number) => {
       const progress = Math.min(1, (now - startedAt) / FASTSCAN_REVEAL_MS);
-      setSweepAngle(progress * 360);
+      sweepAngleRef.current = progress * 360;
+      renderSweep(map, sweepAngleRef.current);
       if (map.getLayer(RADAR_LAYER_ID)) {
         map.setPaintProperty(RADAR_LAYER_ID, 'raster-opacity', radarOpacity * progress);
         if (map.getLayer(RADAR_PREVIOUS_LAYER_ID)) {
@@ -497,46 +572,7 @@ export function RadarMap({
     };
     revealFrameRef.current = requestAnimationFrame(tick);
     return true;
-  }, [mode, product, radarOpacity, stopReveal]);
-
-  // True once the radar tile source has reported a successful load. Used to
-  // suppress false-positive 503/404 banners (e.g. historical frames or
-  // unrelated map sources failing while the live product renders fine).
-  const radarSourceHealthyRef = useRef(false);
-  const tileErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const spotterHandlersBoundRef = useRef(false);
-  const reportHandlersBoundRef = useRef(false);
-  const showSpottersRef = useRef(showSpotters);
-  const showSpotterReportsRef = useRef(showSpotterReports);
-  const spotterHistoryRef = useRef<Map<string, SpotterObservation[]>>(new Map());
-  const [spotterStatus, setSpotterStatus] = useState<{
-    state: 'idle' | 'loading' | 'ready' | 'unavailable';
-    positions: number;
-    reports: number;
-    message?: string;
-  }>({ state: 'idle', positions: 0, reports: 0 });
-  const warningHandlersBoundRef = useRef(false);
-  const mcdHandlersBoundRef = useRef(false);
-  const showMCDRef = useRef(showMCD);
-  const showHurricanesRef = useRef(showHurricanes);
-  const showWarningsRef = useRef(showWarnings);
-  const alertFeaturesRef = useRef<any>(alertFeatures);
-  const onSelectWarningRef = useRef(onSelectWarningFromMap);
-  const onMapContextClickRef = useRef(onMapContextClick);
-  const alertOutlineThicknessRef = useRef(alertOutlineThickness);
-  const towerPillMarkersRef = useRef<maplibregl.Marker[]>([]);
-  const showRadarPillsRef = useRef(showRadarPills);
-  const selectedRadarSiteRef = useRef(radarSite);
-  const onSelectSiteRef = useRef(onSelectSite);
-  const [mcdStatus, setMcdStatus] = useState<{
-    state: 'idle' | 'loading' | 'ready' | 'unavailable';
-    count: number;
-    message?: string;
-  }>({ state: 'idle', count: 0 });
-
-  const site =
-    RADAR_SITES.find((s) => s.id === radarSite || s.radarId === radarSite) ||
-    RADAR_SITES[0];
+  }, [mode, product, radarOpacity, stopReveal, renderSweep]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -557,25 +593,40 @@ export function RadarMap({
     mapRef.current = map;
     spotterHandlersBoundRef.current = false;
     reportHandlersBoundRef.current = false;
+    warningHandlersBoundRef.current = false;
     setMapReady(false);
 
-    map.on('error', (e: any) => {
-      if (e?.sourceId && !RASTER_SOURCE_IDS.includes(e.sourceId)) return;
-      const status = e?.error?.status || e?.status;
-      if (status !== 404 && status !== 503) return;
-      if (radarSourceHealthyRef.current) return;
+    const scheduleRasterTileError = (sourceId: string, status: number | string) => {
+      rasterTileErrorsRef.current.add(sourceId);
+      if (sourceId !== activeRasterSourceIdRef.current) return;
       if (tileErrorTimerRef.current) clearTimeout(tileErrorTimerRef.current);
       tileErrorTimerRef.current = setTimeout(() => {
         tileErrorTimerRef.current = null;
-        if (radarSourceHealthyRef.current) return;
-        setTileError(`Tile Error (${status}): Data unavailable for this region.`);
+        if (rasterTileErrorsRef.current.has(activeRasterSourceIdRef.current)) {
+          setTileError(`Tile Error (${status}): Data unavailable for this region.`);
+        }
       }, 1200);
+    };
+
+    map.on('error', (e: any) => {
+      const sourceId = e?.sourceId;
+      if (!sourceId || !RASTER_SOURCE_IDS.includes(sourceId)) return;
+      const status = e?.error?.status || e?.status;
+      if (status !== 404 && status !== 503) return;
+      scheduleRasterTileError(sourceId, status);
     });
 
     map.on('sourcedata', (e: any) => {
-      if (!e?.sourceId || !RASTER_SOURCE_IDS.includes(e.sourceId)) return;
-      if (!e?.isSourceLoaded) return;
-      radarSourceHealthyRef.current = true;
+      const sourceId = e?.sourceId;
+      if (!sourceId || !RASTER_SOURCE_IDS.includes(sourceId)) return;
+      if (e?.tile?.state === 'errored') {
+        scheduleRasterTileError(sourceId, e?.error?.status || e?.status || 'load error');
+        return;
+      }
+      // Only a successfully loaded tile from the active source clears the banner.
+      if (e?.tile?.state !== 'loaded') return;
+      rasterTileErrorsRef.current.delete(sourceId);
+      if (sourceId !== activeRasterSourceIdRef.current) return;
       if (tileErrorTimerRef.current) {
         clearTimeout(tileErrorTimerRef.current);
         tileErrorTimerRef.current = null;
@@ -589,7 +640,7 @@ export function RadarMap({
     map.on('load', () => {
       setMapReady(true);
       map.resize();
-      if (showWarningsRef.current) updateWarnings(map);
+      updateWarnings(map);
       if (showMCDRef.current) updateMCD(map);
       updateRadar(map);
       if (radarVisualsEnabled && showRangeRings) updateRangeRings(map, site.lat, site.lon);
@@ -602,7 +653,8 @@ export function RadarMap({
         clearTimeout(tileErrorTimerRef.current);
         tileErrorTimerRef.current = null;
       }
-      radarSourceHealthyRef.current = false;
+      rasterTileErrorsRef.current.clear();
+      activeRasterSourceIdRef.current = RADAR_SOURCE_ID;
       setMapReady(false);
       clearTowerPills();
       map.remove();
@@ -613,7 +665,15 @@ export function RadarMap({
 
   const updateWarnings = useCallback((map: MapLibreMap, geojson?: any) => {
     const sourceData = geojson ?? alertFeaturesRef.current ?? { type: 'FeatureCollection', features: [] };
-    const features = Array.isArray(sourceData?.features) ? sourceData.features : [];
+    const allFeatures = Array.isArray(sourceData?.features) ? sourceData.features : [];
+    // Warning and watch toggles are independent. Other alert categories stay
+    // visible regardless of either toggle.
+    const features = allFeatures.filter((feature: any) => {
+      const category = String(feature?.properties?.category || '').toLowerCase();
+      if (category === 'warning') return showWarningsRef.current;
+      if (category === 'watch') return showWatchesRef.current;
+      return true;
+    });
     const validGeoJSON = { type: 'FeatureCollection', features };
 
     const source = map.getSource(WARNINGS_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
@@ -754,13 +814,6 @@ export function RadarMap({
     }
   }, []);
 
-  const removeWarningLayers = useCallback((map: MapLibreMap) => {
-    [WARNINGS_LINE_INNER_ID, WARNINGS_LINE_OUTER_ID, WARNINGS_FILL_ID].forEach((layerId) => {
-      if (map.getLayer(layerId)) map.removeLayer(layerId);
-    });
-    if (map.getSource(WARNINGS_SOURCE_ID)) map.removeSource(WARNINGS_SOURCE_ID);
-  }, []);
-
   const removeMCDLayers = useCallback((map: MapLibreMap) => {
     [MCD_LABEL_ID, MCD_LINE_ID, MCD_FILL_ID].forEach((layerId) => {
       if (map.getLayer(layerId)) map.removeLayer(layerId);
@@ -833,7 +886,7 @@ export function RadarMap({
           layout: {
             'text-field': ['coalesce', ['get', 'discussionNumber'], 'MD'],
             'text-size': 11,
-            'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+            'text-font': ['Noto Sans Bold'],
             'text-allow-overlap': false,
           },
           paint: {
@@ -1006,7 +1059,7 @@ export function RadarMap({
       if (!map.getLayer(HURRICANE_POINTS_LABEL_ID)) map.addLayer({ id: HURRICANE_POINTS_LABEL_ID, type: 'symbol', source: HURRICANE_POINTS_SOURCE_ID, layout: { 'text-field': ['coalesce', ['get', 'dvlabel'], ['get', 'fltlbl'], ''], 'text-size': 9, 'text-offset': [0, 1.2], 'text-anchor': 'top', 'text-allow-overlap': false }, paint: { 'text-color': '#e2e8f0', 'text-halo-color': '#020617', 'text-halo-width': 1 } }, beforeId);
       if (!map.getLayer(HURRICANE_CURRENT_HALO_ID)) map.addLayer({ id: HURRICANE_CURRENT_HALO_ID, type: 'circle', source: HURRICANE_CURRENT_SOURCE_ID, paint: { 'circle-radius': 12, 'circle-color': '#ef4444', 'circle-opacity': 0.18, 'circle-blur': 0.4 } }, beforeId);
       if (!map.getLayer(HURRICANE_CURRENT_CIRCLE_ID)) map.addLayer({ id: HURRICANE_CURRENT_CIRCLE_ID, type: 'circle', source: HURRICANE_CURRENT_SOURCE_ID, paint: { 'circle-radius': 7, 'circle-color': '#ef4444', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2 } }, beforeId);
-      if (!map.getLayer(HURRICANE_CURRENT_LABEL_ID)) map.addLayer({ id: HURRICANE_CURRENT_LABEL_ID, type: 'symbol', source: HURRICANE_CURRENT_SOURCE_ID, layout: { 'text-field': ['coalesce', ['get', 'stormName'], 'Storm'], 'text-size': 11, 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-offset': [0, 1.4], 'text-anchor': 'top' }, paint: { 'text-color': '#ffffff', 'text-halo-color': '#020617', 'text-halo-width': 1.4 } }, beforeId);
+      if (!map.getLayer(HURRICANE_CURRENT_LABEL_ID)) map.addLayer({ id: HURRICANE_CURRENT_LABEL_ID, type: 'symbol', source: HURRICANE_CURRENT_SOURCE_ID, layout: { 'text-field': ['coalesce', ['get', 'stormName'], 'Storm'], 'text-size': 11, 'text-font': ['Noto Sans Bold'], 'text-offset': [0, 1.4], 'text-anchor': 'top' }, paint: { 'text-color': '#ffffff', 'text-halo-color': '#020617', 'text-halo-width': 1.4 } }, beforeId);
 
       if (!hurricaneHandlersBoundRef.current) {
         hurricaneHandlersBoundRef.current = true;
@@ -1148,7 +1201,12 @@ export function RadarMap({
     }
 
     const wmsUrl = `https://geo.weather.gc.ca/geomet?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true&LAYERS=${encodeURIComponent(field.wmsLayer)}&STYLES=&CRS=EPSG:3857&WIDTH=256&HEIGHT=256&BBOX={bbox-epsg-3857}`;
-    const beforeId = map.getLayer('radar-layer') ? 'radar-layer' : map.getLayer(MCD_FILL_ID) ? MCD_FILL_ID : map.getLayer(WARNINGS_FILL_ID) ? WARNINGS_FILL_ID : undefined;
+    const weatherLayerId = map.getLayer(RADAR_LAYER_ID)
+      ? RADAR_LAYER_ID
+      : map.getLayer(SATELLITE_LAYER_ID)
+        ? SATELLITE_LAYER_ID
+        : undefined;
+    const beforeId = weatherLayerId ?? (map.getLayer(MCD_FILL_ID) ? MCD_FILL_ID : map.getLayer(WARNINGS_FILL_ID) ? WARNINGS_FILL_ID : undefined);
     try {
       const src = map.getSource(MODEL_SOURCE_ID) as maplibregl.RasterTileSource | undefined;
       if (src) {
@@ -1179,6 +1237,7 @@ export function RadarMap({
       let archiveAvailable = false;
       let satelliteBounds: [number, number, number, number] | undefined;
       let satelliteMaxzoom: number | undefined;
+      let satelliteSourceConfig = '';
 
       const isSatelliteMode = mode === 'Satellite';
       const rasterSourceId = isSatelliteMode ? SATELLITE_SOURCE_ID : RADAR_SOURCE_ID;
@@ -1186,7 +1245,12 @@ export function RadarMap({
       const staleSourceId = isSatelliteMode ? RADAR_SOURCE_ID : SATELLITE_SOURCE_ID;
       const staleLayerId = isSatelliteMode ? RADAR_LAYER_ID : SATELLITE_LAYER_ID;
       if (map.getLayer(staleLayerId)) map.removeLayer(staleLayerId);
-      if (map.getSource(staleSourceId)) map.removeSource(staleSourceId);
+      if (map.getSource(staleSourceId)) {
+        map.removeSource(staleSourceId);
+        rasterTileErrorsRef.current.delete(staleSourceId);
+      }
+      if (!isSatelliteMode) satelliteSourceConfigRef.current = '';
+      activeRasterSourceIdRef.current = rasterSourceId;
 
       if (mode === 'Composite') {
         tileUrl = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png';
@@ -1198,29 +1262,34 @@ export function RadarMap({
         archiveAvailable = false;
         satelliteBounds = getSatelliteTileBounds(satSel.sector);
         satelliteMaxzoom = getSatelliteTileMaxzoom(satSel.sector);
+        satelliteSourceConfig = JSON.stringify({ tileUrl, bounds: satelliteBounds, maxzoom: satelliteMaxzoom });
         if (!tileUrl) {
           if (map.getLayer(rasterLayerId)) map.removeLayer(rasterLayerId);
           if (map.getSource(rasterSourceId)) map.removeSource(rasterSourceId);
-          setTileError(sat.unavailableReason ? `DATA UNAVAILABLE` : 'DATA UNAVAILABLE');
+          setTileError(sat.unavailableReason || 'DATA UNAVAILABLE');
           setLiveOnly(false);
           return;
         }
-        try {
-          const probeTile = getSatelliteProbeTile(satSel) || '0/0/0';
-          const probe = await fetch(tileUrl.replace('{z}/{x}/{y}', probeTile), { cache: 'no-store' });
-          if (!probe.ok) {
+        const probeTile = getSatelliteProbeTile(satSel);
+        // Moving mesoscale sectors have no stable probe tile. Do not probe a
+        // placeholder world tile and falsely mark a live feed unavailable.
+        if (probeTile) {
+          try {
+            const probe = await fetch(tileUrl.replace('{z}/{x}/{y}', probeTile), { cache: 'no-store' });
+            if (!probe.ok) {
+              if (map.getLayer(rasterLayerId)) map.removeLayer(rasterLayerId);
+              if (map.getSource(rasterSourceId)) map.removeSource(rasterSourceId);
+              setTileError('DATA UNAVAILABLE');
+              setLiveOnly(false);
+              return;
+            }
+          } catch {
             if (map.getLayer(rasterLayerId)) map.removeLayer(rasterLayerId);
             if (map.getSource(rasterSourceId)) map.removeSource(rasterSourceId);
             setTileError('DATA UNAVAILABLE');
             setLiveOnly(false);
             return;
           }
-        } catch {
-          if (map.getLayer(rasterLayerId)) map.removeLayer(rasterLayerId);
-          if (map.getSource(rasterSourceId)) map.removeSource(rasterSourceId);
-          setTileError('DATA UNAVAILABLE');
-          setLiveOnly(false);
-          return;
         }
       } else if (mode === 'Models' || mode === 'Outlooks') {
         if (map.getLayer(rasterLayerId)) map.removeLayer(rasterLayerId);
@@ -1333,9 +1402,9 @@ export function RadarMap({
       prevTileUrlRef.current = tileUrl;
       pendingScanKeyRef.current = '';
 
-      // New/changed source: clear prior banner state and health flag so a
-      // genuinely unavailable product still reports its own failure.
-      radarSourceHealthyRef.current = false;
+      // New/changed source: clear prior banner state and that source's error
+      // so a genuinely unavailable product still reports its own failure.
+      rasterTileErrorsRef.current.delete(rasterSourceId);
       if (tileErrorTimerRef.current) {
         clearTimeout(tileErrorTimerRef.current);
         tileErrorTimerRef.current = null;
@@ -1360,7 +1429,10 @@ export function RadarMap({
       };
 
       const currentScheme = (existingSource as any)?.scheme || (existingSource as any)?.tileScheme;
-      const needsRebuild = !existingSource || typeof existingSource.setTiles !== 'function' || (usesWmsBbox && currentScheme !== 'tms');
+      // setTiles only swaps tile URLs. GOES bounds/maxzoom are source options,
+      // so a sector change needs a new raster source to take effect.
+      const satelliteConfigChanged = isSatelliteMode && satelliteSourceConfigRef.current !== satelliteSourceConfig;
+      const needsRebuild = !existingSource || typeof existingSource.setTiles !== 'function' || (usesWmsBbox && currentScheme !== 'tms') || satelliteConfigChanged;
 
       if (!needsRebuild && existingSource && typeof existingSource.setTiles === 'function') {
         // Switch raster tiles without rebuilding the map or tearing down layers.
@@ -1400,6 +1472,7 @@ export function RadarMap({
         if (isSatelliteMode && satelliteBounds) source.bounds = satelliteBounds;
 
         map.addSource(rasterSourceId, source);
+        satelliteSourceConfigRef.current = isSatelliteMode ? satelliteSourceConfig : '';
 
         map.addLayer(
           {
@@ -1629,7 +1702,7 @@ export function RadarMap({
         } else {
           map.addSource(REPORT_SOURCE_ID, { type: 'geojson', data: repGeo as any, cluster: true, clusterMaxZoom: 11, clusterRadius: 48 });
           map.addLayer({ id: REPORT_CLUSTER_LAYER_ID, type: 'circle', source: REPORT_SOURCE_ID, filter: ['has', 'point_count'], paint: { 'circle-color': ['step', ['get', 'point_count'], '#7f1d1d', 10, '#991b1b', 25, '#dc2626'], 'circle-radius': ['step', ['get', 'point_count'], 14, 10, 18, 25, 24], 'circle-stroke-width': 2, 'circle-stroke-color': '#fecaca', 'circle-opacity': 0.92 } }, warningsBefore);
-          map.addLayer({ id: REPORT_CLUSTER_COUNT_ID, type: 'symbol', source: REPORT_SOURCE_ID, filter: ['has', 'point_count'], layout: { 'text-field': '{point_count_abbreviated}', 'text-size': 11, 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'] }, paint: { 'text-color': '#ffffff' } }, warningsBefore);
+          map.addLayer({ id: REPORT_CLUSTER_COUNT_ID, type: 'symbol', source: REPORT_SOURCE_ID, filter: ['has', 'point_count'], layout: { 'text-field': '{point_count_abbreviated}', 'text-size': 11, 'text-font': ['Noto Sans Bold'] }, paint: { 'text-color': '#ffffff' } }, warningsBefore);
           map.addLayer({ id: REPORT_HALO_LAYER_ID, type: 'circle', source: REPORT_SOURCE_ID, filter: ['!', ['has', 'point_count']], paint: { 'circle-radius': 12, 'circle-color': '#ef4444', 'circle-opacity': 0.14, 'circle-blur': 0.5 } }, warningsBefore);
           map.addLayer({ id: REPORT_POINT_LAYER_ID, type: 'circle', source: REPORT_SOURCE_ID, filter: ['!', ['has', 'point_count']], paint: { 'circle-radius': 8, 'circle-color': ['match', ['get', 'hazard'], 'Tornado', '#dc2626', 'Funnel Cloud', '#f97316', 'Wall Cloud', '#f59e0b', 'Hail', '#22c55e', 'Wind', '#eab308', 'Flooding', '#3b82f6', '#a855f7'], 'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff' } }, warningsBefore);
           map.addLayer({ id: REPORT_ICON_LAYER_ID, type: 'symbol', source: REPORT_SOURCE_ID, filter: ['!', ['has', 'point_count']], layout: { 'text-field': ['match', ['get', 'hazard'], 'Tornado', '🌪', 'Funnel Cloud', '🌪', 'Wall Cloud', '🧱', 'Hail', '🧊', 'Wind', '💨', 'Flooding', '🌊', '⚠'], 'text-size': 10, 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': '#ffffff', 'text-halo-color': 'rgba(0,0,0,0.5)', 'text-halo-width': 0.5 } }, warningsBefore);
@@ -1853,16 +1926,16 @@ export function RadarMap({
 
   useEffect(() => {
     showWarningsRef.current = showWarnings;
+    showWatchesRef.current = showWatches;
     const map = mapRef.current;
     if (!map || !mapReady) return;
-    if (showWarnings) updateWarnings(map, alertFeaturesRef.current);
-    else removeWarningLayers(map);
-  }, [showWarnings, mapReady, updateWarnings, removeWarningLayers]);
+    updateWarnings(map, alertFeaturesRef.current);
+  }, [showWarnings, showWatches, mapReady, updateWarnings]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
-    if (showWarningsRef.current) updateWarnings(map, alertFeatures);
+    updateWarnings(map, alertFeatures);
   }, [alertFeatures, mapReady, updateWarnings]);
 
   useEffect(() => {
@@ -1979,69 +2052,19 @@ export function RadarMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
-
-    const removeSweep = () => {
-      if (map.getLayer(SWEEP_FILL_ID)) map.removeLayer(SWEEP_FILL_ID);
-      if (map.getLayer(SWEEP_LINE_ID)) map.removeLayer(SWEEP_LINE_ID);
-      if (map.getSource(SWEEP_SOURCE_ID)) map.removeSource(SWEEP_SOURCE_ID);
-    };
-
     if (!sweepEnabled) {
-      removeSweep();
+      removeSweepOverlay(map);
       return;
     }
-
-    const geojson = makeSweepGeoJSON(site.lat, site.lon, sweepAngle);
-    const existing = map.getSource(SWEEP_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
-    const fillOpacity = scanIngesting ? 0.22 : 0.08;
-    const lineOpacity = scanIngesting ? 1 : 0.55;
-    const lineWidth = scanIngesting ? 2.5 : 1.5;
-    if (existing) {
-      existing.setData(geojson as any);
-      if (map.getLayer(SWEEP_FILL_ID)) map.setPaintProperty(SWEEP_FILL_ID, 'fill-opacity', fillOpacity);
-      if (map.getLayer(SWEEP_LINE_ID)) {
-        map.setPaintProperty(SWEEP_LINE_ID, 'line-opacity', lineOpacity);
-        map.setPaintProperty(SWEEP_LINE_ID, 'line-width', lineWidth);
-      }
-    } else {
-      map.addSource(SWEEP_SOURCE_ID, { type: 'geojson', data: geojson as any });
-      map.addLayer({
-        id: SWEEP_FILL_ID,
-        type: 'fill',
-        source: SWEEP_SOURCE_ID,
-        filter: ['==', '$type', 'Polygon'],
-        paint: {
-          'fill-color': '#22c55e',
-          'fill-opacity': fillOpacity,
-        },
-      });
-      map.addLayer({
-        id: SWEEP_LINE_ID,
-        type: 'line',
-        source: SWEEP_SOURCE_ID,
-        filter: ['==', '$type', 'LineString'],
-        paint: {
-          'line-color': '#4ade80',
-          'line-width': lineWidth,
-          'line-opacity': lineOpacity,
-        },
-      });
-    }
-
-    return () => {
-      // Data updates every tick; layers persist across ticks for smooth animation.
-    };
-  }, [sweepEnabled, mapReady, sweepAngle, site.lat, site.lon, scanIngesting]);
+    renderSweep(map, sweepAngleRef.current);
+  }, [sweepEnabled, mapReady, renderSweep, removeSweepOverlay]);
 
   useEffect(() => {
     const map = mapRef.current;
     return () => {
-      if (!map) return;
-      if (map.getLayer(SWEEP_FILL_ID)) map.removeLayer(SWEEP_FILL_ID);
-      if (map.getLayer(SWEEP_LINE_ID)) map.removeLayer(SWEEP_LINE_ID);
-      if (map.getSource(SWEEP_SOURCE_ID)) map.removeSource(SWEEP_SOURCE_ID);
+      if (map) removeSweepOverlay(map);
     };
-  }, [mapReady]);
+  }, [mapReady, removeSweepOverlay]);
 
 
   const makeToolId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

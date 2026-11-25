@@ -14,11 +14,20 @@ import {
   type AlertCategoryFilters,
   type WeatherAlert,
 } from './model';
-import { isAlertAudioSupported, playAlertTone, unlockAlertAudio } from './audio';
+import { isAlertAudioSupported, playAlertAudio, unlockAlertAudio } from './audio';
+import type { AlertSettings } from './settings';
 
 const POLL_MS = 30_000;
 const FILTERS_STORAGE_KEY = 'mesovortex_alert_category_filters';
 const AUDIO_CATEGORIES_STORAGE_KEY = 'mesovortex_alert_audio_categories';
+const AUDIO_ENABLED_STORAGE_KEY = 'mesovortex_alert_audio_enabled_v1';
+
+export type FastAlertsOptions = {
+  /** Canonical alert settings. Audio always reads this, never a second legacy schema. */
+  settings: AlertSettings;
+  /** True when the active display mode can show the alert banner. */
+  bannerVisible: boolean;
+};
 
 function readStoredFilters(key: string, fallback: AlertCategoryFilters): AlertCategoryFilters {
   if (typeof window === 'undefined') return fallback;
@@ -58,7 +67,7 @@ export type FastAlertsState = {
   refresh: () => void;
 };
 
-export function useFastAlerts(): FastAlertsState {
+export function useFastAlerts({ settings, bannerVisible }: FastAlertsOptions): FastAlertsState {
   const [alerts, setAlerts] = useState<WeatherAlert[]>([]);
   const [filters, setFilters] = useState<AlertCategoryFilters>(DEFAULT_ALERT_FILTERS);
   const [audioEnabled, setAudioEnabled] = useState(false);
@@ -72,11 +81,31 @@ export function useFastAlerts(): FastAlertsState {
   const seenIdsRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
   const audioEnabledRef = useRef(false);
+  const audioUnlockRequiredRef = useRef(false);
   const audioCategoriesRef = useRef(audioCategories);
+  const settingsRef = useRef(settings);
+  const bannerVisibleRef = useRef(bannerVisible);
+
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
+
+  useEffect(() => {
+    bannerVisibleRef.current = bannerVisible;
+  }, [bannerVisible]);
 
   useEffect(() => {
     setFilters(readStoredFilters(FILTERS_STORAGE_KEY, DEFAULT_ALERT_FILTERS));
     setAudioCategories(readStoredFilters(AUDIO_CATEGORIES_STORAGE_KEY, DEFAULT_AUDIO_CATEGORIES));
+    try {
+      const storedAudioEnabled = window.localStorage.getItem(AUDIO_ENABLED_STORAGE_KEY) === '1';
+      setAudioEnabled(storedAudioEnabled);
+      // A restored arming preference still needs a fresh gesture before the
+      // browser will allow Web Audio or custom Audio.play() after reload.
+      audioUnlockRequiredRef.current = storedAudioEnabled;
+    } catch {
+      // Storage disabled; audio remains off.
+    }
   }, []);
 
   useEffect(() => {
@@ -98,6 +127,27 @@ export function useFastAlerts(): FastAlertsState {
 
   useEffect(() => {
     audioEnabledRef.current = audioEnabled;
+    try {
+      window.localStorage.setItem(AUDIO_ENABLED_STORAGE_KEY, audioEnabled ? '1' : '0');
+    } catch {
+      // Storage disabled; audio state remains in memory.
+    }
+  }, [audioEnabled]);
+
+  useEffect(() => {
+    if (!audioEnabled || !audioUnlockRequiredRef.current) return;
+    const unlockStoredAudio = () => {
+      unlockAlertAudio();
+      audioUnlockRequiredRef.current = false;
+      window.removeEventListener('pointerdown', unlockStoredAudio);
+      window.removeEventListener('keydown', unlockStoredAudio);
+    };
+    window.addEventListener('pointerdown', unlockStoredAudio);
+    window.addEventListener('keydown', unlockStoredAudio);
+    return () => {
+      window.removeEventListener('pointerdown', unlockStoredAudio);
+      window.removeEventListener('keydown', unlockStoredAudio);
+    };
   }, [audioEnabled]);
 
   useEffect(() => {
@@ -132,8 +182,14 @@ export function useFastAlerts(): FastAlertsState {
           if (fresh.length > 0) {
             const top = sortAlerts(fresh)[0];
             setBanner(top);
-            if (audioEnabledRef.current && audioCategoriesRef.current[top.category]) {
-              playAlertTone(top.category);
+            // One dispatcher owns all policy: arming, category, visible surface,
+            // sound profile, custom sounds and silent mode.
+            if (
+              audioEnabledRef.current &&
+              audioCategoriesRef.current[top.category] &&
+              bannerVisibleRef.current
+            ) {
+              playAlertAudio(top.event, top.category, settingsRef.current);
             }
           }
         }
@@ -185,7 +241,8 @@ export function useFastAlerts(): FastAlertsState {
       return;
     }
     unlockAlertAudio();
-    playAlertTone('advisory');
+    audioUnlockRequiredRef.current = false;
+    playAlertAudio('Alert tone armed', 'advisory', settingsRef.current);
     setAudioEnabled(true);
     setError(null);
   }, []);
@@ -199,7 +256,7 @@ export function useFastAlerts(): FastAlertsState {
   }, []);
 
   const testTone = useCallback((category: AlertCategory) => {
-    playAlertTone(category);
+    playAlertAudio('Alert tone test', category, settingsRef.current);
   }, []);
 
   const dismissBanner = useCallback(() => setBanner(null), []);

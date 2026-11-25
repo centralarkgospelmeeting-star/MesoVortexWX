@@ -5,7 +5,8 @@ export const dynamic = 'force-dynamic';
 /**
  * Composite radar tile timeline from RainViewer Weather Maps API.
  * Free tier is limited (zoom, rate limits, no large composites) as of 2025/2026.
- * For single-station (terminal) radar use /api/radar or /api/nexrad/frames (IEM).
+ * For single-station (terminal) radar use /api/nexrad/frames (IEM). The legacy
+ * /api/radar endpoint is retired and returns 410 Gone.
  */
 export async function GET() {
   const source = 'https://api.rainviewer.com/public/weather-maps.json';
@@ -63,7 +64,7 @@ export async function GET() {
           source,
           ok: true,
           count: tiles.length,
-          note: 'Composite tiles. Single-station radar: /api/radar?site=KLZK',
+          note: 'Composite tiles. Single-station radar: /api/nexrad/frames?site=KLZK',
         },
       },
       {

@@ -16,4 +16,23 @@ assert.match(radarMap, /getRadarRasterRenderConfig\(\{ mode, product \}\)/, 'Rad
 assert.match(radarMap, /tileSize:\s*renderConfig\.tileSize/, 'RadarMap must use configured tile size');
 assert.match(radarMap, /'raster-resampling':\s*renderConfig\.rasterResampling/, 'RadarMap must use configured resampling');
 
-console.log('PASS: radar render config contract');
+// Phase 4A map-integrity contracts. These are static guards for defects that
+// passed the original render-config check: font/glyph mismatch, per-source
+// tile-error suppression, warning/watch coupling, stale layer ids, satellite
+// source-option reuse, and React state updates inside the reveal rAF loop.
+const basemapStyles = fs.readFileSync('lib/map/basemap-styles.ts', 'utf8');
+assert.match(basemapStyles, /Noto Sans Bold/, 'OpenFreeMap basemap must declare available Noto Sans glyphs');
+assert.doesNotMatch(radarMap, /Open Sans Bold|Arial Unicode MS Bold/, 'map overlays must use the glyphs served by the basemap style');
+assert.doesNotMatch(radarMap, /radarSourceHealthyRef/, 'tile errors must not be suppressed by a global healthy flag');
+assert.match(radarMap, /rasterTileErrorsRef/, 'tile errors must be tracked per raster source');
+assert.match(radarMap, /tile\?\.state === 'errored'/, 'sourcedata must recognize errored tiles');
+assert.match(radarMap, /showWatchesRef/, 'warning and watch toggles must be independent');
+assert.match(radarMap, /category === 'warning'.*showWarningsRef\.current/s, 'warning features must follow showWarnings');
+assert.match(radarMap, /category === 'watch'.*showWatchesRef\.current/s, 'watch features must follow showWatches');
+assert.doesNotMatch(radarMap, /if \(showWarningsRef\.current\) updateWarnings/, 'watch-only view must not be gated by showWarnings');
+assert.doesNotMatch(radarMap, /getLayer\('radar-layer'\)/, 'layer ordering must use the canonical RADAR_LAYER_ID');
+assert.match(radarMap, /satelliteSourceConfigRef/, 'satellite bounds/maxzoom changes must rebuild the source');
+assert.doesNotMatch(radarMap, /getSatelliteProbeTile\(satSel\)\s*\|\|\s*'0\/0\/0'/, 'unstable satellite probes must not fall back to a blank world tile');
+assert.doesNotMatch(radarMap, /setSweepAngle/, 'reveal animation must not set React state per frame');
+
+console.log('PASS: radar render config and map integrity contract');

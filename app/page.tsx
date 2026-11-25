@@ -33,7 +33,7 @@ import {
 } from '../lib/satellite';
 import { MODEL_CATALOG, getModelById } from '../lib/model-registry';
 import { parsePal, type PalTable } from '../lib/pal';
-import { DEFAULT_ALERT_SETTINGS, loadAlertSettings, saveAlertSettings, applyAlertSettingsToAlert, shouldSpeakAlert, formatAlertSpeech, alertSoundForEvent, profileAllowsTone, type AlertSettings } from '../lib/alerts/settings';
+import { DEFAULT_ALERT_SETTINGS, loadAlertSettings, saveAlertSettings, applyAlertSettingsToAlert, shouldSpeakAlert, formatAlertSpeech, type AlertSettings } from '../lib/alerts/settings';
 
 type RadarProduct =
   | 'ref'
@@ -263,7 +263,6 @@ export default function MesoVortexWorkstation() {
   const [tripleMode, setTripleMode] = useState(false);
   const [thirdPane, setThirdPane] = useState<PaneMode>('Composite');
   const spokenBannerIdRef = useRef<string | null>(null);
-  const playedSoundBannerIdRef = useRef<string | null>(null);
 
   const [alertsOpen, setAlertsOpen] = useState(initialPrefs.alertsOpen);
   const [alertSettingsOpen, setAlertSettingsOpen] = useState(false);
@@ -342,7 +341,10 @@ export default function MesoVortexWorkstation() {
     error: alertError,
     loading: alertsLoading,
     refresh: refreshAlerts,
-  } = useFastAlerts();
+  } = useFastAlerts({
+    settings: alertSettings,
+    bannerVisible: warningPopup && alertSettings.warningDisplayBehavior !== 'sidebar-only',
+  });
 
   useEffect(() => {
     if (!alertBanner) return;
@@ -367,20 +369,6 @@ export default function MesoVortexWorkstation() {
       window.speechSynthesis.speak(u);
     } catch {}
   }, [alertBanner, warningVoiceEnabled, warningVoicePack, alertSettings]);
-
-  useEffect(() => {
-    if (!alertBanner) return;
-    if (playedSoundBannerIdRef.current === alertBanner.id) return;
-    if (!profileAllowsTone(alertSettings.soundProfile)) return;
-    const custom = alertSoundForEvent(alertBanner.event, alertSettings);
-    if (!custom) return;
-    playedSoundBannerIdRef.current = alertBanner.id;
-    try {
-      const audio = new Audio(custom);
-      audio.volume = 0.9;
-      void audio.play().catch(() => {});
-    } catch {}
-  }, [alertBanner, alertSettings]);
 
   const currentSite =
     RADAR_SITES.find((s) => s.id === radarSite) || RADAR_SITES[0];
@@ -582,9 +570,10 @@ export default function MesoVortexWorkstation() {
     alertOutlineThickness: alertSettings.outlineThickness,
     onSelectWarningFromMap: (w: any) => {
       const id = String(w?.id || '');
-      if (id) { setSelectedAlertId(id); setAlertsOpen(true); }
+      if (id) { setLocationContext(null); setSelectedAlertId(id); setAlertsOpen(true); }
     },
     onMapContextClick: (lat: number, lon: number) => {
+      setSelectedAlertId(null);
       setLocationContext({ lat, lon, ts: Date.now() });
       // Do not force-open alerts panel during map interaction; details panel provides context.
       if (alertSettings.sidebarAutoHide && !alertSettings.sidebarPinned) setAlertsOpen(false);
@@ -1059,7 +1048,7 @@ export default function MesoVortexWorkstation() {
               onRefresh={refreshAlerts}
               onClose={() => { if (!alertSettings.sidebarPinned) setAlertsOpen(false); }}
               onOpenSettings={() => setAlertSettingsOpen(true)}
-              onSelectAlert={(a) => { setSelectedAlertId(a.id); setAlertsOpen(true); }}
+              onSelectAlert={(a) => { setLocationContext(null); setSelectedAlertId(a.id); setAlertsOpen(true); }}
               selectedAlertId={selectedAlertId}
               pinned={alertSettings.sidebarPinned}
               onTogglePinned={() => setAlertSettings((s) => ({ ...s, sidebarPinned: !s.sidebarPinned }))}
@@ -1209,7 +1198,7 @@ export default function MesoVortexWorkstation() {
       {styledBanner && warningPopup && alertSettings.warningDisplayBehavior !== 'sidebar-only' && (
         <button
           type="button"
-          onClick={() => { setSelectedAlertId(styledBanner.id); setAlertsOpen(true); }}
+          onClick={() => { setLocationContext(null); setSelectedAlertId(styledBanner.id); setAlertsOpen(true); }}
           className={`absolute left-1/2 top-24 z-50 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border bg-[#0b1220] p-4 text-left shadow-lg ${warningFlash ? 'animate-pulse' : ''}`}
           style={{ borderColor: styledBanner.color }}
         >
@@ -1247,7 +1236,7 @@ export default function MesoVortexWorkstation() {
           alert={selectedAlert}
           context={alertLocationContext}
           onClose={() => { setSelectedAlertId(null); setLocationContext(null); }}
-          onSelectAlert={(a) => { setSelectedAlertId(a.id); setAlertsOpen(true); }}
+          onSelectAlert={(a) => { setLocationContext(null); setSelectedAlertId(a.id); setAlertsOpen(true); }}
         />
       )}
 

@@ -2,6 +2,17 @@ import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
+function known(value: unknown): string {
+  return value === undefined || value === null || value === '' ? 'UNAVAILABLE' : String(value);
+}
+
+function measured(value: unknown, unit = ''): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return 'UNAVAILABLE (no verified value supplied)';
+  }
+  return unit ? `${value} ${unit}` : String(value);
+}
+
 export async function POST(request: Request) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -18,31 +29,39 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON request' }, { status: 400 });
   }
 
-  const { site, product, tilt, sounding, alerts } = body;
+  const { site, product, tilt, sounding, alerts } = body ?? {};
+  const indices = sounding?.indices ?? {};
+  const alertList = Array.isArray(alerts) && alerts.length > 0
+    ? alerts.map(known).join(' | ')
+    : 'UNAVAILABLE (no alerts supplied)';
+  const tiltLine = tilt === undefined || tilt === null || tilt === ''
+    ? ' (tilt UNAVAILABLE)'
+    : ` at ${tilt}° elevation beam`;
 
   const prompt = `
-You are the Lead Forecaster at the NOAA Storm Prediction Center (SPC) in Norman, Oklahoma.
-Draft an official, highly technical, and urgent MESOSCALE CONVECTIVE DISCUSSION (MCD) based on the following real-time data:
+You are drafting an internal, UNOFFICIAL mesoscale discussion for human review. You are not issuing an official NWS/SPC product.
+Use ONLY the data supplied below. Treat every value marked UNAVAILABLE as unknown: do not infer, estimate, assume, or fabricate it.
+Never invent numerical weather values, probabilities, discussion numbers, valid times, locations, storm mode, or threat levels. If a required input is missing, write "UNAVAILABLE - no verified data supplied" for that item.
 
-- RADAR SITE: ${site.id} (${site.name}) at Lat: ${site.lat}, Lon: ${site.lon}
-- PRODUCT & TILT: ${product.toUpperCase()} at ${tilt}° elevation beam
-- THERMODYNAMIC INDICES:
-  * SBCAPE: ${sounding?.indices?.sbcape || 2400} J/kg
-  * 0-1km SRH: ${sounding?.indices?.srh01 || 220} m²/s²
-  * 0-6km Bulk Shear: ${sounding?.indices?.shear06 || 48} kt
-  * Significant Tornado Parameter (STP): ${sounding?.indices?.stp || 2.4}
-- ACTIVE WARNINGS / ALERTS: ${alerts && alerts.length > 0 ? alerts.join(' | ') : 'Elevated convective activity under radar surveillance'}
+- RADAR SITE: ${known(site?.id)} (${known(site?.name)}) at Lat: ${known(site?.lat)}, Lon: ${known(site?.lon)}
+- PRODUCT & TILT: ${known(product)}${tiltLine}
+- THERMODYNAMIC INDICES (supplied values only; no defaults):
+  * SBCAPE: ${measured(indices.sbcape, 'J/kg')}
+  * 0-1km SRH: ${measured(indices.srh01, 'm²/s²')}
+  * 0-6km Bulk Shear: ${measured(indices.shear06, 'kt')}
+  * Significant Tornado Parameter (STP): ${measured(indices.stp)}
+- ACTIVE WARNINGS / ALERTS: ${alertList}
 
-Format your response exactly like an official SPC MCD:
-1. HEADER: MESOSCALE CONVECTIVE DISCUSSION [DISC NUMBER]
-2. CONCERNING: [Target Area and Radar Station]
-3. VALID TIME: [Current UTC Time Range]
-4. PROBABILITY OF WATCH ISSUANCE: [e.g. 80% or 95%]
-5. SUMMARY: 2-3 sentences summarizing the immediate threat (Tornado, Giant Hail, Damaging Winds).
-6. DISCUSSION: 2-3 detailed meteorological paragraphs analyzing low-level jet advection, boundary layer kinematics, hodograph curvature, hook echo evolution, and storm mode.
-7. AREAS AFFECTED: Specific counties and regional coordinates.
+Format your response as an SPC MCD draft, clearly marked as unofficial:
+1. HEADER: UNOFFICIAL MCD DRAFT (no discussion number)
+2. CONCERNING: Only sites/locations explicitly supplied; otherwise UNAVAILABLE.
+3. VALID TIME: UNAVAILABLE unless a verified time range is supplied; never derive one from the current clock.
+4. PROBABILITY OF WATCH ISSUANCE: UNAVAILABLE unless a verified probability is supplied; never guess a percentage.
+5. SUMMARY: Only threats supported by supplied data; otherwise UNAVAILABLE.
+6. DISCUSSION: Analyze only supplied data. Do not invent kinematics, hodograph curvature, storm mode, radar signatures, or warning decisions.
+7. AREAS AFFECTED: Only locations explicitly supplied; otherwise UNAVAILABLE.
 
-Keep your tone professional, authoritative, and concise. Return the result in a JSON object with a single property named "mcd".
+Keep your tone professional, concise, and explicit about missing data. Return the result in a JSON object with a single property named "mcd".
 `;
 
   try {
@@ -74,7 +93,7 @@ Keep your tone professional, authoritative, and concise. Return the result in a 
       const parsed = JSON.parse(data.output_text || data.outputs?.[0]?.text || '{}');
       mcdText = parsed.mcd || JSON.stringify(parsed);
     } catch {
-      mcdText = data.output_text || 'Discussion generated.';
+      mcdText = data.output_text || 'Discussion unavailable.';
     }
 
     return NextResponse.json({ mcd: mcdText });

@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { canonicalRadarProductId } from '../lib/radar/capability-matrix';
 
 export type LegendType =
   | 'ref'
   | 'max_ref'
   | 'ref_x'
+  | 'comp_ref'
   | 'vel'
   | 'srvel'
   | 'norm_vel'
@@ -19,7 +21,6 @@ export type LegendType =
   | 'vil'
   | 'vil_density'
   | 'mesh'
-  | 'azshear'
   | 'rotation_tracks'
   | 'qpe'
   | 'precip_rate'
@@ -29,7 +30,9 @@ export type LegendType =
   | 'satellite'
   | 'spc'
   | 'cape'
-  | 'temp';
+  | 'temp'
+  | 'nrot'
+  | 'hhc';
 
 type Props = {
   type: LegendType | string;
@@ -47,6 +50,30 @@ type LegendStep = {
   label: string;
   value: string;
 };
+
+type LegendMeta = {
+  title: string;
+  description: string;
+  legendLabel: string;
+};
+
+export type ProductLegendStep = {
+  color: string;
+  label: string;
+  value: string;
+  meaning: string;
+};
+
+export type ProductLegendInfo = {
+  key: string;
+  title: string;
+  description: string;
+  legendLabel: string;
+  steps: readonly ProductLegendStep[];
+  hasVerifiedScale: boolean;
+};
+
+export const NO_VERIFIED_SCALE_LABEL = 'No verified scale available';
 
 const LEGENDS: Record<string, LegendStep[]> = {
   ref: [
@@ -81,6 +108,16 @@ const LEGENDS: Record<string, LegendStep[]> = {
     { color: '#0064ff', label: '0.95–0.97', value: 'Very high CC · Uniform precipitation' },
     { color: '#00ffff', label: '0.97–0.99', value: 'Near-unity CC · Uniform precipitation' },
     { color: '#ffffff', label: '0.99+', value: 'Near-perfect CC · Highly uniform echoes' },
+  ],
+  // Relocated from the former ProductInfoBanner MIN_CC table; no values or units changed.
+  min_cc: [
+    { color: '#9600b4', label: '< 0.50', value: '0.20-0.50 · Very low sampled CC' },
+    { color: '#285ad2', label: '0.50-0.65', value: '0.50-0.65 · Low sampled CC' },
+    { color: '#00bedc', label: '0.65-0.80', value: '0.65-0.80 · Reduced sampled CC' },
+    { color: '#00be00', label: '0.80-0.90', value: '0.80-0.90 · Moderate sampled CC' },
+    { color: '#dcdc00', label: '0.90-0.95', value: '0.90-0.95 · High sampled CC' },
+    { color: '#ff8000', label: '0.95-0.97', value: '0.95-0.97 · Very high sampled CC' },
+    { color: '#ffffff', label: '0.97+', value: '0.97-1.05 · Near-unity minimum CC' },
   ],
   zdr: [
     { color: '#8246c8', label: '< -1 dB', value: 'Negative ZDR · Vertically oriented or mixed targets' },
@@ -226,30 +263,135 @@ const LEGENDS: Record<string, LegendStep[]> = {
   ],
 };
 
+const LEGEND_META: Record<string, LegendMeta> = {
+  ref: { title: 'Reflectivity', description: 'Radar reflectivity indicating precipitation intensity and storm structure.', legendLabel: 'Reflectivity scale (dBZ)' },
+  vel: { title: 'Base Velocity', description: 'Radial velocity showing inbound/outbound motion relative to radar.', legendLabel: 'Velocity scale (kt)' },
+  cc: { title: 'Correlation Coefficient', description: 'Correlation Coefficient (CC) indicating uniformity of targets. Lower values can indicate non-meteorological debris or mixed precipitation.', legendLabel: 'Correlation Coefficient (CC)' },
+  min_cc: { title: 'Volume-Minimum Correlation Coefficient', description: 'Lowest valid CC sampled from the live Level II elevation sweeps at each map location. App-derived vertical-column estimate, not a separate official Level III product.', legendLabel: 'Minimum sampled CC' },
+  zdr: { title: 'Differential Reflectivity', description: 'Differential Reflectivity (ZDR) comparing horizontal and vertical reflectivity to estimate hydrometeor shape/size.', legendLabel: 'Differential Reflectivity (dB)' },
+  kdp: { title: 'Specific Differential Phase', description: '', legendLabel: 'Specific differential phase scale (°/km)' },
+  sw: { title: 'Spectrum Width', description: '', legendLabel: 'Spectrum width scale (m/s)' },
+  gate_to_gate_shear: { title: 'Gate-to-Gate Shear', description: '', legendLabel: 'Gate-to-gate shear scale (kt)' },
+  tops: { title: 'Echo Tops', description: '', legendLabel: 'Echo-top height scale (km MSL)' },
+  vil: { title: 'Vertically Integrated Liquid', description: '', legendLabel: 'VIL scale (kg/m²)' },
+  mesh: { title: 'MESH', description: '', legendLabel: 'MESH scale (in)' },
+  vil_density: { title: 'VIL Density', description: '', legendLabel: 'VIL density scale (g/m³)' },
+  azshear: { title: 'Azimuthal Shear', description: '', legendLabel: 'Azimuthal shear scale (s⁻¹)' },
+  rotation_tracks: { title: 'Rotation Tracks', description: '', legendLabel: 'Rotation track scale (s⁻¹)' },
+  qpe: { title: 'Precipitation / QPE', description: '', legendLabel: 'QPE accumulation scale (mm)' },
+  precip_rate: { title: 'Precipitation Rate', description: '', legendLabel: 'Precipitation rate scale (mm/hr)' },
+  hail_detection: { title: 'Hail Severity Index (SHI)', description: '', legendLabel: 'Hail severity index scale (SHI)' },
+  rain_mix_snow: { title: 'Surface Precipitation Type', description: '', legendLabel: 'Surface precipitation type categories' },
+  satellite: { title: 'Satellite', description: 'Satellite imagery product.', legendLabel: 'Temperature / imagery scale' },
+  spc: { title: 'SPC Outlook', description: 'Storm Prediction Center categorical convective outlook.', legendLabel: 'Risk category scale' },
+  cape: { title: 'CAPE', description: '', legendLabel: 'CAPE scale (J/kg)' },
+  temp: { title: 'Temperature', description: '', legendLabel: 'Temperature scale (°F)' },
+};
+
+const LEGEND_ALIASES: Record<string, string> = {
+  ref: 'ref', reflectivity: 'ref', br: 'ref', max_ref: 'ref', ref_x: 'ref', comp_ref: 'ref',
+  vel: 'vel', velocity: 'vel', bv: 'vel', srvel: 'vel', srv: 'vel', sr_v: 'vel', storm_relative_velocity: 'vel',
+  cc: 'cc', correlation: 'cc', correlation_coefficient: 'cc',
+  min_cc: 'min_cc', mcc: 'min_cc',
+  zdr: 'zdr', differential_reflectivity: 'zdr',
+  kdp: 'kdp', specific_differential_phase: 'kdp',
+  sw: 'sw', spectrum_width: 'sw',
+  gate: 'gate_to_gate_shear', gate_to_gate: 'gate_to_gate_shear', gate_to_gate_shear: 'gate_to_gate_shear',
+  tops: 'tops', et: 'tops', echo_tops: 'tops', enhanced_echo_tops: 'tops',
+  vil: 'vil', vild: 'vil_density', vil_density: 'vil_density',
+  mesh: 'mesh',
+  az: 'azshear', azshear: 'azshear', az_shear: 'azshear', azimuthal_shear: 'azshear',
+  trk: 'rotation_tracks', rotation_tracks: 'rotation_tracks', rotation_track: 'rotation_tracks', rottrk: 'rotation_tracks',
+  qpe: 'qpe',
+  rate: 'precip_rate', precip_rate: 'precip_rate', precipitation_rate: 'precip_rate',
+  hail: 'hail_detection', hail_detection: 'hail_detection', hail_severity_index: 'hail_detection',
+  rms: 'rain_mix_snow', rain_mix_snow: 'rain_mix_snow', precip_flag: 'rain_mix_snow',
+  satellite: 'satellite', geocolor: 'satellite', goes_east: 'satellite', goes_west: 'satellite', infrared: 'satellite', clean_ir: 'satellite',
+  spc: 'spc', outlook: 'spc',
+  cape: 'cape', temp: 'temp',
+  // Product IDs with no verified scale are mapped to themselves, never to REF.
+  nrot: 'nrot', norm_vel: 'nrot', normalized_rotation: 'nrot',
+  hhc: 'hhc', gate_filter: 'gate_filter', cross_section: 'cross_section',
+  storm_analysis: 'storm_analysis', volume_scan: 'volume_scan', tilt_selection: 'tilt_selection',
+};
+
+function normalizeLookupKey(raw: string): string {
+  const canonical = canonicalRadarProductId(raw || '');
+  return canonical.trim().toLowerCase().replace(/[\s-]+/g, '_').replace(/_+/g, '_');
+}
+
+/**
+ * Static proof of alias ordering:
+ * 1. Exact LEGEND_ALIASES / LEGENDS keys resolve before any substring rule, so
+ *    `azshear`, `hail`, `rotation_tracks`/`trk`, and `vild` cannot be captured
+ *    by the broad `ref` or `vel` rules.
+ * 2. Specialized substring rules (VIL density, rotation, azshear, SHI, gate
+ *    shear, precip type) run before generic reflectivity/velocity rules.
+ * 3. Unknown or unverified IDs return '' and render a neutral state, not REF.
+ */
 function normalizeLegendType(raw: string): string {
-  const lower = (raw || '').toLowerCase();
-  if (lower === 'sw') return 'sw';
-  if (lower.includes('vil_density') || lower === 'vild') return 'vil_density';
-  if (lower.includes('rotation_tracks') || lower === 'trk') return 'rotation_tracks';
-  if (lower.includes('azshear') || lower === 'az') return 'azshear';
-  if (lower === 'qpe') return 'qpe';
-  if (lower.includes('precip_rate') || lower === 'rate') return 'precip_rate';
-  if (lower.includes('hail_detection') || lower === 'hail') return 'hail_detection';
-  if (lower.includes('gate_to_gate') || lower === 'gate') return 'gate_to_gate_shear';
-  if (lower.includes('rain_mix_snow') || lower === 'rms') return 'rain_mix_snow';
-  if (lower.includes('max_ref') || lower.includes('ref_x') || lower.includes('ref')) return 'ref';
-  if (lower.includes('vel') || lower.includes('srvel') || lower.includes('azshear')) return 'vel';
-  if (lower.includes('cc')) return 'cc';
-  if (lower.includes('zdr')) return 'zdr';
-  if (lower.includes('kdp')) return 'kdp';
-  if (lower.includes('tops')) return 'tops';
-  if (lower.includes('vil')) return 'vil';
-  if (lower.includes('mesh') || lower.includes('hail')) return 'mesh';
-  if (lower.includes('sat') || lower.includes('goes') || lower.includes('ir') || lower.includes('geocolor')) return 'satellite';
-  if (lower.includes('spc') || lower.includes('outlook') || lower.includes('cat')) return 'spc';
-  if (lower.includes('cape')) return 'cape';
-  if (lower.includes('temp')) return 'temp';
-  return 'ref';
+  const key = normalizeLookupKey(raw);
+  if (!key) return '';
+
+  const alias = LEGEND_ALIASES[key];
+  if (alias) return alias;
+  if (Object.prototype.hasOwnProperty.call(LEGENDS, key)) return key;
+
+  if (key.includes('vil_density') || key.includes('vild')) return 'vil_density';
+  if (key.includes('rotation_track') || key.includes('rottrk')) return 'rotation_tracks';
+  if (key.includes('azshear') || key.includes('az_shear')) return 'azshear';
+  if (key.includes('precip_rate') || key.includes('precipitation_rate')) return 'precip_rate';
+  if (key.includes('hail_detection') || key.includes('hail_severity') || key.includes('severe_hail_index') || key.includes('shi') || key.includes('hail')) return 'hail_detection';
+  if (key.includes('gate_to_gate') || key.includes('gate_shear')) return 'gate_to_gate_shear';
+  if (key.includes('rain_mix_snow') || key.includes('precip_flag') || key.includes('precip_type')) return 'rain_mix_snow';
+  if (key.includes('qpe')) return 'qpe';
+  if (key.includes('specific_differential_phase') || key.includes('kdp')) return 'kdp';
+  if (key.includes('spectrum_width')) return 'sw';
+  if (key.includes('echo_tops') || key.includes('tops')) return 'tops';
+  if (key.includes('mesh')) return 'mesh';
+  if (key.includes('min_cc') || key.includes('minimum_cc') || key.includes('mcc')) return 'min_cc';
+  if (key.includes('cc') || key.includes('correlation')) return 'cc';
+  if (key.includes('zdr') || key.includes('differential_reflectivity')) return 'zdr';
+  if (key.includes('reflect') || key.includes('ref')) return 'ref';
+  if (key.includes('vel')) return 'vel';
+  if (key.includes('sat') || key.includes('goes') || key.includes('ir') || key.includes('geocolor')) return 'satellite';
+  if (key.includes('spc') || key.includes('outlook') || key.includes('cat')) return 'spc';
+  if (key.includes('cape')) return 'cape';
+  if (key.includes('temp')) return 'temp';
+  return '';
+}
+
+function toProductLegendStep(step: LegendStep): ProductLegendStep {
+  const prefix = `${step.label} · `;
+  const meaning = step.value.startsWith(prefix) ? step.value.slice(prefix.length) : step.value;
+  return { color: step.color, label: step.label, value: step.label, meaning };
+}
+
+/** Read-only accessor: returns fresh step objects so callers cannot mutate LEGENDS. */
+export function getProductLegendInfo(type: string): ProductLegendInfo {
+  const key = normalizeLegendType(type);
+  const steps = key ? LEGENDS[key] : undefined;
+  const meta = key ? LEGEND_META[key] : undefined;
+
+  if (!steps || steps.length === 0 || !meta) {
+    return {
+      key,
+      title: '',
+      description: '',
+      legendLabel: NO_VERIFIED_SCALE_LABEL,
+      steps: [],
+      hasVerifiedScale: false,
+    };
+  }
+
+  return {
+    key,
+    title: meta.title,
+    description: meta.description,
+    legendLabel: meta.legendLabel,
+    steps: steps.map(toProductLegendStep),
+    hasVerifiedScale: true,
+  };
 }
 
 export function UniversalLegend({
@@ -260,7 +402,7 @@ export function UniversalLegend({
 }: Props) {
   const [hovered, setHovered] = useState<LegendStep | null>(null);
   const legendKey = normalizeLegendType(type);
-  const steps = LEGENDS[legendKey] || LEGENDS.ref;
+  const steps = legendKey ? LEGENDS[legendKey] ?? [] : [];
 
   return (
     <div className="relative w-full z-50 select-none">
@@ -303,20 +445,26 @@ export function UniversalLegend({
       )}
 
       {/* 2. Pinned Universal Data Legend Color Strip (Section 2.A) */}
-      <div className="flex h-2 w-full cursor-crosshair shadow-md">
-        {steps.map((s, idx) => (
-          <div
-            key={idx}
-            style={{ backgroundColor: s.color }}
-            className="flex-1 transition-opacity hover:opacity-80"
-            onMouseEnter={() => setHovered(s)}
-            onMouseLeave={() => setHovered(null)}
-          />
-        ))}
-      </div>
+      {steps.length > 0 ? (
+        <div className="flex h-2 w-full cursor-crosshair shadow-md">
+          {steps.map((s, idx) => (
+            <div
+              key={idx}
+              style={{ backgroundColor: s.color }}
+              className="flex-1 transition-opacity hover:opacity-80"
+              onMouseEnter={() => setHovered(s)}
+              onMouseLeave={() => setHovered(null)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="flex h-4 w-full items-center justify-center bg-slate-800 text-[9px] font-bold uppercase tracking-wide text-slate-400">
+          {NO_VERIFIED_SCALE_LABEL}
+        </div>
+      )}
 
       {/* 3. Floating Tooltip on Hover */}
-      {hovered && (
+      {hovered && steps.length > 0 && (
         <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-white/20 bg-[#0b1220] px-3 py-1 text-[10px] font-mono font-bold text-white shadow-2xl animate-fade-in z-50 flex items-center gap-1.5">
           <span
             className="inline-block h-2.5 w-2.5 rounded-full border border-white/40"

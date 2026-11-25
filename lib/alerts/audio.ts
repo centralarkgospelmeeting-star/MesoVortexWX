@@ -1,3 +1,4 @@
+import { alertSoundForEvent, profileAllowsTone, type AlertSettings, type AlertSoundProfile } from './settings';
 import type { AlertCategory } from './model';
 
 type Tone = {
@@ -7,7 +8,7 @@ type Tone = {
   gain: number;
 };
 
-const TONE_PATTERNS: Record<AlertCategory, Tone[]> = {
+const BASE_TONE_PATTERNS: Record<AlertCategory, Tone[]> = {
   // NOAA Weather Radio style attention tone for warnings.
   warning: [
     { frequency: 1050, duration: 0.85, gap: 0.2, gain: 0.34 },
@@ -24,6 +25,53 @@ const TONE_PATTERNS: Record<AlertCategory, Tone[]> = {
   ],
   statement: [{ frequency: 523, duration: 0.18, gap: 0, gain: 0.12 }],
   other: [{ frequency: 523, duration: 0.15, gap: 0, gain: 0.1 }],
+};
+
+const PROFILE_TONE_PATTERNS: Record<AlertSoundProfile, Record<AlertCategory, Tone[]>> = {
+  classic: BASE_TONE_PATTERNS,
+  nws: {
+    warning: [
+      { frequency: 1050, duration: 0.9, gap: 0.12, gain: 0.4 },
+      { frequency: 1050, duration: 0.9, gap: 0.12, gain: 0.4 },
+      { frequency: 1050, duration: 1.2, gap: 0, gain: 0.4 },
+    ],
+    watch: [
+      { frequency: 880, duration: 0.35, gap: 0.1, gain: 0.26 },
+      { frequency: 660, duration: 0.45, gap: 0, gain: 0.26 },
+    ],
+    advisory: BASE_TONE_PATTERNS.advisory,
+    statement: BASE_TONE_PATTERNS.statement,
+    other: BASE_TONE_PATTERNS.other,
+  },
+  broadcast: {
+    warning: [
+      { frequency: 784, duration: 0.32, gap: 0.12, gain: 0.3 },
+      { frequency: 1047, duration: 0.32, gap: 0.12, gain: 0.3 },
+      { frequency: 784, duration: 0.32, gap: 0.12, gain: 0.3 },
+      { frequency: 1047, duration: 0.5, gap: 0, gain: 0.3 },
+    ],
+    watch: [
+      { frequency: 740, duration: 0.24, gap: 0.1, gain: 0.22 },
+      { frequency: 587, duration: 0.34, gap: 0, gain: 0.22 },
+    ],
+    advisory: BASE_TONE_PATTERNS.advisory,
+    statement: BASE_TONE_PATTERNS.statement,
+    other: BASE_TONE_PATTERNS.other,
+  },
+  minimal: {
+    warning: [{ frequency: 880, duration: 0.18, gap: 0, gain: 0.16 }],
+    watch: [{ frequency: 700, duration: 0.14, gap: 0, gain: 0.13 }],
+    advisory: [{ frequency: 620, duration: 0.1, gap: 0, gain: 0.1 }],
+    statement: [{ frequency: 523, duration: 0.1, gap: 0, gain: 0.09 }],
+    other: [{ frequency: 523, duration: 0.08, gap: 0, gain: 0.08 }],
+  },
+  silent: {
+    warning: [],
+    watch: [],
+    advisory: [],
+    statement: [],
+    other: [],
+  },
 };
 
 let audioContext: AudioContext | null = null;
@@ -48,12 +96,18 @@ export function unlockAlertAudio(): AudioContext | null {
   }
 }
 
-export function playAlertTone(category: AlertCategory): void {
+/**
+ * Play a built-in tone using a named profile. `silent` is a real no-op.
+ */
+export function playAlertTone(category: AlertCategory, profile: AlertSoundProfile = 'classic'): void {
+  if (!profileAllowsTone(profile)) return;
+  const pattern = PROFILE_TONE_PATTERNS[profile]?.[category] || [];
+  if (!pattern.length) return;
+
   const context = unlockAlertAudio();
   if (!context) return;
 
   const start = (): void => {
-    const pattern = TONE_PATTERNS[category] || TONE_PATTERNS.other;
     let offset = context.currentTime + 0.02;
 
     pattern.forEach((tone) => {
@@ -84,6 +138,30 @@ export function playAlertTone(category: AlertCategory): void {
   } else {
     start();
   }
+}
+
+/**
+ * Single audio dispatcher for new alerts and test buttons. It honors the
+ * selected sound profile before any sound is produced, including custom files.
+ */
+export function playAlertAudio(event: string, category: AlertCategory, settings: AlertSettings): void {
+  if (!profileAllowsTone(settings.soundProfile)) return;
+
+  const custom = alertSoundForEvent(event, settings);
+  if (custom && typeof window !== 'undefined' && typeof Audio !== 'undefined') {
+    try {
+      const audio = new Audio(custom);
+      audio.volume = 0.9;
+      void audio.play().catch(() => {
+        // Browser may require another gesture; never fabricate a fallback tone.
+      });
+      return;
+    } catch {
+      return;
+    }
+  }
+
+  playAlertTone(category, settings.soundProfile);
 }
 
 export function isAlertAudioSupported(): boolean {
