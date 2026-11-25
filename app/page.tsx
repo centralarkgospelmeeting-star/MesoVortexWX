@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { RadarMap, BasemapType, ModeTab } from '../components/RadarMap';
 import { CrossSectionModal } from '../components/CrossSectionModal';
+import { StormAnalysisPanel } from '../components/radar/StormAnalysisPanel';
 import type { LiveCrossSectionResult } from '../lib/radar/cross-section-types';
 import { VolumeScanInspector } from '../components/radar/VolumeScanInspector';
 import { WeatherWiseRadarCard } from '../components/WeatherWiseRadarCard';
@@ -53,7 +54,8 @@ type RadarProduct =
   | 'vil'
   | 'hhc'
   | 'qpe'
-  | 'volume_scan';
+  | 'volume_scan'
+  | 'storm_analysis';
 
 type SpcDay = 'Day 1' | 'Day 2' | 'Day 3';
 type PaneMode = 'Radar' | 'Satellite' | 'Composite' | 'Models';
@@ -1201,6 +1203,9 @@ export default function MesoVortexWorkstation() {
             onToolDrawingsChange={setToolDrawings}
             onToolModeChange={setToolMode}
           />
+        )}
+        {product === 'storm_analysis' && !quadMode && !expertMode && tab === 'Radar' && (
+          <StormAnalysisPanel siteId={currentSite.id} siteName={currentSite.name} onClose={() => setProduct('ref')} />
         )}
         {product === 'volume_scan' && !quadMode && !expertMode && tab === 'Radar' && (
           <VolumeScanInspector

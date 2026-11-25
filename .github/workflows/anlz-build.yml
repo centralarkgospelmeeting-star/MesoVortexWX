@@ -1,0 +1,35 @@
+name: ANLZ Storm Analysis
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/api/radar/storm-analysis/**'
+      - 'components/radar/StormAnalysisPanel.tsx'
+      - 'lib/radar/storm-analysis.ts'
+      - 'lib/radar/capability-matrix.ts'
+      - 'scripts/test-live-anlz.mjs'
+      - '.github/workflows/anlz-build.yml'
+      - 'package.json'
+      - 'package-lock.json'
+  push:
+    branches: [dev/anlz-storm-analysis]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Start production server
+        run: npm run start -- --hostname 127.0.0.1 > /tmp/mesovortex-next.log 2>&1 &
+      - name: Live NOAA Level II ANLZ smoke tests
+        run: node scripts/test-live-anlz.mjs
