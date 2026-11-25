@@ -59,11 +59,6 @@ function nearestUnfolded(value: number, reference: number, nyquist: number): { v
     Math.round((reference - value) / (2 * nyquist))));
   return { value: value + 2 * nyquist * fold, fold };
 }
-function median(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-}
 
 export function dealiasVelocity<T extends DealiasRadial>(input: T[]): DealiasResult<T> {
   const ordered = input.map((radial, originalIndex) => ({ radial, originalIndex }))
@@ -136,14 +131,13 @@ export function dealiasVelocity<T extends DealiasRadial>(input: T[]): DealiasRes
       if (observed == null || !Number.isFinite(observed)) continue;
       const range = current.velocity!.first_gate! + gi * current.velocity!.gate_size!;
       const previousGate = nearestGate(previous.velocity, range);
-      const references: number[] = [];
-      if (previousGate >= 0 && corrected[ri - 1][previousGate] != null) {
-        references.push(corrected[ri - 1][previousGate]!);
-      }
-      if (gi > 0 && corrected[ri][gi - 1] != null) references.push(corrected[ri][gi - 1]!);
-      if (!references.length) { unresolved++; continue; }
+      // Prefer the already-unfolded previous radial. A same-ray previous
+      // gate may itself still be folded at a fold boundary and can pull the
+      // reference back into the aliased interval. Use it only as a fallback.
+      let reference: number | null = previousGate >= 0 ? corrected[ri - 1][previousGate] : null;
+      if (reference == null && gi > 0) reference = corrected[ri][gi - 1];
+      if (reference == null) { unresolved++; continue; }
       considered++;
-      const reference = median(references);
       const candidate = nearestUnfolded(observed, reference, nyq);
       const rawDifference = Math.abs(observed - reference);
       const correctedDifference = Math.abs(candidate.value - reference);
