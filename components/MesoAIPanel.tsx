@@ -11,6 +11,8 @@ type Props = {
   productKey: string;
   warning: WarningContext | null;
   satelliteSelection: SatelliteSelection;
+  /** Real METAR/ASOS station features from the app's live surface feed. */
+  surfaceStations?: any;
 };
 
 const MODES: Array<{ id: AnalysisMode; label: string }> = [
@@ -26,7 +28,7 @@ type AnalyzeResponse = {
   observations: WeatherObservation[];
 };
 
-export function MesoAIPanel({ open, onClose, site, productKey, warning, satelliteSelection }: Props) {
+export function MesoAIPanel({ open, onClose, site, productKey, warning, satelliteSelection, surfaceStations }: Props) {
   const [mode, setMode] = useState<AnalysisMode>('storm');
   const [response, setResponse] = useState<AnalyzeResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -35,6 +37,11 @@ export function MesoAIPanel({ open, onClose, site, productKey, warning, satellit
   const [watcherLoading, setWatcherLoading] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<string | null>(null);
+  const surfaceKey = Array.isArray(surfaceStations?.features)
+    ? surfaceStations.features
+        .map((feature: any) => String(feature?.id || feature?.properties?.stationId || ''))
+        .join(',')
+    : '';
 
   useEffect(() => {
     if (!open) return;
@@ -47,7 +54,7 @@ export function MesoAIPanel({ open, onClose, site, productKey, warning, satellit
     fetch('/api/mesoai/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode, site, productKey, warning, satelliteSelection }),
+      body: JSON.stringify({ mode, site, productKey, warning, satelliteSelection, surfaceStations }),
       signal: AbortSignal.timeout(95_000),
     })
       .then(async (res) => {
@@ -66,7 +73,7 @@ export function MesoAIPanel({ open, onClose, site, productKey, warning, satellit
       });
 
     return () => { cancelled = true; };
-  }, [open, mode, site.id, site.name, site.lat, site.lon, productKey, warning?.event, satelliteSelection.bird, satelliteSelection.sector, satelliteSelection.productId]);
+  }, [open, mode, site.id, site.name, site.lat, site.lon, productKey, warning?.event, satelliteSelection.bird, satelliteSelection.sector, satelliteSelection.productId, surfaceKey]);
 
   useEffect(() => {
     if (!open) return;

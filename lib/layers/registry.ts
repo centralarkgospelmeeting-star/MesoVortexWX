@@ -68,11 +68,11 @@ export const DEFAULT_LAYERS: LayerDef[] = [
   },
   {
     id: 'obs.metar',
-    label: 'METAR/Surface',
+    label: 'METAR/ASOS Stations',
     group: 'observations',
     defaultVisible: false,
-    sourceAttribution: 'NWS/NOAA',
-    description: 'Surface observations',
+    sourceAttribution: 'AviationWeather.gov METAR',
+    description: 'Real surface station reports; ASOS subset from AUTO/AO1/AO2 remarks',
   },
   {
     id: 'obs.lsr',

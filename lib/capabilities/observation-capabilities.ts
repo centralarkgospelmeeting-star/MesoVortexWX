@@ -11,9 +11,9 @@ export interface ObservationCapability {
 
 export const OBSERVATION_CAPABILITIES: readonly ObservationCapability[] = [
   // Sources/products
-  { id: 'metar', name: 'METAR observations', category: 'source', status: 'PARTIAL', reason: 'METAR route/integration exists; full end-to-end verification and coverage not complete.', evidence: ['app/api/metar/route.ts', 'app/api/metar/geojson/route.ts'] },
+  { id: 'metar', name: 'METAR observations', category: 'source', status: 'PARTIAL', reason: 'Real AviationWeather METAR stations feed is wired to a live map layer, panel, and MesoAI context; coverage and archive completeness are not fully verified.', evidence: ['app/api/metar/geojson/route.ts', 'lib/metar/surface-feed.ts', 'components/METARPanel.tsx', 'components/RadarMap.tsx'] },
   { id: 'speci', name: 'SPECI reports', category: 'source', status: 'UNAVAILABLE', reason: 'DATA UNAVAILABLE - SPECI-specific parsing/integration not verified.', evidence: ['No dedicated verified SPECI pipeline'] },
-  { id: 'asos', name: 'ASOS', category: 'source', status: 'PARTIAL', reason: 'ASOS observations may be present through METAR/network feeds; dedicated ASOS verification incomplete.', evidence: ['METAR/observation feeds commonly include ASOS; no dedicated ASOS verification'] },
+  { id: 'asos', name: 'ASOS', category: 'source', status: 'PARTIAL', reason: 'ASOS stations are selected only from genuine METAR reports carrying AUTO/AO1/AO2 remarks; no separate ASOS network feed is claimed.', evidence: ['app/api/asos/geojson/route.ts', 'lib/metar/surface-feed.ts isAsosReport', 'components/METARPanel.tsx'] },
   { id: 'awos', name: 'AWOS', category: 'source', status: 'PARTIAL', reason: 'AWOS observations may be present through METAR/network feeds; dedicated AWOS verification incomplete.', evidence: ['METAR/observation feeds commonly include AWOS; no dedicated AWOS verification'] },
   { id: 'mesonet', name: 'Mesonet networks', category: 'source', status: 'UNAVAILABLE', reason: 'DATA UNAVAILABLE - Mesonet network integrations not verified end-to-end.', evidence: ['placefile catalog references mesonets; no verified in-app mesonet data pipeline'] },
   { id: 'pws', name: 'Personal weather stations', category: 'source', status: 'UNAVAILABLE', reason: 'DATA UNAVAILABLE - PWS integration not verified end-to-end.', evidence: ['No verified PWS ingestion pipeline'] },
@@ -40,15 +40,15 @@ export const OBSERVATION_CAPABILITIES: readonly ObservationCapability[] = [
   { id: 'obs_pressure', name: 'Barometric pressure', category: 'reading', status: 'PARTIAL', reason: 'Available where observation source is verified; not all sources verified.', evidence: ['METAR/adapters parse pressure'] },
   { id: 'obs_pressure_tendency', name: 'Pressure tendency', category: 'reading', status: 'UNAVAILABLE', reason: 'DATA UNAVAILABLE - Pressure tendency not verified end-to-end.', evidence: ['No verified pressure tendency pipeline'] },
   { id: 'obs_precip', name: 'Precipitation', category: 'reading', status: 'UNAVAILABLE', reason: 'DATA UNAVAILABLE - Station precipitation observation not verified end-to-end.', evidence: ['No verified station precip observation pipeline'] },
-  { id: 'obs_visibility', name: 'Visibility', category: 'reading', status: 'PARTIAL', reason: 'Available where METAR source is verified; not all sources verified.', evidence: ['METAR parsing'] },
-  { id: 'obs_ceiling', name: 'Cloud ceilings', category: 'reading', status: 'UNAVAILABLE', reason: 'DATA UNAVAILABLE - Cloud ceiling parsing/display not verified end-to-end.', evidence: ['No verified ceiling pipeline'] },
+  { id: 'obs_visibility', name: 'Visibility', category: 'reading', status: 'PARTIAL', reason: 'Shown from the real METAR visib field where reported; not all stations report it.', evidence: ['lib/metar/surface-feed.ts visibilitySm', 'components/METARPanel.tsx'] },
+  { id: 'obs_ceiling', name: 'Cloud ceilings', category: 'reading', status: 'PARTIAL', reason: 'Shown from the real METAR ceil field where reported; no ceiling is inferred when absent.', evidence: ['lib/metar/surface-feed.ts ceilingFt', 'components/METARPanel.tsx'] },
   { id: 'obs_conditions', name: 'Weather conditions', category: 'reading', status: 'PARTIAL', reason: 'Available where observation source is verified; coverage incomplete.', evidence: ['METAR/weather condition parsing exists in parts'] },
   { id: 'obs_solar', name: 'Solar radiation', category: 'reading', status: 'UNAVAILABLE', reason: 'DATA UNAVAILABLE - Solar radiation not verified/integrated.', evidence: ['No verified solar radiation source'] },
   { id: 'obs_uv', name: 'UV index', category: 'reading', status: 'UNAVAILABLE', reason: 'DATA UNAVAILABLE - UV index observation not verified/integrated.', evidence: ['No verified UV observation source'] },
   { id: 'obs_soil', name: 'Soil temperature and moisture, where available', category: 'reading', status: 'UNAVAILABLE', reason: 'DATA UNAVAILABLE - Soil temp/moisture not verified/integrated.', evidence: ['No verified soil observation source'] },
 
   // Tools
-  { id: 'obs_clickable_markers', name: 'Clickable station markers', category: 'tool', status: 'PARTIAL', reason: 'Station marker/map interaction exists in some forms; full coverage/verification incomplete.', evidence: ['Map/station UI components exist'] },
+  { id: 'obs_clickable_markers', name: 'Clickable station markers', category: 'tool', status: 'PARTIAL', reason: 'METAR/ASOS station points open a real-report popup; full station-type coverage incomplete.', evidence: ['components/RadarMap.tsx SURFACE_POINT_ID popup', 'Map/station UI components'] },
   { id: 'obs_station_history', name: 'Station history', category: 'tool', status: 'UNAVAILABLE', reason: 'DATA UNAVAILABLE - Station history not verified/implemented.', evidence: ['No verified station history pipeline'] },
   { id: 'obs_graphs', name: 'Observation graphs', category: 'tool', status: 'UNAVAILABLE', reason: 'DATA UNAVAILABLE - Observation graphs not verified/implemented.', evidence: ['No verified observation graph workflow'] },
   { id: 'obs_timeseries_compare', name: 'Time-series comparisons', category: 'tool', status: 'UNAVAILABLE', reason: 'DATA UNAVAILABLE - Time-series comparisons not verified/implemented.', evidence: ['No verified time-series comparison workflow'] },
@@ -57,7 +57,7 @@ export const OBSERVATION_CAPABILITIES: readonly ObservationCapability[] = [
   { id: 'obs_frequency', name: 'Station reporting frequency', category: 'tool', status: 'UNAVAILABLE', reason: 'DATA UNAVAILABLE - Reporting frequency display not verified/implemented.', evidence: ['No verified reporting frequency UI'] },
   { id: 'obs_favorites', name: 'Custom station favorites', category: 'tool', status: 'UNAVAILABLE', reason: 'DATA UNAVAILABLE - Station favorites not verified/implemented.', evidence: ['No verified favorites feature'] },
   { id: 'obs_personal_integration', name: 'Personal station integration', category: 'tool', status: 'UNAVAILABLE', reason: 'DATA UNAVAILABLE - Personal station integration not verified/implemented.', evidence: ['No verified personal station integration'] },
-  { id: 'obs_overlays', name: 'Observation overlays on radar, satellite, and model maps', category: 'tool', status: 'PARTIAL', reason: 'Some observation/report overlays exist; full cross-map observation overlay system not verified.', evidence: ['LSR/spotter/warning overlays exist; full observation overlay coverage incomplete'] },
+  { id: 'obs_overlays', name: 'Observation overlays on radar, satellite, and model maps', category: 'tool', status: 'PARTIAL', reason: 'Live METAR/ASOS station points join existing report overlays; full cross-map observation overlay system not verified.', evidence: ['components/RadarMap.tsx SURFACE_SOURCE_ID', 'LSR/spotter/warning overlays'] },
 ] as const;
 
 export function getObservationCapability(id: string): ObservationCapability | undefined {

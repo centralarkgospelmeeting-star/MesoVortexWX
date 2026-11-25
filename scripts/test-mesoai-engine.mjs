@@ -77,6 +77,28 @@ assert.doesNotMatch(dataEngine, /fetch\(/, 'data engine must perform no network 
 assert.match(dataEngine, /deriveGlmMetrics/, 'lightning metrics must come from the real GLM payload');
 assert.match(dataEngine, /obs-satellite-selection/, 'selected satellite context must be normalized');
 assert.match(dataEngine, /getSatelliteTileUrl/, 'satellite selection must reuse the verified URL builder');
+assert.ok(dataEngine.includes('obs-surface-stations'), 'real station features must become a MesoAI observation');
+
+const surfaceFeed = fs.readFileSync('lib/metar/surface-feed.ts', 'utf8');
+assert.doesNotMatch(surfaceFeed, /fetch\(|Math\.random\(/, 'surface normalization must be deterministic and network-free');
+assert.match(surfaceFeed, /AUTO\|AO\[12\]/, 'ASOS must come from real automated-station remarks');
+assert.match(surfaceFeed, /ceilingRaw \* 100/, 'AWC ceil is in hundreds of feet');
+assert.match(surfaceFeed, /const latest = new Map/, 'station reports must dedupe to the latest observation');
+assert.match(surfaceFeed, /No fabricated|never invents|no invented/i, 'surface feed must disclaim invented readings');
+const surfaceResponse = fs.readFileSync('lib/metar/surface-response.ts', 'utf8');
+assert.match(surfaceResponse, /forcedSource/, 'ASOS route must force the automated-station subset');
+const asosRoute = fs.readFileSync('app/api/asos/geojson/route.ts', 'utf8');
+assert.match(asosRoute, /params\.set\('source', 'asos'\)/, 'ASOS endpoint must request the strict subset');
+const radarMapSource = fs.readFileSync('components/RadarMap.tsx', 'utf8');
+for (const id of ['mv-surface-source', 'mv-surface-point', 'mv-surface-label']) {
+  assert.ok(radarMapSource.includes(id), `METAR/ASOS map layer must define ${id}`);
+}
+const surfacePanel = fs.readFileSync('components/METARPanel.tsx', 'utf8');
+assert.match(surfacePanel, /flightCategory/, 'panel must show real flight category');
+assert.match(surfacePanel, /ceilingFt/, 'panel must show real ceiling');
+assert.match(surfacePanel, /visibilitySm/, 'panel must show real visibility');
+const analyzeRoute = fs.readFileSync('app/api/mesoai/analyze/route.ts', 'utf8');
+assert.match(analyzeRoute, /surfaceInput\.features\.slice\(0, 150\)/, 'MesoAI must cap supplied station features');
 
 const glmRoute = fs.readFileSync('app/api/lightning/glm/route.ts', 'utf8');
 assert.match(glmRoute, /normalizeGlmResponse/, 'GLM route must normalize source fields');
@@ -118,6 +140,7 @@ const files = [
   'lib/mesoai/local-renderer.ts',
   'lib/mesoai/watcher.ts',
   'lib/mesoai/qwen-adapter.ts',
+  'lib/metar/surface-feed.ts',
 ];
 execFileSync(tsc, [
   ...files,
@@ -134,6 +157,23 @@ const render = require(path.join(outDir, 'mesoai', 'local-renderer.js'));
 const watch = require(path.join(outDir, 'mesoai', 'watcher.js'));
 const data = require(path.join(outDir, 'mesoai', 'data-engine.js'));
 const qwenAdapter = require(path.join(outDir, 'mesoai', 'qwen-adapter.js'));
+const surface = require(path.join(outDir, 'metar', 'surface-feed.js'));
+
+const rawStationReports = [
+  { id: 'KAAA', geometry: { coordinates: [-90, 34] }, properties: { obsTime: '2026-11-25T12:00:00Z', temp: 1, ceil: 95, rawOb: 'METAR KAAA 251200Z AUTO 10SM OVC095 01/M02 A3001 AO2' } },
+  { id: 'KAAA', geometry: { coordinates: [-90, 34] }, properties: { obsTime: '2026-11-25T13:00:00Z', temp: 3, ceil: 40, rawOb: 'METAR KAAA 251300Z AUTO 10SM OVC040 03/M02 A3001 AO2' } },
+  { id: 'KBBB', geometry: { coordinates: [-91, 35] }, properties: { obsTime: '2026-11-25T13:00:00Z', temp: 5, rawOb: 'METAR KBBB 251300Z 10SM SKC 05/M02 A3001' } },
+];
+const allStations = surface.normalizeCollection(rawStationReports, 'metar');
+assert.equal(allStations.length, 2, 'duplicate station reports must collapse to the latest');
+const aaa = allStations.find((item) => item.id === 'KAAA');
+assert.equal(aaa.properties.tempC, 3, 'latest station report must win');
+assert.equal(aaa.properties.ceilingFt, 4000, 'ceil 40 must mean 4000 ft');
+assert.equal(aaa.properties.asos, true, 'AO2 remark must classify as ASOS');
+const asosOnly = surface.normalizeCollection(rawStationReports, 'asos');
+assert.equal(asosOnly.length, 1, 'ASOS must exclude reports without automated markers');
+assert.equal(surface.buildUpstreamUrl({}), null, 'missing query must fail closed before fetch');
+assert.equal(surface.buildUpstreamUrl({ bbox: '33,-95,36' }), null, 'malformed bbox must fail closed before fetch');
 
 const site = { id: 'KLZK', name: 'Little Rock, AR', lat: 34.84, lon: -92.23 };
 const radarObservation = {
@@ -295,6 +335,14 @@ const broader = data.buildObservations({
     observations: [{ station: 'KOUN', text: 'Clear skies', temp: '72°F', dewpoint: '55°F', wind: 'Calm' }],
     _meta: { ok: true, fetchedAt: '2026-11-24T12:00:00Z' },
   },
+  surfaceStations: {
+    features: [
+      { id: 'KLIT', properties: { stationId: 'KLIT', flightCategory: 'VFR', tempC: 4, asos: true, rawOb: 'METAR KLIT 251353Z 01005KT 10SM SKC 04/M03 A3027 AO2' } },
+      { id: 'KFYV', properties: { stationId: 'KFYV', flightCategory: 'MVFR', tempC: -4, asos: true, rawOb: 'METAR KFYV 251353Z AUTO 10SM OVC015 M04/M06 A3012' } },
+      { id: 'KFFF', properties: { stationId: 'KFFF', flightCategory: null, tempC: null, asos: false, rawOb: '' } },
+    ],
+    _meta: { fetchedAt: '2026-11-24T12:00:00Z' },
+  },
   lsr: { features: [{ type: 'Feature' }], _meta: { fetchedAt: '2026-11-24T12:00:00Z' } },
   mcd: {
     features: [{ properties: { name: 'Mesoscale Discussion 1234', issueTime: '2026-11-24T11:55:00Z' } }],
@@ -302,9 +350,13 @@ const broader = data.buildObservations({
   includeSatelliteContext: true,
 });
 const broaderIds = broader.map((item) => item.id);
-for (const id of ['obs-mrms-aws-listing', 'obs-satellite-capability', 'obs-surface-metar', 'obs-storm-reports', 'obs-spc-mcd']) {
+for (const id of ['obs-mrms-aws-listing', 'obs-satellite-capability', 'obs-surface-metar', 'obs-surface-stations', 'obs-storm-reports', 'obs-spc-mcd']) {
   assert.ok(broaderIds.includes(id), `broader data engine must emit ${id}`);
 }
+const stationObservation = broader.find((item) => item.id === 'obs-surface-stations');
+assert.equal(stationObservation.values.stationCount, 3, 'station count must come from real features');
+assert.equal(stationObservation.values.asosCount, 2, 'ASOS count must come only from AUTO/AO remarks');
+assert.match(stationObservation.caveats.join(' '), /no separate ASOS feed/i, 'ASOS must disclaim a separate feed');
 assert.ok(broader.every((item) => item.verification !== 'VERIFIED' || item.domain === 'RADAR'), 'metadata context must stay PARTIAL');
 assert.ok(broader.find((item) => item.id === 'obs-mrms-aws-listing').caveats.some((text) => /decode/i.test(text)), 'MRMS context must disclaim missing decode pipeline');
 assert.ok(broader.find((item) => item.id === 'obs-satellite-capability').caveats.some((text) => /no pixel value/i.test(text)), 'satellite context must disclaim imagery values');

@@ -87,6 +87,10 @@ export async function POST(request: Request) {
     sector: (typeof satelliteInput.sector === 'string' ? satelliteInput.sector.slice(0, 32) : undefined) as SatelliteSelection['sector'] | undefined,
     productId: (typeof satelliteInput.productId === 'string' ? satelliteInput.productId.slice(0, 32) : undefined) as SatelliteSelection['productId'] | undefined,
   } : null;
+  const surfaceInput = body.surfaceStations as { features?: unknown[]; _meta?: unknown } | undefined;
+  const surfaceStations = surfaceInput && Array.isArray(surfaceInput.features)
+    ? { features: surfaceInput.features.slice(0, 150), _meta: surfaceInput._meta }
+    : null;
   const needsRadar = mode === 'storm';
   const needsAlerts = mode === 'storm' || mode === 'warning';
 
@@ -149,6 +153,7 @@ export async function POST(request: Request) {
     productKey,
     mrms: mrmsResult.status === 'fulfilled' ? mrmsResult.value : null,
     metar: metarResult.status === 'fulfilled' ? metarResult.value : null,
+    surfaceStations,
     lsr: lsrResult.status === 'fulfilled' ? lsrResult.value : null,
     mcd: mcdResult.status === 'fulfilled' ? mcdResult.value : null,
     satelliteSelection,

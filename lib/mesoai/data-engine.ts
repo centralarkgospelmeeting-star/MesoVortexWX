@@ -28,6 +28,8 @@ export type RawWeatherInputs = {
   productKey?: string | null;
   mrms?: unknown;
   metar?: unknown;
+  /** Real station features from /api/metar/geojson (includes ASOS subset). */
+  surfaceStations?: unknown;
   lsr?: unknown;
   mcd?: unknown;
   includeSatelliteContext?: boolean;
@@ -307,6 +309,54 @@ function metarObservation(payload: unknown): WeatherObservation | null {
   };
 }
 
+function surfaceStationsObservation(payload: unknown): WeatherObservation | null {
+  const rawFeatures = (payload as { features?: unknown } | null)?.features;
+  const features = Array.isArray(rawFeatures) ? rawFeatures : [];
+  if (features.length === 0) return null;
+
+  const props = features.map((feature) => (feature as { properties?: unknown })?.properties || {});
+  const stations = unique(props.map((p: any) =>
+    String(p.stationId || p.icaoId || p.id || '').trim()
+  ));
+  const asosCount = unique(props
+    .map((p: any, index: number) => ({
+      id: String(p.stationId || p.icaoId || p.id || `report-${index}`).trim(),
+      asos: p.asos === true || /\b(?:AUTO|AO[12])\b/i.test(String(p.rawOb || p.raw || '')),
+    }))
+    .filter((entry) => entry.asos)
+    .map((entry) => entry.id)).length;
+  const categories = ['VFR', 'MVFR', 'IFR', 'LIFR']
+    .map((category) => `${category}:${props.filter((p: any) =>
+      String(p.flightCategory || p.fltcat || '').toUpperCase() === category
+    ).length}`);
+  const sample = props.slice(0, 3).map((p: any) => {
+    const id = String(p.stationId || p.icaoId || p.id || '').trim();
+    const temp = p.tempC ?? p.temp;
+    const flight = p.flightCategory || p.fltcat;
+    return [id, flight, temp != null ? `${temp}C` : null].filter(Boolean).join(' ');
+  });
+
+  return {
+    id: 'obs-surface-stations',
+    domain: 'OBSERVATION',
+    source: 'AviationWeather.gov METAR stations (METAR/ASOS subset)',
+    productCode: 'geojson',
+    verification: 'PARTIAL',
+    observedAt: isoOrNull((payload as { _meta?: { fetchedAt?: unknown } } | null)?._meta?.fetchedAt),
+    values: {
+      stationCount: stations.length || features.length,
+      asosCount,
+      flightCategories: categories.join(' | '),
+      stationSample: sample.join(' | '),
+    },
+    caveats: [
+      'Surface station reports are local observations and do not verify conditions aloft.',
+      'ASOS labels come only from AUTO/AO1/AO2 remarks in real METAR reports; no separate ASOS feed is claimed.',
+      'Fields omitted by the real report are never inferred.',
+    ],
+  };
+}
+
 function lsrObservation(payload: unknown): WeatherObservation | null {
   const features = Array.isArray((payload as { features?: unknown })?.features)
     ? (payload as { features: unknown[] }).features
@@ -369,6 +419,7 @@ export function buildObservations(input: RawWeatherInputs): WeatherObservation[]
       ? satelliteSelectionObservation(input.satelliteSelection)
       : satelliteObservation(input.includeSatelliteContext === true),
     metarObservation(input.metar),
+    surfaceStationsObservation(input.surfaceStations),
     lsrObservation(input.lsr),
     mcdObservation(input.mcd),
   ].filter((observation): observation is WeatherObservation => observation !== null);

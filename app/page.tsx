@@ -28,6 +28,7 @@ import {
 import { AlertDetailsPanel, buildLocationContext } from '../components/AlertDetailsPanel';
 import { ProductInfoBanner } from '../components/ProductInfoBanner';
 import { WeatherIntensityScorePanel } from '../components/WeatherIntensityScorePanel';
+import { METARPanel, type SurfaceSource } from '../components/METARPanel';
 import {
   DEFAULT_SATELLITE_SELECTION,
   SATELLITE_BIRDS,
@@ -119,6 +120,7 @@ type UserPrefs = {
   showMCD: boolean;
   showSpotters: boolean;
   showSpotterReports: boolean;
+  showMetars: boolean;
   showStormTracks: boolean;
   showCounties: boolean;
   showTornadoAnalysis: boolean;
@@ -149,6 +151,7 @@ const DEFAULT_PREFS: UserPrefs = {
   showMCD: true,
   showSpotters: true,
   showSpotterReports: true,
+  showMetars: false,
   showStormTracks: true,
   showCounties: true,
   showTornadoAnalysis: true,
@@ -188,6 +191,7 @@ function loadUserPrefs(): UserPrefs {
       colorTable: typeof p.colorTable === 'string' ? p.colorTable : DEFAULT_PREFS.colorTable,
       alertsOpen: typeof p.alertsOpen === 'boolean' ? p.alertsOpen : DEFAULT_PREFS.alertsOpen,
       alertSidebarState: p.alertSidebarState === 'open' ? 'open' : 'closed',
+      showMetars: typeof p.showMetars === 'boolean' ? p.showMetars : DEFAULT_PREFS.showMetars,
     } as UserPrefs;
   } catch {
     return DEFAULT_PREFS;
@@ -286,6 +290,16 @@ export default function MesoVortexWorkstation() {
   const [projectionMode, setProjectionMode] = useState<'mercator' | 'globe'>(initialPrefs.projectionMode);
   const [mapPitch, setMapPitch] = useState(initialPrefs.mapPitch);
   const [showSpotterReports, setShowSpotterReports] = useState(initialPrefs.showSpotterReports);
+  const [showMetars, setShowMetars] = useState(initialPrefs.showMetars);
+  const [surfaceSource, setSurfaceSource] = useState<SurfaceSource>('metar');
+  const [surfaceGeoJson, setSurfaceGeoJson] = useState<any>({ type: 'FeatureCollection', features: [] });
+  const [surfaceStatus, setSurfaceStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [surfaceError, setSurfaceError] = useState<string | null>(null);
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lon: number; zoom: number }>({
+    lat: RADAR_SITES[0]?.lat ?? 34.836,
+    lon: RADAR_SITES[0]?.lon ?? -92.262,
+    zoom: 7,
+  });
   const [spotterFilters, setSpotterFilters] = useState({
     tornado: true,
     funnel: true,
@@ -346,6 +360,7 @@ export default function MesoVortexWorkstation() {
         showMCD,
         showSpotters,
         showSpotterReports,
+        showMetars,
         showStormTracks,
         showCounties,
         showTornadoAnalysis,
@@ -355,7 +370,7 @@ export default function MesoVortexWorkstation() {
       };
       localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(prefs));
     } catch {}
-  }, [projectionMode, mapPitch, showRangeRings, radarOpacity, smoothing, playbackSpeed, playbackDirection, loopPauseMs, favoriteProducts, product, tilt, radarSite, colorTable, showRadarPills, showLightning, showLSR, showWatches, showWarnings, showMCD, showSpotters, showSpotterReports, showStormTracks, showCounties, showTornadoAnalysis, showHurricanes, alertsOpen]);
+  }, [projectionMode, mapPitch, showRangeRings, radarOpacity, smoothing, playbackSpeed, playbackDirection, loopPauseMs, favoriteProducts, product, tilt, radarSite, colorTable, showRadarPills, showLightning, showLSR, showWatches, showWarnings, showMCD, showSpotters, showSpotterReports, showMetars, showStormTracks, showCounties, showTornadoAnalysis, showHurricanes, alertsOpen]);
   const [alertSettings, setAlertSettings] = useState<AlertSettings>(DEFAULT_ALERT_SETTINGS);
   const [menuOpen, setMenuOpen] = useState(false);
   const [wisOpen, setWisOpen] = useState(true);
@@ -664,6 +679,46 @@ export default function MesoVortexWorkstation() {
     }
   };
 
+  // One real surface feed serves both the map overlay and the METAR/ASOS panel.
+  // ASOS is a strict subset of genuine reports carrying AUTO/AO1/AO2 remarks.
+  useEffect(() => {
+    const active = showMetars || openPanel === 'METAR' || openPanel === 'ASOS';
+    if (!active) return;
+    let cancelled = false;
+    const load = async () => {
+      setSurfaceStatus('loading');
+      setSurfaceError(null);
+      try {
+        const lat0 = Math.max(-90, mapCenter.lat - 3);
+        const lat1 = Math.min(90, mapCenter.lat + 3);
+        const lon0 = Math.max(-180, mapCenter.lon - 3.5);
+        const lon1 = Math.min(180, mapCenter.lon + 3.5);
+        const qs = new URLSearchParams({
+          bbox: `${lat0},${lon0},${lat1},${lon1}`,
+          hours: '3',
+          source: surfaceSource,
+        });
+        const res = await fetch(`/api/metar/geojson?${qs.toString()}`, { cache: 'no-store' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+        if (cancelled) return;
+        setSurfaceGeoJson({ type: 'FeatureCollection', features: data.features || [] });
+        setSurfaceStatus('ready');
+      } catch (error) {
+        if (cancelled) return;
+        setSurfaceError(error instanceof Error ? error.message : 'Unable to load surface observations');
+        setSurfaceStatus('error');
+      }
+    };
+    const start = window.setTimeout(load, 300);
+    const poll = window.setInterval(load, 180_000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(start);
+      window.clearInterval(poll);
+    };
+  }, [showMetars, openPanel, surfaceSource, mapCenter.lat, mapCenter.lon]);
+
   const paneProps = {
     radarSite,
     tilt,
@@ -675,6 +730,9 @@ export default function MesoVortexWorkstation() {
     showRadarPills,
     showLightning,
     showLSR,
+    showMetars,
+    surfaceGeoJson,
+    onCameraChange: setMapCenter,
     showWatches,
     showWarnings,
     showMCD,
@@ -1239,6 +1297,7 @@ export default function MesoVortexWorkstation() {
           productKey={product}
           warning={mesoaiWarning}
           satelliteSelection={activeSatSel}
+          surfaceStations={surfaceGeoJson}
         />
         {quadMode ? (
           <>
@@ -1482,12 +1541,19 @@ export default function MesoVortexWorkstation() {
                 ['Satellite','Satellite'],
                 ['Tropics','Tropics'],
                 ['Discussions','Discussions'],
+                ['METAR','METAR Observations'],
+                ['ASOS','ASOS Stations'],
                 ['Lightning','Lightning'],
                 ['DataSources','Data Sources'],
                 ['Settings','Settings'],
               ].map(([id,label]) => (
                 <button key={id} type="button"
-                  onClick={() => { setOpenPanel(id); setMenuOpen(false); }}
+                  onClick={() => {
+                    if (id === 'METAR') setSurfaceSource('metar');
+                    if (id === 'ASOS') setSurfaceSource('asos');
+                    setOpenPanel(id);
+                    setMenuOpen(false);
+                  }}
                   className={`w-full rounded-lg px-3 py-2 text-left transition ${openPanel===id ? 'bg-sky-900/30 text-sky-300 border border-sky-700' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
                   {label}
                 </button>
@@ -1534,6 +1600,42 @@ export default function MesoVortexWorkstation() {
               <div><span className="text-slate-500">Basemap:</span> {basemapStatus}</div>
               <div><span className="text-slate-500">Radar site:</span> {currentSite?.id || radarSite}</div>
               <div className="text-slate-500">Map is primary. Open other panels only when needed.</div>
+            </div>
+          )}
+
+          {(openPanel === 'METAR' || openPanel === 'ASOS') && (
+            <div className="space-y-3">
+              <label className="flex items-center gap-2 text-[11px] font-bold cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showMetars}
+                  onChange={(e) => setShowMetars(e.target.checked)}
+                />
+                Show stations on map
+              </label>
+              <div data-surface-source-toggle="true" className="flex gap-1.5">
+                {(['metar', 'asos'] as SurfaceSource[]).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setSurfaceSource(value)}
+                    className={`flex-1 rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${
+                      surfaceSource === value
+                        ? 'border-sky-600 bg-sky-900/30 text-sky-300'
+                        : 'border-slate-700 text-slate-400 hover:bg-slate-800'
+                    }`}
+                  >
+                    {value === 'metar' ? 'METAR' : 'ASOS'}
+                  </button>
+                ))}
+              </div>
+              <METARPanel
+                center={mapCenter}
+                features={Array.isArray(surfaceGeoJson?.features) ? surfaceGeoJson.features : []}
+                source={surfaceSource}
+                status={surfaceStatus}
+                error={surfaceError}
+              />
             </div>
           )}
 

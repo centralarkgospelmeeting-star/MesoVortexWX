@@ -75,6 +75,11 @@ export interface RadarMapProps {
   showRadarPills?: boolean;
   showLightning?: boolean;
   showLSR?: boolean;
+  /** Real AviationWeather METAR / ASOS station points. */
+  showMetars?: boolean;
+  surfaceGeoJson?: any;
+  /** Fires on camera settle so panels can query stations near the current view. */
+  onCameraChange?: (center: { lat: number; lon: number; zoom: number }) => void;
   showWatches?: boolean;
   showWarnings?: boolean;
   showMCD?: boolean;
@@ -149,6 +154,9 @@ const MCD_SOURCE_ID = 'mv-mcd-source';
 const MCD_FILL_ID = 'mv-mcd-fill';
 const MCD_LINE_ID = 'mv-mcd-line';
 const MCD_LABEL_ID = 'mv-mcd-label';
+const SURFACE_SOURCE_ID = 'mv-surface-source';
+const SURFACE_POINT_ID = 'mv-surface-point';
+const SURFACE_LABEL_ID = 'mv-surface-label';
 const RINGS_SOURCE_ID = 'mv-rings-source';
 const RINGS_LAYER_ID = 'mv-rings-layer';
 const RINGS_LABEL_ID = 'mv-rings-label';
@@ -327,6 +335,9 @@ export function RadarMap({
   flashReflectivity: flashReflectivityProp,
   flashRange = [60, 80],
   showLightning = false,
+  showMetars = false,
+  surfaceGeoJson = { type: 'FeatureCollection', features: [] },
+  onCameraChange,
   spotterData = [],
   alertFeatures = { type: 'FeatureCollection', features: [] },
   syncGroup = null,
@@ -485,6 +496,14 @@ export function RadarMap({
   const warningHandlersBoundRef = useRef(false);
   const mcdHandlersBoundRef = useRef(false);
   const showMCDRef = useRef(showMCD);
+  const showMetarsRef = useRef(showMetars);
+  const surfaceGeoJsonRef = useRef(surfaceGeoJson);
+  const surfaceHandlersRef = useRef<{
+    click: (e: any) => void;
+    enter: () => void;
+    leave: () => void;
+  } | null>(null);
+  const onCameraChangeRef = useRef(onCameraChange);
   const showHurricanesRef = useRef(showHurricanes);
   const showWarningsRef = useRef(showWarnings);
   const showWatchesRef = useRef(showWatches);
@@ -647,6 +666,11 @@ export function RadarMap({
 
     setTimeout(() => map.resize(), 100);
     setTimeout(() => map.resize(), 300);
+
+    map.on('moveend', () => {
+      const center = map.getCenter();
+      onCameraChangeRef.current?.({ lat: center.lat, lon: center.lng, zoom: map.getZoom() });
+    });
 
     map.on('load', () => {
       setMapReady(true);
@@ -944,6 +968,123 @@ export function RadarMap({
       });
     }
   }, [removeMCDLayers]);
+
+  const removeSurfaceLayers = useCallback((map: MapLibreMap) => {
+    [SURFACE_LABEL_ID, SURFACE_POINT_ID].forEach((id) => {
+      if (map.getLayer(id)) map.removeLayer(id);
+    });
+    if (map.getSource(SURFACE_SOURCE_ID)) map.removeSource(SURFACE_SOURCE_ID);
+    if (surfaceHandlersRef.current) {
+      map.off('click', SURFACE_POINT_ID, surfaceHandlersRef.current.click);
+      map.off('mouseenter', SURFACE_POINT_ID, surfaceHandlersRef.current.enter);
+      map.off('mouseleave', SURFACE_POINT_ID, surfaceHandlersRef.current.leave);
+      surfaceHandlersRef.current = null;
+    }
+  }, []);
+
+  const updateSurfaceLayer = useCallback((map: MapLibreMap, geojson?: any) => {
+    const data = geojson ?? surfaceGeoJsonRef.current ?? { type: 'FeatureCollection', features: [] };
+    const features = Array.isArray(data?.features) ? data.features : [];
+    if (features.length === 0) {
+      removeSurfaceLayers(map);
+      return;
+    }
+
+    const source = map.getSource(SURFACE_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+    if (source) {
+      source.setData({ type: 'FeatureCollection', features } as any);
+      return;
+    }
+
+    map.addSource(SURFACE_SOURCE_ID, {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features } as any,
+    });
+
+    const beforeId =
+      map.getLayer(SPOTTER_HALO_LAYER_ID) ? SPOTTER_HALO_LAYER_ID :
+      map.getLayer(SPOTTER_POSITION_LAYER_ID) ? SPOTTER_POSITION_LAYER_ID :
+      undefined;
+
+    map.addLayer({
+      id: SURFACE_POINT_ID,
+      type: 'circle',
+      source: SURFACE_SOURCE_ID,
+      paint: {
+        'circle-radius': 5,
+        'circle-color': [
+          'match', ['coalesce', ['get', 'flightCategory'], ['get', 'fltcat'], ''],
+          'VFR', '#34d399',
+          'MVFR', '#38bdf8',
+          'IFR', '#fbbf24',
+          'LIFR', '#f87171',
+          '#94a3b8',
+        ],
+        'circle-stroke-color': '#0f172a',
+        'circle-stroke-width': 1.5,
+        'circle-opacity': 0.95,
+      },
+    }, beforeId);
+
+    map.addLayer({
+      id: SURFACE_LABEL_ID,
+      type: 'symbol',
+      source: SURFACE_SOURCE_ID,
+      layout: {
+        'text-field': ['coalesce', ['get', 'stationId'], ['get', 'id'], ''],
+        'text-size': 10,
+        'text-font': ['Noto Sans Bold'],
+        'text-offset': [0, 1.1],
+        'text-anchor': 'top',
+        'text-allow-overlap': false,
+      },
+      paint: {
+        'text-color': '#e2e8f0',
+        'text-halo-color': '#020617',
+        'text-halo-width': 1.4,
+      },
+    }, beforeId);
+
+    const onClick = (e: any) => {
+      const p = e.features?.[0]?.properties;
+      if (!p) return;
+      const station = String(p.stationId || p.id || '');
+      const flight = String(p.flightCategory || p.fltcat || 'N/A');
+      const temp = p.tempC ?? p.temp;
+      const dew = p.dewpointC ?? p.dewp;
+      const wind = p.windSpeedKt ?? p.wspd;
+      const dir = p.windDirDeg ?? p.wdir ?? 'VRB';
+      const lines = [
+        `${station}${p.siteName || p.site ? ` — ${p.siteName || p.site}` : ''}`,
+        `${flight} · ${temp != null ? `${temp}°C` : '—'} / ${dew != null ? `${dew}°C` : '—'} · ${dir} ${wind != null ? `${wind} kt` : '—'}`,
+        `${p.asos ? 'ASOS automated report · ' : ''}Source: AviationWeather.gov METAR`,
+      ];
+      const html = lines.map((line) => escapeHtml(line)).join('<br/>');
+      new maplibregl.Popup({ closeButton: true, offset: 10, maxWidth: '260px', className: 'mv-spotter-popup' })
+        .setLngLat(e.lngLat)
+        .setHTML(`<div style="font-family:system-ui;font-size:11px;padding:8px;background:#0b1220;color:#e2e8f0;border-radius:8px;border:1px solid #334155;">${html}</div>`)
+        .addTo(map);
+    };
+    const onEnter = () => { map.getCanvas().style.cursor = 'pointer'; };
+    const onLeave = () => { map.getCanvas().style.cursor = ''; };
+    surfaceHandlersRef.current = { click: onClick, enter: onEnter, leave: onLeave };
+    map.on('click', SURFACE_POINT_ID, onClick);
+    map.on('mouseenter', SURFACE_POINT_ID, onEnter);
+    map.on('mouseleave', SURFACE_POINT_ID, onLeave);
+  }, [removeSurfaceLayers]);
+
+  useEffect(() => {
+    onCameraChangeRef.current = onCameraChange;
+    showMetarsRef.current = showMetars;
+    surfaceGeoJsonRef.current = surfaceGeoJson;
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    if (!showMetars) {
+      removeSurfaceLayers(map);
+      return;
+    }
+    updateSurfaceLayer(map, surfaceGeoJson);
+  }, [mapReady, showMetars, surfaceGeoJson, onCameraChange, updateSurfaceLayer, removeSurfaceLayers]);
 
   const removeHurricaneLayers = useCallback((map: MapLibreMap) => {
     [
