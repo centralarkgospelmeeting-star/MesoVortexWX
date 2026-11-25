@@ -28,7 +28,7 @@ const PRODUCT_KEYS: RadarProductDef[] = [
   { key: 'kdp', capId: 'kdp', short: 'KDP', label: 'Specific Differential Phase', category: 'Dual-Pol' },
   { key: 'hhc', capId: 'hhc', short: 'HHC', label: 'Hydrometeor Classification', category: 'Dual-Pol' },
   { key: 'min_cc', capId: 'min_cc', short: 'MCC', label: 'Minimum Correlation Coefficient', category: 'Dual-Pol' },
-  { key: 'norm_vel', capId: 'nrot', short: 'NROT', label: 'Normalized Rotation', category: 'Severe Weather' },
+  { key: 'storm_analysis', capId: 'storm_analysis', short: 'NROT', label: 'NROT-Style Normalized Rotation (Live Level II)', category: 'Severe Weather' }
   { key: 'azshear', capId: 'azshear', short: 'AZ', label: 'Azimuthal Shear', category: 'Severe Weather' },
   { key: 'rotation_tracks', capId: 'rotation_tracks', short: 'TRK', label: 'Rotation Tracks', category: 'Severe Weather' },
   { key: 'hail_detection', capId: 'hail_detection', short: 'HAIL', label: 'Hail Severity Index (SHI)', category: 'Severe Weather' },
