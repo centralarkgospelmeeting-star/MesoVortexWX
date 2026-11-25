@@ -118,11 +118,13 @@ function destination(lat: number, lon: number, bearing: number, rangeKm: number)
     lon: Number((((lon2 / DEG + 540) % 360) - 180).toFixed(5)),
   };
 }
-function nearestGate(radial: NrotRadial, rangeKm: number): number {
-  const moment = radial.velocity;
+function nearestMomentGate(moment: NrotMoment | undefined, rangeKm: number): number {
   if (!moment?.moment_data?.length || !Number.isFinite(moment.first_gate)
     || !Number.isFinite(moment.gate_size) || !moment.gate_size) return -1;
   return Math.round((rangeKm - moment.first_gate!) / moment.gate_size!);
+}
+function nearestGate(radial: NrotRadial, rangeKm: number): number {
+  return nearestMomentGate(radial.velocity, rangeKm);
 }
 
 export function calculateNrot(
@@ -166,10 +168,11 @@ export function calculateNrot(
     const count = centerMoment.moment_data!.length;
     // Process every second gate to bound CPU cost while preserving useful spatial detail.
     for (let gi = 2; gi < count - 2; gi += 2) {
-      const reflectivity = center.reflect?.moment_data?.[gi];
+      const rangeKm = centerMoment.first_gate! + gi * gateSize;
+      const reflectGate = nearestMomentGate(center.reflect, rangeKm);
+      const reflectivity = reflectGate >= 0 ? center.reflect?.moment_data?.[reflectGate] : null;
       // Focus on meteorological echoes instead of fitting clear-air/noise gates.
       if (reflectivity == null || !Number.isFinite(reflectivity) || reflectivity < 20) continue;
-      const rangeKm = centerMoment.first_gate! + gi * gateSize;
       if (rangeKm < MIN_RANGE_KM) { near++; continue; }
       const bearing = center.azimuth!;
       const rawSamples: Array<{ x: number; y: number; v: number; radialOffset: number; gateOffset: number }> = [];
