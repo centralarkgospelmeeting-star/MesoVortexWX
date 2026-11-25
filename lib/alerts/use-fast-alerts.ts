@@ -215,11 +215,8 @@ export function useFastAlerts({ settings, bannerVisible }: FastAlertsOptions): F
     };
   }, [reloadToken]);
 
-  useEffect(() => {
-    if (!banner) return;
-    const timer = setTimeout(() => setBanner(null), 25_000);
-    return () => clearTimeout(timer);
-  }, [banner]);
+  // Warning banners remain visible until the user dismisses them manually.
+  // There is no auto-dismiss timer and no flashing/repeating animation.
 
   const toggleFilter = useCallback((category: AlertCategory) => {
     setFilters((previous) => ({ ...previous, [category]: !previous[category] }));

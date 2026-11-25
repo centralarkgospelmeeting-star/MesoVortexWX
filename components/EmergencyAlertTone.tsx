@@ -138,21 +138,21 @@ export function EmergencyAlertTone() {
         </button>
       ) : (
         <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-full border border-emerald-500/40 bg-[#0b1220] px-3 py-1.5 text-[11px] font-medium text-emerald-400 shadow-xl">
-          <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="h-2 w-2 rounded-full bg-emerald-400" />
           Warning Siren Armed
         </div>
       )}
 
-      {/* Flashing Banner If User Is Inside a Warning Polygon */}
+      {/* Professional warning summary: slides in once, stays visible, manual dismissal. */}
       {activeWarningHeadline && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-xl border border-red-500 bg-red-600/95 px-5 py-3 text-white shadow-2xl animate-bounce">
-          <span className="text-xl">⚠️</span>
+        <div className="warning-banner-enter fixed top-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-xl border border-red-500/70 bg-[#111827] px-5 py-3 text-white shadow-2xl">
+          <span className="rounded bg-red-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider">Warning</span>
           <div className="text-xs font-bold uppercase tracking-wide">
             {activeWarningHeadline}
           </div>
           <button
             onClick={() => setActiveWarningHeadline(null)}
-            className="ml-3 rounded bg-[#050a12]/80 px-2 py-0.5 text-xs text-white hover:bg-black/50"
+            className="ml-3 rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-100 hover:bg-slate-700"
           >
             Dismiss
           </button>

@@ -60,4 +60,16 @@ const warningClick = map.match(/map\.on\('click', WARNINGS_FILL_ID,[\s\S]*?\n   
 assert.ok(warningClick.includes('onSelectWarningRef.current'), 'warning clicks must open the single alert workflow');
 assert.doesNotMatch(warningClick, /new maplibregl\.Popup/, 'warning clicks must not open a duplicate raw popup');
 
+// Professional warning banners: one-time slide-in, persistent, manually dismissed.
+const css = fs.readFileSync('app/globals.css', 'utf8');
+const tone = fs.readFileSync('components/EmergencyAlertTone.tsx', 'utf8');
+assert.match(page, /warning-banner-enter/, 'main warning banner must use the one-time slide-in');
+assert.doesNotMatch(page, /warningFlash|animate-pulse/, 'main warning banner must not flash or pulse');
+assert.match(page, /onClick=\{dismissBanner\}/, 'warning banner must support manual dismissal');
+assert.doesNotMatch(hook, /setTimeout\(\(\) => setBanner\(null\)/, 'warning banner must remain visible until dismissed');
+assert.match(css, /@keyframes warning-slide-in/, 'one-time slide-in keyframes must exist');
+assert.doesNotMatch(css, /warning-slide-in[\s\S]*?infinite/, 'slide-in must not repeat');
+assert.match(tone, /warning-banner-enter/, 'emergency banner must slide in once');
+assert.doesNotMatch(tone, /animate-bounce|animate-pulse/, 'emergency banner must not bounce or pulse');
+
 console.log('PASS: alert correctness and single-audio-dispatcher contract');

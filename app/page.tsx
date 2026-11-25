@@ -282,7 +282,6 @@ export default function MesoVortexWorkstation() {
   const [smoothing, setSmoothing] = useState(initialPrefs.smoothing);
   const [colorTable, setColorTable] = useState(initialPrefs.colorTable);
   const [velocityUnit, setVelocityUnit] = useState<'mph' | 'knots' | 'kmh'>('mph');
-  const [warningFlash, setWarningFlash] = useState(true);
   const [warningPopup, setWarningPopup] = useState(true);
   const [warningVoiceEnabled, setWarningVoiceEnabled] = useState(false);
   const [warningVoicePack, setWarningVoicePack] = useState<'default' | 'short'>('default');
@@ -1628,14 +1627,17 @@ export default function MesoVortexWorkstation() {
       )}
 
       {styledBanner && warningPopup && alertSettings.warningDisplayBehavior !== 'sidebar-only' && (
-        <button
-          type="button"
-          onClick={() => { setLocationContext(null); setSelectedAlertId(styledBanner.id); setAlertsOpen(true); }}
-          className={`absolute left-1/2 top-24 z-50 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border bg-[#0b1220] p-4 text-left shadow-lg ${warningFlash ? 'animate-pulse' : ''}`}
+        <div
+          role="status"
+          className="warning-banner-enter absolute left-1/2 top-24 z-50 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border bg-[#0b1220] p-4 text-left shadow-lg"
           style={{ borderColor: styledBanner.color }}
         >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
+          <div className="flex items-start gap-3">
+            <button
+              type="button"
+              onClick={() => { setLocationContext(null); setSelectedAlertId(styledBanner.id); setAlertsOpen(true); }}
+              className="min-w-0 flex-1 text-left"
+            >
               <div className="flex items-center gap-2">
                 <span className="rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white" style={{ backgroundColor: styledBanner.color }}>
                   {ALERT_CATEGORY_META[styledBanner.category].singular}
@@ -1647,18 +1649,17 @@ export default function MesoVortexWorkstation() {
               <div className="mt-1 line-clamp-2 text-xs text-slate-300">{styledBanner.headline}</div>
               <div className="mt-1 truncate text-[11px] text-slate-500">{styledBanner.areaDesc}</div>
               <div className="mt-2 text-[10px] font-bold text-sky-300">Click for detailed warning panel</div>
-            </div>
-            <span
-              onClick={(e) => { e.stopPropagation(); dismissBanner(); }}
-              className="rounded-full p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+            </button>
+            <button
+              type="button"
+              onClick={dismissBanner}
+              className="shrink-0 rounded-full p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
               aria-label="Dismiss alert banner"
-              role="button"
-              tabIndex={0}
             >
               ✕
-            </span>
+            </button>
           </div>
-        </button>
+        </div>
       )}
 
 
@@ -2035,8 +2036,7 @@ export default function MesoVortexWorkstation() {
 
               <div className="rounded-lg border border-slate-800 bg-[#111827] p-2 space-y-2">
                 <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">Warning Settings</div>
-                <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={warningFlash} onChange={(e)=>setWarningFlash(e.target.checked)} />Flash warning polygons/banners</label>
-                <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={warningPopup} onChange={(e)=>setWarningPopup(e.target.checked)} />Show warning popup details</label>
+                                <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={warningPopup} onChange={(e)=>setWarningPopup(e.target.checked)} />Show warning popup details</label>
                 <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={warningVoiceEnabled} onChange={(e)=>setWarningVoiceEnabled(e.target.checked)} />Voice alerts (browser speech)</label>
                 <div className="flex gap-1">
                   <button type="button" onClick={()=>setWarningVoicePack('default')} className={`rounded-full px-2 py-1 text-[11px] font-bold ${warningVoicePack==='default'?'bg-cyan-600 text-white':'bg-slate-800 text-slate-200'}`}>Default voice</button>
