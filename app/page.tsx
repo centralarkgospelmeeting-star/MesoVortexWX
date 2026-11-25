@@ -32,7 +32,7 @@ import { WeatherIntensityScorePanel } from '../components/WeatherIntensityScoreP
 import { METARPanel, type SurfaceSource } from '../components/METARPanel';
 import { SurfaceLayersPanel, type SurfaceLayerStatus } from '../components/surface/SurfaceLayersPanel';
 import { normalizeStationPlots } from '../lib/surface/station-model';
-import type { SurfaceLayerId, StationPlot } from '../lib/surface/types';
+import { OBSERVATION_MASTER_LAYERS, SURFACE_LAYERS, type SurfaceLayerId, type StationPlot } from '../lib/surface/types';
 import {
   DEFAULT_SATELLITE_SELECTION,
   SATELLITE_BIRDS,
@@ -1978,6 +1978,38 @@ export default function MesoVortexWorkstation() {
                 <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showRadarPills} onChange={(e)=>{ setShowRadarPills(e.target.checked); setShowRadarSites(e.target.checked); }} />Secondary Towers / Radar Pills</label>
                 <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showRangeRings} onChange={(e)=>setShowRangeRings(e.target.checked)} />Range rings</label>
                 <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showCounties} onChange={(e)=>setShowCounties(e.target.checked)} />County boundaries</label>
+              </div>
+
+              <div className="rounded-lg border border-slate-800 bg-[#111827] p-2 space-y-1">
+                <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">Surface observations</div>
+                <label className="flex items-center gap-2 font-bold cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={surfaceLayers.observations}
+                    onChange={(e)=>toggleSurfaceLayer('observations', e.target.checked)}
+                  />
+                  OBSERVATIONS (all supported networks)
+                </label>
+                <details>
+                  <summary className="cursor-pointer text-[10px] text-slate-400">Network-specific controls (advanced)</summary>
+                  <div className="mt-1 space-y-1">
+                    {OBSERVATION_MASTER_LAYERS.map((id) => {
+                      const layer = SURFACE_LAYERS.find((l) => l.id === id);
+                      return (
+                        <label key={id} className={`flex items-center gap-2 font-bold ${surfaceLayers.observations ? 'text-slate-500' : 'cursor-pointer'}`}>
+                          <input
+                            type="checkbox"
+                            checked={surfaceLayers.observations || surfaceLayers[id]}
+                            disabled={surfaceLayers.observations}
+                            onChange={(e)=>toggleSurfaceLayer(id, e.target.checked)}
+                          />
+                          {layer?.name ?? id.toUpperCase()}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </details>
+                <div className="text-[10px] text-slate-500">When OBSERVATIONS is on, every supported network plots together; duplicate stations resolve by source priority. Vendor networks without a verified feed stay DATA UNAVAILABLE.</div>
               </div>
 
               <div className="rounded-lg border border-slate-800 bg-[#111827] p-2 space-y-2">

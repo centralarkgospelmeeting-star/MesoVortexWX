@@ -92,5 +92,7 @@ const page = read('app/page.tsx');
 assert.match(page, /SurfaceLayersPanel/, 'surface panel must be mounted');
 assert.match(page, /surfaceLayers/, 'independent layer state must be persisted');
 assert.match(page, /surfaceNetwork/, 'combined feed must tag each station network');
+assert.match(page, /OBSERVATIONS \(all supported networks\)/, 'settings must expose the master OBSERVATIONS toggle');
+assert.match(page, /Network-specific controls \(advanced\)/, 'settings must expose granular network controls for advanced users');
 
 console.log('PASS: Phase 4C surface station network and workstation model contracts');
