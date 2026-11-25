@@ -56,6 +56,7 @@ assert.match(panel, /DATA UNAVAILABLE/, 'missing station fields must be visibly 
 for (const file of [
   'app/api/metar/geojson/route.ts',
   'app/api/asos/geojson/route.ts',
+  'app/api/surface/awos/route.ts',
   'app/api/surface/mesonet/route.ts',
   'app/api/surface/pws/route.ts',
   'app/api/surface/buoy/route.ts',

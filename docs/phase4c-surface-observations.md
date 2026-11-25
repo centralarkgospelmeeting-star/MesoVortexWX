@@ -116,7 +116,21 @@ Added:
 - `scripts/test-phase4c-surface.mjs`
 - `docs/phase4c-screenshots/01-station-models.png`, `02-station-detail-popup.png`, `03-independent-layer-toggles.png`
 
-## 6. Build results
+## 8. Station detail panel (WeatherWise-style)
+
+The map popup is now a compact, sectioned workstation panel instead of a flat field list:
+
+- **Flight category** — VFR/MVFR/IFR/LIFR badge, derived only from reported ceiling and visibility (labeled derived); `DATA UNAVAILABLE` when either is missing.
+- **Observation** — age, report type, station type, network, elevation, wind, temperature, dew point, humidity (reported/derived label), pressure + kind, tendency, visibility.
+- **Sky** — ceiling, sky cover (0–8 okta), cloud layers (e.g. `OVC 4000ft`), weather conditions.
+- **METAR** — decoded one-line summary (wind, visibility, clouds, T/Td, altimeter) + raw METAR/SPECI string.
+- **Station** — source label.
+
+No value is fabricated; every missing field reads `DATA UNAVAILABLE`.
+
+### AWOS support
+
+AWOS sites are classified from the real IEM `network.py` `IS_AWOS` flag and joined to real AWC METAR observations (`/api/surface/awos`). Observations are never synthesized; only sites IEM flags as AWOS are tagged `stationType: AWOS`. Coverage is network-specific (default `IA_ASOS`).
 
 `source ~/.nvm/nvm.sh && npm run typecheck && npm run test:verify && npm run build` — all pass.
 

@@ -28,6 +28,14 @@ export type SurfaceLayerId = 'metar' | 'aviation' | 'mesonet' | 'pws' | 'buoy' |
 
 export type ObservationQuality = 'fresh' | 'stale' | 'unavailable';
 
+/** Aviation flight category derived only from reported ceiling and visibility. */
+export type FlightCategory = 'VFR' | 'MVFR' | 'IFR' | 'LIFR';
+
+export interface CloudLayer {
+  cover: string;
+  baseFt: number | null;
+}
+
 export type PresentWeatherCode =
   | 'RA' | 'SN' | 'FG' | 'TS' | 'FZRA' | 'DZ' | 'HZ' | 'FU'
   | 'BR' | 'SH' | 'GR' | 'GS' | 'PL' | 'IC' | 'SG' | 'UP';
@@ -67,6 +75,9 @@ export interface StationPlot {
   waterTempC: number | null;
   skyCoverOkta: number | null;
   ceilingFt: number | null;
+  cloudLayers: CloudLayer[];
+  flightCategory: FlightCategory | null;
+  decodedMetar: string | null;
   presentWeather: PresentWeatherCode[];
   weatherConditions: string | null;
 
@@ -134,12 +145,12 @@ export const SURFACE_NETWORKS: readonly SurfaceNetworkDefinition[] = [
     name: 'AWOS',
     layer: 'aviation',
     verification: 'PARTIAL',
-    implementation: 'UNAVAILABLE',
-    source: 'IEM station metadata attributes.IS_AWOS can classify ASOS-network stations',
-    endpoint: null,
-    fields: ['attributes.IS_AWOS', 'station site metadata'],
-    limitation: 'AWC observations have no station-class field; remarks AUTO/AO1/AO2 are not a reliable AWOS classifier. No AWOS layer is plotted.',
-    evidence: ['https://mesonet.agron.iastate.edu/geojson/network.py?network=IA_ASOS', 'No AWC station-class field'],
+    implementation: 'PARTIAL',
+    source: 'IEM network.py station metadata IS_AWOS flag, joined to real METAR observations',
+    endpoint: '/api/surface/awos',
+    fields: ['attributes.IS_AWOS', 'station id', 'real METAR obs from AWC'],
+    limitation: 'AWOS classification uses IEM IS_AWOS metadata per network; only networks with that flag are classified. No AWOS value is synthesized.',
+    evidence: ['https://mesonet.agron.iastate.edu/geojson/network.py?network=IA_ASOS', 'app/api/surface/awos/route.ts'],
   },
   {
     id: 'mesonet',

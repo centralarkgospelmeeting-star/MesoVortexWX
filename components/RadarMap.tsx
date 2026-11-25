@@ -21,7 +21,7 @@ import { getModelById } from '../lib/model-registry';
 import { getRadarRasterRenderConfig } from '../lib/radar/render-config';
 import { distanceMeters, formatArea, formatDistance, polygonAreaMeters2, polylineMeters, type LngLat } from '../lib/map-tools/geo';
 import { drawStationModels, hitTestStationModels, type PositionedStationPlot } from '../lib/surface/draw-station-model';
-import { normalizeStationPlots, stationDetailFields } from '../lib/surface/station-model';
+import { normalizeStationPlots, stationDetailFields, DATA_UNAVAILABLE } from '../lib/surface/station-model';
 import type { SurfaceLayerId, StationPlot } from '../lib/surface/types';
 
 // Next/webpack bundles maplibre-gl, so the library's relative worker URL
@@ -1075,21 +1075,44 @@ export function RadarMap({
       const station = locate(event.point);
       if (!station) return;
       const fields = stationDetailFields(station);
-      const rows = fields.map((field) => {
-        const tone = field.source === 'unavailable' ? '#64748b' : field.source === 'derived' ? '#38bdf8' : '#e2e8f0';
-        return `<div style="display:flex;gap:8px;justify-content:space-between;"><span style="color:#94a3b8">${escapeHtml(field.label)}</span><span style="color:${tone};font-weight:600">${escapeHtml(field.value)}</span></div>`;
-      }).join('');
+      // Group fields into WeatherWise-style sections.
+      const section = (title: string, rows: string) =>
+        rows
+          ? `<div style="margin-top:6px;border-top:1px solid #334155;padding-top:4px"><div style="color:#94a3b8;font-weight:800;margin-bottom:2px">${escapeHtml(title)}</div>${rows}</div>`
+          : '';
+      const rowHtml = (label: string, value: string, tone: string) =>
+        `<div style="display:flex;gap:8px;justify-content:space-between"><span style="color:#94a3b8">${escapeHtml(label)}</span><span style="color:${tone};font-weight:600">${escapeHtml(value)}</span></div>`;
+      const byLabel = new Map(fields.map((f) => [f.label, f]));
+      const toneFor = (f: { source: string }) =>
+        f.source === 'unavailable' ? '#64748b' : f.source === 'derived' ? '#38bdf8' : '#e2e8f0';
+      const pick = (labels: string[]) =>
+        labels
+          .map((l) => byLabel.get(l))
+          .filter(Boolean)
+          .map((f) => rowHtml(f!.label, f!.value, toneFor(f!)))
+          .join('');
+      const flight = station.flightCategory
+        ? `<span style="padding:1px 4px;border-radius:3px;font-weight:800;background:${station.flightCategory === 'VFR' ? '#166534' : station.flightCategory === 'MVFR' ? '#1e40af' : station.flightCategory === 'IFR' ? '#991b1b' : '#7f1d1d'};color:#f8fafc">${station.flightCategory}</span>`
+        : `<span style="color:#64748b">${escapeHtml(DATA_UNAVAILABLE)}</span>`;
       const stale = station.quality === 'stale' ? '<span style="color:#fbbf24"> · STALE</span>' : '';
       const raw = station.rawOb
-        ? `<div style="margin-top:5px;border-top:1px solid #334155;padding-top:5px;color:#94a3b8;word-break:break-all">${escapeHtml(station.rawOb)}</div>`
-        : `<div style="margin-top:5px;border-top:1px solid #334155;padding-top:5px;color:#64748b">${escapeHtml('DATA UNAVAILABLE')}</div>`;
-      new maplibregl.Popup({ closeButton: true, offset: 14, maxWidth: '320px', className: 'mv-station-popup' })
+        ? `<div style="margin-top:4px;padding:4px;background:#020617;border-radius:3px;color:#cbd5e1;word-break:break-all">${escapeHtml(station.rawOb)}</div>`
+        : `<div style="margin-top:4px;color:#64748b">${escapeHtml(DATA_UNAVAILABLE)}</div>`;
+      const decoded = station.decodedMetar
+        ? `<div style="margin-top:4px;color:#94a3b8">${escapeHtml(station.decodedMetar)}</div>`
+        : '';
+      new maplibregl.Popup({ closeButton: true, offset: 14, maxWidth: '340px', className: 'mv-station-popup' })
         .setLngLat([station.lon, station.lat])
         .setHTML(
           `<div style="font-family:ui-monospace,monospace;font-size:10px;padding:8px;background:#0b1220;color:#e2e8f0;border-radius:6px;border:1px solid #334155;line-height:1.4;">` +
-          `<div style="font-size:12px;font-weight:800;color:#38bdf8">${escapeHtml(station.stationId)}${stale}</div>` +
+          `<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:12px;font-weight:800;color:#38bdf8">${escapeHtml(station.stationId)}${stale}</div>${flight}</div>` +
           (station.name ? `<div style="color:#94a3b8">${escapeHtml(station.name)}</div>` : '') +
-          `<div style="margin-top:5px">${rows}</div>${raw}</div>`
+          section('Flight category', `<div style="color:#e2e8f0;font-weight:600">${flight}</div>`) +
+          section('Observation', pick(['Observation age', 'Report type', 'Station type', 'Network', 'Elevation', 'Wind', 'Temperature', 'Dew point', 'Humidity', 'Pressure', 'Pressure tendency', 'Visibility'])) +
+          section('Sky', pick(['Ceiling', 'Sky cover', 'Cloud layers', 'Weather conditions'])) +
+          section('METAR', (decoded || '') + raw) +
+          section('Station', pick(['Source'])) +
+          `</div>`
         )
         .addTo(map);
     };

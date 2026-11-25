@@ -370,6 +370,16 @@ export const DATA_SOURCES: DataSourceEntry[] = [
     notes: 'DATA UNAVAILABLE - no verified keyless AWOS classification/feed; automated METAR remarks are not a reliable AWOS classifier.',
   },
   {
+    id: 'surface-awos-iem',
+    category: 'Surface Observations',
+    data: 'AWOS station observations',
+    source: 'IEM network.py IS_AWOS metadata joined to AWC METAR',
+    status: 'PARTIAL',
+    attribution: 'Iowa Environmental Mesonet + NOAA Aviation Weather Center',
+    url: 'https://mesonet.agron.iastate.edu/geojson/network.py?network=IA_ASOS',
+    notes: 'AWOS classification is real but network-specific; observations come from the verified METAR feed, not a separate AWOS feed.',
+  },
+  {
     id: 'surface-mesonet-iem',
     category: 'Surface Observations',
     data: 'Mesonet current station observations',

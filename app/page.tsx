@@ -100,6 +100,7 @@ const PROJECTION_STORAGE_KEY = 'mesovortex_projection_mode';
 const PREFS_STORAGE_KEY = 'mesovortex_preferences_v1';
 const WIS_STORAGE_KEY = 'mesovortex_weather_intensity_visible';
 const DEFAULT_MESONET_NETWORK = 'ISUSM';
+const DEFAULT_AWOS_NETWORK = 'IA_ASOS';
 const PANE_MODES: PaneMode[] = ['Radar', 'Satellite', 'Composite', 'Models'];
 
 type UserPrefs = {
@@ -725,6 +726,7 @@ export default function MesoVortexWorkstation() {
       const queries: Array<{ layer: SurfaceLayerId; network: string; url: string }> = [];
       if (requested.metar) queries.push({ layer: 'metar', network: 'metar', url: `/api/metar/geojson?${new URLSearchParams({ bbox, hours: '3', source: 'metar' })}` });
       if (requested.aviation) queries.push({ layer: 'aviation', network: 'asos', url: `/api/asos/geojson?${new URLSearchParams({ bbox, hours: '3' })}` });
+      if (requested.aviation) queries.push({ layer: 'aviation', network: 'awos', url: `/api/surface/awos?${new URLSearchParams({ bbox, network: DEFAULT_AWOS_NETWORK })}` });
       if (requested.mesonet) queries.push({ layer: 'mesonet', network: 'mesonet', url: `/api/surface/mesonet?${new URLSearchParams({ bbox, network: DEFAULT_MESONET_NETWORK })}` });
       if (requested.pws) queries.push({ layer: 'pws', network: 'pws', url: `/api/surface/pws?${new URLSearchParams({ bbox })}` });
       if (requested.buoy) queries.push({ layer: 'buoy', network: 'buoy', url: `/api/surface/buoy?${new URLSearchParams({ bbox })}` });

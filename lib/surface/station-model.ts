@@ -5,7 +5,9 @@
  */
 
 import {
+  type CloudLayer,
   type FieldValue,
+  type FlightCategory,
   type ObservationQuality,
   type PresentWeatherCode,
   type StationPlot,
@@ -99,6 +101,69 @@ export function skyCoverOkta(raw: unknown, upstream?: unknown): number | null {
   return found ? okta : null;
 }
 
+const CLOUD_COVER: Record<string, string> = {
+  SKC: 'SKC', CLR: 'CLR', NSC: 'NSC', NCD: 'NCD',
+  FEW: 'FEW', SCT: 'SCT', BKN: 'BKN', OVC: 'OVC', VV: 'VV',
+};
+
+/** Decode real cloud groups (FEW020 SCT035 BKN047 OVC095) into layers. */
+export function cloudLayers(raw: unknown, upstream?: unknown): CloudLayer[] {
+  const rawText = `${text(upstream) || ''} ${text(raw) || ''}`.toUpperCase();
+  if (!rawText.trim()) return [];
+  const layers: CloudLayer[] = [];
+  const pattern = /\b(SKC|CLR|NSC|NCD|FEW|SCT|BKN|OVC|VV)(\d{3}|\/{3})?\b/g;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(rawText)) !== null) {
+    const cover = CLOUD_COVER[match[1]];
+    if (!cover) continue;
+    const base = match[2] && match[2] !== '///' ? Number(match[2]) * 100 : null;
+    layers.push({ cover, baseFt: base });
+  }
+  return layers;
+}
+
+/**
+ * Aviation flight category from reported ceiling and visibility only.
+ * Returns null (DATA UNAVAILABLE) unless both inputs are reported; never guesses.
+ */
+export function flightCategory(ceilingFt: number | null, visibilitySm: string | null): FlightCategory | null {
+  if (ceilingFt === null || visibilitySm === null) return null;
+  const vis = Number.parseFloat(visibilitySm);
+  if (!Number.isFinite(vis)) return null;
+  const ceil = ceilingFt;
+  if (ceil < 500 || vis < 1) return 'LIFR';
+  if (ceil < 1000 || vis < 3) return 'IFR';
+  if (ceil <= 3000 || vis <= 5) return 'MVFR';
+  return 'VFR';
+}
+
+/** Compact human-readable decode of the real raw METAR; never invents tokens. */
+export function decodedMetar(raw: unknown): string | null {
+  const text0 = text(raw);
+  if (!text0) return null;
+  const parts: string[] = [];
+  const wind = text0.match(/\b(\d{3}|VRB)(\d{2,3})(G\d{2,3})?KT\b/);
+  if (wind) {
+    const dir = wind[1] === 'VRB' ? 'Variable' : `${wind[1]}°`;
+    parts.push(`Wind ${dir} at ${wind[2]} kt${wind[3] ? ` gusting ${wind[3].slice(1)} kt` : ''}`);
+  }
+  const vis = text0.match(/\b(\d{1,3}(?:\s+\d\/\d)?|\d\/\d|\d{4}|M?1\/4(?:SM)?|\d+SM)\b/);
+  if (vis && /SM|\d{4}/.test(vis[1])) parts.push(`Visibility ${vis[1]}`);
+  for (const layer of cloudLayers(text0)) {
+    parts.push(`${layer.cover}${layer.baseFt === null ? '' : ` at ${layer.baseFt} ft`}`);
+  }
+  const temp = text0.match(/\b(M?\d{2})\/(M?\d{2})\b/);
+  if (temp) {
+    const parse = (s: string) => (s.startsWith('M') ? -Number(s.slice(1)) : Number(s));
+    parts.push(`Temperature ${parse(temp[1])}°C / dew point ${parse(temp[2])}°C`);
+  }
+  const altim = text0.match(/\bA(\d{4})\b/);
+  if (altim) parts.push(`Altimeter ${Number(altim[1]) / 100} inHg`);
+  const codes = presentWeatherCodes(text0);
+  if (codes.length) parts.push(`Weather ${codes.join(' ')}`);
+  return parts.length ? parts.join(' · ') : null;
+}
+
 function pressureDescriptor(feature: any): StationPlot['pressure'] {
   const p = feature?.properties || feature || {};
   const slpRaw = finite(p.slp ?? p.mslp ?? p.seaLevelPressure);
@@ -148,6 +213,10 @@ export function normalizeStationPlots(features: unknown, options: NormalizeOptio
     const windDirDeg = windDirRaw === 'VRB' ? 'VRB' : finite(windDirRaw);
     const weatherCodes = presentWeatherCodes(rawOb, p.wx ?? p.wxString ?? p.presentWeatherCodes ?? p.wxcodes);
     const pressure = pressureDescriptor(feature);
+    const layers = cloudLayers(rawOb, p.cloudLayers ?? p.clouds);
+    const skyOkta = skyCoverOkta(rawOb, p.skyCoverOkta ?? p.cov ?? p.cover ?? p.skyCoverCode ?? p.skyCover);
+    const ceilFt = finite(p.ceilingFt ?? p.ceil);
+    const visSm = text(p.visibilitySm ?? p.visib ?? p.visibility);
 
     plots.push({
       id: `${layer}:${network}:${stationId}`,
@@ -177,11 +246,14 @@ export function normalizeStationPlots(features: unknown, options: NormalizeOptio
       waveHeightM: finite(p.waveHeightM ?? p.WVHT),
       wavePeriodS: finite(p.dominantPeriodS ?? p.dominantPeriod ?? p.DPD),
       waterTempC: finite(p.waterTempC ?? p.WTMP),
-      skyCoverOkta: skyCoverOkta(rawOb, p.skyCoverOkta ?? p.cov ?? p.cover ?? p.skyCoverCode ?? p.skyCover),
-      ceilingFt: finite(p.ceilingFt ?? p.ceil),
+      skyCoverOkta: skyOkta,
+      ceilingFt: ceilFt,
+      cloudLayers: layers,
+      flightCategory: flightCategory(ceilFt, visSm),
       presentWeather: weatherCodes,
       weatherConditions: weatherCodes.length ? weatherCodes.join(' ') : null,
       rawOb,
+      decodedMetar: decodedMetar(rawOb),
       reportType: text(p.reportType ?? p.metarType) || (/^SPECI\b/i.test(rawOb || '') ? 'SPECI' : /^METAR\b/i.test(rawOb || '') ? 'METAR' : null),
       sourceLabel: text(p.sourceLabel) ?? options.sourceLabel,
       sourceUrl: options.sourceUrl ?? text(p.sourceUrl) ?? null,
@@ -225,6 +297,7 @@ export function stationDetailFields(plot: StationPlot): StationDetailField[] {
     source: value === null ? 'unavailable' : source,
   });
   return [
+    row('Flight category', plot.flightCategory, 'derived'),
     row('Observation age', formatMinutes(plot.ageMinutes)),
     row('Report type', plot.reportType),
     row('Station type', plot.stationType),
@@ -236,13 +309,12 @@ export function stationDetailFields(plot: StationPlot): StationDetailField[] {
     row('Humidity', plot.humidityPct.value === null ? null : `${plot.humidityPct.value}% (${plot.humidityPct.source})`, plot.humidityPct.source),
     row('Pressure', plot.pressure.display === null ? null : `${plot.pressure.display} (${plot.pressure.kind === 'slp' ? 'SLP' : 'altimeter'})`),
     row('Pressure tendency', plot.pressureTendency === null ? null : `${plot.pressureTendency} hPa`),
-    row('Wave height', plot.waveHeightM === null ? null : `${plot.waveHeightM} m`),
-    row('Wave period', plot.wavePeriodS === null ? null : `${plot.wavePeriodS} s`),
-    row('Water temperature', plot.waterTempC === null ? null : formatTemp(plot.waterTempC)),
     row('Visibility', plot.visibilitySm === null ? null : `${plot.visibilitySm} sm`),
     row('Ceiling', plot.ceilingFt === null ? null : `${Math.round(plot.ceilingFt)} ft`),
-    row('Sky cover', plot.skyCoverOkta === null ? null : `${plot.skyCoverOkta}/8 okta${plot.quality === 'stale' ? ' (stale)' : ''}`),
+    row('Sky cover', plot.skyCoverOkta === null ? null : `${plot.skyCoverOkta}/8 okta`),
+    row('Cloud layers', plot.cloudLayers.length ? plot.cloudLayers.map((l) => `${l.cover}${l.baseFt === null ? '' : ` ${l.baseFt}ft`}`).join(', ') : null),
     row('Weather conditions', plot.weatherConditions),
+    row('Decoded METAR', plot.decodedMetar),
     row('Source', plot.sourceLabel),
   ];
 }
