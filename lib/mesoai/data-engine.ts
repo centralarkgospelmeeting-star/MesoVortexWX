@@ -15,7 +15,7 @@ import {
   spcCategoryAtPoint,
   stormAnalysisToRadarInput,
   type IntensityAlert,
-} from '../weather-intensity';
+} from '../hazard-severity';
 import type { AnalysisSite, ProductContext, WeatherObservation } from './types';
 import { isoOrNull, unique } from './util';
 

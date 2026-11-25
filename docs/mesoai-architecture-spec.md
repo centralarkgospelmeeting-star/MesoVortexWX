@@ -207,7 +207,7 @@ No automatic threshold mutation, prompt rewriting, weight update, or model fine-
 
 The top banner becomes a compact, spectrum-first control. Product/source prose moves to hover meaning inside the spectrum and to the existing product drawer. MesoAI explanations are opened on demand from the spectrum/storm/warning surfaces rather than occupying permanent banner space.
 
-The Weather Intensity Score is a small deterministic summary of Layer 2 detections. It is not an AI-generated probability and not an official severity rating.
+The Hazard Severity Index (HSI) is a compact, deterministic composite hazard ranking built only from verified Layer 2 inputs. Unavailable components reduce confidence and are reported as `DATA INCOMPLETE`. HSI is not an AI-generated probability, not an official severity rating, and not a warning.
 
 ## Verification requirements
 
@@ -226,8 +226,8 @@ Before any MesoAI surface is enabled:
 
 - remove standalone product info box;
 - compact spectrum-only banner;
-- Weather Intensity Score widget;
-- deterministic score inputs and indicators;
+- Hazard Severity Index (HSI) panel;
+- deterministic HSI inputs and confidence indicators;
 - this architecture spec.
 
 ### Phase M2 — Detection engine

@@ -13,43 +13,48 @@ assert.match(spec, /local renderer/, 'spec must make local analysis the default'
 assert.match(spec, /TVS.*hidden|hidden until a verified gate-level algorithm exists/, 'spec must hide unverified severe signatures');
 assert.match(spec, /structured/, 'spec must require structured weather input, not raw imagery');
 
-const scoreLib = fs.readFileSync('lib/weather-intensity.ts', 'utf8');
-for (const label of ['Minimal impact', 'General precipitation', 'Strong thunderstorms', 'Severe concerns', 'High-impact weather']) {
-  assert.ok(scoreLib.includes(label), `score must define band: ${label}`);
+const scoreLib = fs.readFileSync('lib/hazard-severity.ts', 'utf8');
+for (const label of ['Low', 'Elevated', 'Significant', 'Major', 'Extreme']) {
+  assert.ok(scoreLib.includes(`label: '${label}'`), `HSI must define band: ${label}`);
 }
-assert.match(scoreLib, /calculateWeatherIntensity/, 'score must be calculated by a deterministic function');
-assert.match(scoreLib, /stormAnalysisToRadarInput/, 'score must use live Level II analysis input');
-assert.match(scoreLib, /lightningToInput/, 'score must use GLM lightning input');
-assert.match(scoreLib, /alertsNearSite/, 'score must scope alerts to the selected radar site');
-assert.match(scoreLib, /spcCategoryAtPoint/, 'score must use the SPC categorical outlook at the site point');
-assert.doesNotMatch(scoreLib, /Math\.random|fetch\(/, 'score must not invent values or fetch data itself');
-assert.doesNotMatch(scoreLib, /tornado detected|debris signature detected/i, 'score must not claim unverified severe signatures');
+assert.match(scoreLib, /calculateHsi/, 'HSI must be calculated by a deterministic function');
+assert.match(scoreLib, /DATA INCOMPLETE/, 'unavailable components must reduce confidence honestly');
+assert.match(scoreLib, /HSI_SCALES/, 'HSI must support national, regional, state, local, and custom scales');
+assert.match(scoreLib, /alertsForHsiScope/, 'HSI must scope alerts to the selected area');
+assert.match(scoreLib, /stormAnalysisToRadarInput/, 'HSI must use live Level II analysis input');
+assert.match(scoreLib, /lightningToInput/, 'HSI must use GLM lightning input');
+assert.match(scoreLib, /spcCategoryAtPoint/, 'HSI must use the SPC categorical outlook at the site point');
+assert.doesNotMatch(scoreLib, /Math\.random|fetch\(/, 'HSI must not invent values or fetch data itself');
+assert.doesNotMatch(scoreLib, /tornado detected|debris signature detected/i, 'HSI must not claim unverified severe signatures');
 
-const panel = fs.readFileSync('components/WeatherIntensityScorePanel.tsx', 'utf8');
-assert.match(panel, /data-weather-intensity-panel="true"/, 'panel must expose an observable DOM surface');
+const panel = fs.readFileSync('components/hsi/HsiPanel.tsx', 'utf8');
+assert.match(panel, /data-hsi-panel="true"/, 'panel must expose an observable DOM surface');
+assert.match(panel, /Hazard Severity Index \(HSI\)/, 'panel must use the HSI name');
 assert.match(panel, /onClose/, 'panel must support closing');
 assert.match(panel, /Refresh/, 'panel must support refresh');
-assert.match(panel, /alertsNearSite/, 'panel must scope alerts to the active site');
-assert.match(panel, /not official/, 'panel must disclose that the score is not official');
+assert.match(panel, /alertsForHsiScope/, 'panel must scope alerts to the active area');
+assert.match(panel, /DATA INCOMPLETE/, 'panel must disclose incomplete input coverage');
+assert.match(panel, /Draw operational area/, 'custom HSI must let emergency managers draw an area');
+assert.match(panel, /not official/, 'panel must disclose that HSI is not official');
 assert.doesNotMatch(panel, /debris|TVS/i, 'panel must not show unverified severe signatures');
 
-// The score panel has a right-click action menu; no browser default menu and
+// The HSI panel has a right-click action menu; no browser default menu and
 // no claim that the menu can change the underlying data.
 assert.match(panel, /onContextMenu=\{\(event\) => \{/, 'panel must intercept right-click');
 assert.match(panel, /event\.preventDefault\(\);/, 'panel must suppress the browser default context menu');
-assert.match(panel, /data-wis-context-menu="true"/, 'panel must expose an observable context menu');
-for (const action of ['Refresh score', 'Copy summary', 'Hide score']) {
+assert.match(panel, /data-hsi-context-menu="true"/, 'panel must expose an observable context menu');
+for (const action of ['Refresh HSI', 'Copy summary', 'Hide HSI']) {
   assert.ok(panel.includes(action), `context menu must expose: ${action}`);
 }
 assert.match(panel, /role="menu"/, 'context menu must expose menu semantics');
 assert.doesNotMatch(panel, /navigator\.clipboard\.writeText\([^)]*detected/i, 'copy action must not claim detections');
 
 const page = fs.readFileSync('app/page.tsx', 'utf8');
-assert.match(page, /WeatherIntensityScorePanel/, 'page must mount the score panel');
-assert.match(page, /data-menu-wis-toggle="true"/, 'hamburger menu must expose a show/hide control');
-assert.match(page, /setWisOpen\(\(v\) => !v\)/, 'hamburger control must toggle score visibility');
-assert.match(page, /onClose=\{\(\) => setWisOpen\(false\)\}/, 'panel close must hide the panel');
-assert.match(page, /WIS_STORAGE_KEY/, 'score visibility must persist across reloads');
+assert.match(page, /HsiPanel/, 'page must mount the HSI panel');
+assert.match(page, /data-menu-hsi-toggle="true"/, 'hamburger menu must expose a show/hide control');
+assert.match(page, /setHsiOpen\(\(v\) => !v\)/, 'hamburger control must toggle HSI visibility');
+assert.match(page, /onClose=\{\(\) => setHsiOpen\(false\)\}/, 'panel close must hide the panel');
+assert.match(page, /HSI_STORAGE_KEY/, 'HSI visibility must persist across reloads');
 assert.match(page, /siteLat=\{currentSite\.lat\}/, 'panel must receive real site coordinates');
 
 const radarMap = fs.readFileSync('components/RadarMap.tsx', 'utf8');

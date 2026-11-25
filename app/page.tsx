@@ -28,7 +28,7 @@ import {
 import { AlertDetailsPanel, buildLocationContext } from '../components/AlertDetailsPanel';
 import { getCompositeSource, COMPOSITE_SOURCES } from '../lib/radar/composite-sources';
 import { ProductInfoBanner } from '../components/ProductInfoBanner';
-import { WeatherIntensityScorePanel } from '../components/WeatherIntensityScorePanel';
+import { HsiPanel } from '../components/hsi/HsiPanel';
 import { METARPanel, type SurfaceSource } from '../components/METARPanel';
 import { SurfaceLayersPanel, type SurfaceLayerStatus } from '../components/surface/SurfaceLayersPanel';
 import { declusterStationPlots, normalizeStationPlots, observationBbox } from '../lib/surface/station-model';
@@ -99,7 +99,7 @@ type FrameMetadata = {
 const BASEMAP_STORAGE_KEY = 'mesovortex_basemap_preference';
 const PROJECTION_STORAGE_KEY = 'mesovortex_projection_mode';
 const PREFS_STORAGE_KEY = 'mesovortex_preferences_v1';
-const WIS_STORAGE_KEY = 'mesovortex_weather_intensity_visible';
+const HSI_STORAGE_KEY = 'mesovortex_hsi_visible';
 const DEFAULT_MESONET_NETWORK = 'ISUSM';
 const DEFAULT_AWOS_NETWORK = 'IA_ASOS';
 const PANE_MODES: PaneMode[] = ['Radar', 'Satellite', 'Composite', 'Models'];
@@ -396,22 +396,22 @@ export default function MesoVortexWorkstation() {
   }, [projectionMode, mapPitch, showRangeRings, radarOpacity, smoothing, playbackSpeed, playbackDirection, loopPauseMs, favoriteProducts, product, tilt, radarSite, colorTable, showRadarPills, showLightning, showLSR, showWatches, showWarnings, showMCD, showSpotters, showSpotterReports, showMetars, surfaceLayers, showStormTracks, showCounties, showTornadoAnalysis, showHurricanes, alertsOpen]);
   const [alertSettings, setAlertSettings] = useState<AlertSettings>(DEFAULT_ALERT_SETTINGS);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [wisOpen, setWisOpen] = useState(true);
+  const [hsiOpen, setHsiOpen] = useState(true);
   const [mesoaiOpen, setMesoaiOpen] = useState(false);
   const [dataSourceFilter, setDataSourceFilter] = useState<'ALL' | DataSourceStatus>('ALL');
 
   useEffect(() => {
     try {
-      const stored = window.localStorage.getItem(WIS_STORAGE_KEY);
-      if (stored !== null) setWisOpen(stored === '1');
+      const stored = window.localStorage.getItem(HSI_STORAGE_KEY);
+      if (stored !== null) setHsiOpen(stored === '1');
     } catch {}
   }, []);
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(WIS_STORAGE_KEY, wisOpen ? '1' : '0');
+      window.localStorage.setItem(HSI_STORAGE_KEY, hsiOpen ? '1' : '0');
     } catch {}
-  }, [wisOpen]);
+  }, [hsiOpen]);
 
   useEffect(() => {
     const loaded = loadAlertSettings();
@@ -1439,14 +1439,17 @@ export default function MesoVortexWorkstation() {
 
       <div className="relative min-h-0 flex-1 pb-10">
         {!quadMode && !expertMode && (
-          <WeatherIntensityScorePanel
-            open={wisOpen}
-            onClose={() => setWisOpen(false)}
+          <HsiPanel
+            open={hsiOpen}
+            onClose={() => setHsiOpen(false)}
             siteId={currentSite.id}
             siteName={currentSite.name}
             siteLat={currentSite.lat}
             siteLon={currentSite.lon}
             alerts={styledAlerts}
+            customPolygon={toolDrawings.filter((d) => d.kind === 'polygon').slice(-1)[0]?.points ?? null}
+            onStartDraw={() => setToolMode('draw-polygon')}
+            onClearDraw={() => setToolDrawings((prev) => prev.filter((d) => d.kind !== 'polygon'))}
           />
         )}
         <MesoAIPanel
@@ -1732,13 +1735,13 @@ export default function MesoVortexWorkstation() {
                 {mesoaiOpen ? 'Hide MesoAI Analysis' : 'Show MesoAI Analysis'}
               </button>
               <button
-                key="WeatherIntensityScore"
+                key="HazardSeverityIndex"
                 type="button"
-                data-menu-wis-toggle="true"
-                onClick={() => { setWisOpen((v) => !v); setMenuOpen(false); }}
+                data-menu-hsi-toggle="true"
+                onClick={() => { setHsiOpen((v) => !v); setMenuOpen(false); }}
                 className="w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white"
               >
-                {wisOpen ? 'Hide' : 'Show'} Weather Intensity Score
+                {hsiOpen ? 'Hide' : 'Show'} Hazard Severity Index (HSI)
               </button>
             </div>
             <div className="mt-4 border-t border-slate-800 pt-3 text-[10px] text-slate-500">

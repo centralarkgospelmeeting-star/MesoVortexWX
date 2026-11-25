@@ -1,10 +1,22 @@
 /**
- * Deterministic Weather Intensity Score.
+ * Hazard Severity Index (HSI).
  *
- * This module never fetches data and never guesses missing values. Callers
- * supply structured observations from already-verified app sources. The score
- * is a compact summary, not an official rating, probability, or warning.
+ * Deterministic, source-scoped composite hazard ranking. This module never
+ * fetches data and never guesses missing values: callers supply structured
+ * inputs from already-verified app sources. HSI is a compact operational
+ * summary — not an official rating, probability, forecast, or warning.
+ * Unavailable inputs reduce confidence and are reported, never fabricated.
  */
+
+export type HsiScaleId = 'national' | 'regional' | 'state' | 'local' | 'custom';
+
+export const HSI_SCALES: readonly { id: HsiScaleId; label: string; example: string }[] = [
+  { id: 'national', label: 'National', example: 'United States HSI' },
+  { id: 'regional', label: 'Regional', example: 'Central Plains HSI' },
+  { id: 'state', label: 'State', example: 'Arkansas HSI' },
+  { id: 'local', label: 'Local', example: 'Pulaski County HSI' },
+  { id: 'custom', label: 'Custom', example: 'Custom operational area HSI' },
+];
 
 export type IntensityBand = {
   min: number;
@@ -14,13 +26,16 @@ export type IntensityBand = {
   text: string;
 };
 
-export const WEATHER_INTENSITY_BANDS: readonly IntensityBand[] = [
-  { min: 0, max: 20, label: 'Minimal impact', color: '#22c55e', text: 'text-emerald-300' },
-  { min: 21, max: 40, label: 'General precipitation', color: '#38bdf8', text: 'text-sky-300' },
-  { min: 41, max: 60, label: 'Strong thunderstorms', color: '#eab308', text: 'text-yellow-300' },
-  { min: 61, max: 80, label: 'Severe concerns', color: '#f97316', text: 'text-orange-300' },
-  { min: 81, max: 100, label: 'High-impact weather', color: '#ef4444', text: 'text-red-300' },
+export const HSI_BANDS: readonly IntensityBand[] = [
+  { min: 0, max: 19, label: 'Low', color: '#22c55e', text: 'text-emerald-300' },
+  { min: 20, max: 39, label: 'Elevated', color: '#38bdf8', text: 'text-sky-300' },
+  { min: 40, max: 59, label: 'Significant', color: '#eab308', text: 'text-yellow-300' },
+  { min: 60, max: 79, label: 'Major', color: '#f97316', text: 'text-orange-300' },
+  { min: 80, max: 100, label: 'Extreme', color: '#ef4444', text: 'text-red-300' },
 ] as const;
+
+/** Backwards-compatible band export; HSI_BANDS is canonical. */
+export const WEATHER_INTENSITY_BANDS = HSI_BANDS;
 
 export type IntensityAlert = {
   event: string;
@@ -28,6 +43,7 @@ export type IntensityAlert = {
   severity?: string;
   areaDesc?: string;
   wfo?: string;
+  geometry?: any;
 };
 
 export type RadarIntensityInput = {
@@ -53,11 +69,25 @@ export type OutlookIntensityInput = {
   day?: string | null;
 };
 
-export type WeatherIntensityInput = {
+export type HsiInput = {
+  scale?: HsiScaleId;
+  areaLabel?: string | null;
   radar?: RadarIntensityInput | null;
   alerts?: IntensityAlert[];
+  mcds?: unknown[] | null;
   lightning?: LightningIntensityInput | null;
   outlook?: OutlookIntensityInput | null;
+  /** Future inputs. Null/undefined means unavailable, never zero. */
+  cape?: number | null;
+  shear?: number | null;
+  srh?: number | null;
+  tornadoProbability?: number | null;
+  hailProbability?: number | null;
+  windProbability?: number | null;
+  flashFloodRisk?: string | null;
+  winterImpact?: string | null;
+  tropicalImpact?: string | null;
+  populationExposure?: number | null;
 };
 
 export type IntensityContributor = {
@@ -68,13 +98,17 @@ export type IntensityContributor = {
   points: number;
 };
 
-export type WeatherIntensityResult = {
+export type HsiResult = {
   score: number | null;
   band: IntensityBand | null;
+  bandLabel: string;
+  confidence: number;
+  dataIncomplete: boolean;
   contributors: IntensityContributor[];
   unavailable: string[];
   summary: string;
   sourceCount: number;
+  areaCount: number;
 };
 
 const finite = (value: unknown): number | null =>
@@ -90,10 +124,30 @@ const minValues = (values: Array<number | null>): number | null => {
   return valid.length ? Math.min(...valid) : null;
 };
 
-export function bandForScore(score: number | null): IntensityBand | null {
+export function hsiBandForScore(score: number | null): IntensityBand | null {
   if (score === null || !Number.isFinite(score)) return null;
-  return WEATHER_INTENSITY_BANDS.find((band) => score >= band.min && score <= band.max) ?? null;
+  return HSI_BANDS.find((band) => score >= band.min && score <= band.max) ?? null;
 }
+
+/** Backwards-compatible band lookup. */
+export const bandForScore = hsiBandForScore;
+
+const DATA_INCOMPLETE = 'DATA INCOMPLETE';
+const CONFIDENCE_THRESHOLD = 0.6;
+
+const FUTURE_INPUT_LABELS: Array<{ key: keyof HsiInput; label: string }> = [
+  { key: 'mcds', label: 'MCDs' },
+  { key: 'cape', label: 'CAPE' },
+  { key: 'shear', label: 'Shear' },
+  { key: 'srh', label: 'SRH' },
+  { key: 'tornadoProbability', label: 'Tornado probability' },
+  { key: 'hailProbability', label: 'Hail probability' },
+  { key: 'windProbability', label: 'Wind probability' },
+  { key: 'flashFloodRisk', label: 'Flash flood risk' },
+  { key: 'winterImpact', label: 'Winter storm impacts' },
+  { key: 'tropicalImpact', label: 'Tropical impacts' },
+  { key: 'populationExposure', label: 'Population exposure' },
+];
 
 function radarContributors(radar: RadarIntensityInput | null | undefined): {
   contributors: IntensityContributor[];
@@ -254,7 +308,7 @@ function outlookContributors(outlook: OutlookIntensityInput | null | undefined):
   };
 }
 
-export function calculateWeatherIntensity(input: WeatherIntensityInput): WeatherIntensityResult {
+export function calculateHsi(input: HsiInput): HsiResult {
   const groups = [
     radarContributors(input.radar),
     alertContributors(input.alerts),
@@ -267,36 +321,79 @@ export function calculateWeatherIntensity(input: WeatherIntensityInput): Weather
     .sort((a, b) => b.points - a.points);
   const sourceCount = groups.filter((group) => group.available).length;
 
+  const availableFuture = FUTURE_INPUT_LABELS.filter(({ key }) => {
+    const value = input[key];
+    return value !== null && value !== undefined && (!Array.isArray(value) || value.length > 0);
+  });
+  const totalInputs = groups.length + FUTURE_INPUT_LABELS.length;
+  const confidence = totalInputs === 0 ? 0 : Math.round((sourceCount + availableFuture.length) / totalInputs * 100) / 100;
+  const unavailable = [
+    ...groups.map((group, index) => ({ available: group.available, label: ['Radar', 'Alerts', 'Lightning', 'SPC outlooks'][index] || 'Input' }))
+      .filter((group) => !group.available).map((group) => group.label),
+    ...FUTURE_INPUT_LABELS.filter(({ key }) => {
+      const value = input[key];
+      return value === null || value === undefined || (Array.isArray(value) && value.length === 0);
+    }).map(({ label }) => label),
+  ];
+  const areaCount = new Set(
+    (Array.isArray(input.alerts) ? input.alerts : [])
+      .map((alert) => alert.areaDesc || alert.wfo)
+      .filter((value): value is string => Boolean(value))
+  ).size;
+  if (areaCount > 1) {
+    contributors.push({
+      id: 'spatial-extent',
+      label: 'Spatial extent',
+      detail: `${areaCount} reported areas in scope`,
+      source: 'NWS alerts',
+      points: areaCount >= 10 ? 6 : areaCount >= 4 ? 4 : 2,
+    });
+    contributors.sort((a, b) => b.points - a.points);
+  }
+
+  const dataIncomplete = unavailable.length > 0 || confidence < CONFIDENCE_THRESHOLD;
+  const areaLabel = input.areaLabel?.trim() || 'selected area';
+
   if (sourceCount === 0) {
     return {
       score: null,
       band: null,
+      bandLabel: DATA_INCOMPLETE,
+      confidence,
+      dataIncomplete: true,
       contributors: [],
-      unavailable: ['No verified intensity inputs available'],
-      summary: 'Waiting for verified radar, alert, lightning, or outlook input.',
+      unavailable,
+      summary: `${DATA_INCOMPLETE} — no verified hazard inputs available for ${areaLabel}.`,
       sourceCount: 0,
+      areaCount,
     };
   }
 
   const score = Math.min(100, contributors.reduce((sum, item) => sum + item.points, 0));
-  const band = bandForScore(score);
+  const band = hsiBandForScore(score);
+  const bandLabel = dataIncomplete ? DATA_INCOMPLETE : band?.label ?? DATA_INCOMPLETE;
   const top = contributors.filter((item) => item.points > 0).slice(0, 3);
-  const summary = top.length
-    ? `${band?.label ?? 'Unclassified'}: ${top.map((item) => item.label.toLowerCase()).join(', ')}.`
-    : `${band?.label ?? 'Unclassified'}: observed inputs are below intensity thresholds.`;
+  const cause = top.length
+    ? top.map((item) => item.label.toLowerCase()).join(', ')
+    : 'reported inputs below hazard thresholds';
+  const summary = `${bandLabel} for ${areaLabel}: ${cause}.${dataIncomplete ? ` ${unavailable.length} input(s) unavailable; confidence ${Math.round(confidence * 100)}%.` : ''}`;
 
   return {
     score,
     band,
+    bandLabel,
+    confidence,
+    dataIncomplete,
     contributors,
-    unavailable: groups
-      .map((group, index) => ({ group, label: ['Radar', 'Alerts', 'Lightning', 'Outlook'][index] || 'Input' }))
-      .filter(({ group }) => !group.available)
-      .map(({ label }) => label),
+    unavailable,
     summary,
     sourceCount,
+    areaCount,
   };
 }
+
+/** Backwards-compatible alias retained for historical callers only. */
+export const calculateWeatherIntensity = calculateHsi;
 
 export function stormAnalysisToRadarInput(payload: any): RadarIntensityInput {
   const sweeps = Array.isArray(payload?.sweeps) ? payload.sweeps : [];
@@ -382,4 +479,61 @@ export function spcCategoryAtPoint(payload: any, lat: number, lon: number): stri
     if (match) return match[1].toUpperCase();
   }
   return null;
+}
+
+/** Scale-aware area label used by the HSI panel and copied summaries. */
+export function hsiAreaLabel(scope: { scale: HsiScaleId; text?: string | null }): string {
+  const def = HSI_SCALES.find((item) => item.id === scope.scale) || HSI_SCALES[0];
+  const text = scope.text?.trim();
+  if (text) return `${text} ${def.label.toLowerCase()} HSI`;
+  return def.example;
+}
+
+function alertCoordinate(alert: IntensityAlert): [number, number] | null {
+  const geometry = alert.geometry;
+  const coordinates = geometry?.type === 'Polygon'
+    ? geometry.coordinates?.[0]?.[0]
+    : geometry?.type === 'MultiPolygon'
+      ? geometry.coordinates?.[0]?.[0]?.[0]
+      : null;
+  const lon = Number(coordinates?.[0]);
+  const lat = Number(coordinates?.[1]);
+  return Number.isFinite(lon) && Number.isFinite(lat) ? [lon, lat] : null;
+}
+
+function pointInRing(point: [number, number], ring: Array<[number, number]>): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = Number(ring[i]?.[0]);
+    const yi = Number(ring[i]?.[1]);
+    const xj = Number(ring[j]?.[0]);
+    const yj = Number(ring[j]?.[1]);
+    if (![xi, yi, xj, yj].every(Number.isFinite)) continue;
+    const intersects = yi > point[1] !== yj > point[1]
+      && point[0] < ((xj - xi) * (point[1] - yi)) / (yj - yi) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Scope alerts to a national/regional/state/local/custom area. Custom areas
+ * use an emergency manager's drawn polygon; area matching is approximate and
+ * is never represented as a legal boundary or official jurisdiction.
+ */
+export function alertsForHsiScope(
+  alerts: IntensityAlert[] | undefined,
+  scope: { scale: HsiScaleId; text?: string | null; polygon?: Array<[number, number]> | null }
+): IntensityAlert[] {
+  if (!Array.isArray(alerts)) return [];
+  if (scope.scale === 'national') return alerts;
+  if (scope.scale === 'custom' && Array.isArray(scope.polygon) && scope.polygon.length >= 3) {
+    return alerts.filter((alert) => {
+      const point = alertCoordinate(alert);
+      return point !== null && pointInRing(point, scope.polygon as Array<[number, number]>);
+    });
+  }
+  const text = (scope.text || '').trim().toUpperCase();
+  if (!text) return alerts;
+  return alerts.filter((alert) => `${alert.areaDesc || ''} ${alert.wfo || ''}`.toUpperCase().includes(text));
 }
