@@ -152,7 +152,7 @@ export function calculateNrot(
       velocityDealiased: radials.length > 0 && radials.every(r => r.velocityDealiased === true),
       nyquistVelocityAvailable: radials.some(r => Number.isFinite(r.radial?.nyquist_velocity)
         && (r.radial?.nyquist_velocity || 0) > 0),
-      aliasSensitive: !(radials.length > 0 && radials.every(r => r.velocityDealiased === true)),
+      aliasSensitive: true,
       minimumRangeKm: Number(MIN_RANGE_KM.toFixed(2)),
     },
   };
@@ -243,7 +243,7 @@ export function calculateNrot(
   return {
     ...empty,
     available: candidates.length > 0,
-    method: empty.method + (empty.quality.velocityDealiased ? ' Velocity was continuity-dealiased.' : ' Velocity was not fully dealiased.'),
+    method: empty.method + (empty.quality.velocityDealiased ? ' Velocity was continuity-dealiased; residual fold ambiguity remains.' : ' Velocity was not fully dealiased.'),
     peaks,
     maxCyclonic: cyclonic.length ? Number(Math.max(...cyclonic.map(p => p.nrot)).toFixed(3)) : null,
     maxAnticyclonic: anticyclonic.length ? Number(Math.min(...anticyclonic.map(p => p.nrot)).toFixed(3)) : null,
