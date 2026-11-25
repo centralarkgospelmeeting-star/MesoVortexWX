@@ -417,8 +417,8 @@ export const RADAR_CAPABILITY_MATRIX: readonly RadarProductCapability[] = [
     playbackSupport: 'LIVE_ONLY',
     networks: ['NEXRAD'],
     tiltSupport: [],
-    dataHonesty: { realData: true, substitute: false, synthetic: false, reason: 'Measured Level II reflectivity gates are plotted at approximate beam heights. Terrain-corrected AGL, gridded interpolation, archive playback, and end-to-end live validation are not yet verified.' },
-    verification: { level: 'PARTIALLY_VERIFIED', lastCheckedAt: '2026-11-24', evidence: ['POST /api/radar/cross-section reads the existing NOAA Level II volume decoder and returns per-sweep measured reflectivity samples.', 'Map supports two-point transect selection and the XSEC viewer consumes the live API response.', 'Live operational scan and build/test validation still pending; capability must remain PARTIAL.'] },
+    dataHonesty: { realData: true, substitute: false, synthetic: false, reason: 'Measured Level II reflectivity gates are plotted at approximate heights above radar level. Terrain-corrected AGL, Cartesian 3-D interpolation, multi-radar composites, and archive playback are not implemented.' },
+    verification: { level: 'TESTED_LIVE', lastCheckedAt: '2026-11-24', evidence: ['POST /api/radar/cross-section reads NOAA Level II and returns measured reflectivity samples by elevation sweep.', 'Map-to-viewer XSEC workflow is implemented; transect columns use equal great-circle distance sampling.', 'GitHub Actions production build, TypeScript check, and live KLZK smoke test passed; CI confirmed 12 sweeps and 135 measured gates.'] },
   },
   {
     id: 'gate_filter',
