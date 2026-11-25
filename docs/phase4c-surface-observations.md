@@ -32,6 +32,16 @@ Optional fields:
 
 AviationWeather tightened `/api/data/metar`: a `bbox` request now also requires `zoom` and `density`, and coordinates with float noise (e.g. `31.700000000000003`) are rejected with HTTP 400 (`Must specify station IDs or bounding box, zoom, and density`). `buildUpstreamUrl` rounds the bbox to 3 decimals and sends `zoom=6&density=1`, so METAR/AVIATION layers return 200 with real reports. The Phase 4C guard asserts this contract to prevent regression.
 
+### Observation layer simplification (OBSERVATIONS master toggle)
+
+The surface layer panel now exposes a single **OBSERVATIONS** master toggle instead of six independent layer checkboxes.
+
+- When **OBSERVATIONS** is enabled, all supported observation networks are displayed together: METAR/SPECI (METAR layer), Aviation/ASOS subset (Aviation layer), IEM Mesonet, atmowx PWS, NDBC Buoys, and NDBC Marine.
+- Vendor networks without a verified open feed (Weather Underground, Tempest, Davis) and realtime COOP remain `DATA UNAVAILABLE` and are not plotted.
+- When the master toggle is disabled, network-specific controls remain reachable through "Network-specific controls (advanced)" in the same panel for granular control.
+
+Duplicate stations reported by multiple networks (for example ASOS is a strict subset of genuine METAR) are resolved by source priority (`SURFACE_SOURCE_PRIORITY` in `lib/surface/station-model.ts`); the highest-priority source wins and lower-priority duplicates are not plotted twice.
+
 ## 2. Supported station networks (plotted today)
 
 - **METAR + SPECI** (AviationWeather.gov) — METAR layer.
