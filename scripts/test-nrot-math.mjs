@@ -27,6 +27,7 @@ for (let azimuth = 0; azimuth < 360; azimuth += 1) {
     azimuth,
     elevation_angle: 0.5,
     radial: { nyquist_velocity: 2500 },
+    reflect: { first_gate: firstGate, gate_size: gateSize, moment_data: Array(280).fill(35) },
     velocity: { first_gate: firstGate, gate_size: gateSize, moment_data },
   });
 }
