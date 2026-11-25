@@ -1743,6 +1743,14 @@ export default function MesoVortexWorkstation() {
               >
                 {hsiOpen ? 'Hide' : 'Show'} Hazard Severity Index (HSI)
               </button>
+              <a
+                href="/about"
+                data-menu-about="true"
+                onClick={() => setMenuOpen(false)}
+                className="block w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white"
+              >
+                Credits &amp; About
+              </a>
             </div>
             <div className="mt-4 border-t border-slate-800 pt-3 text-[10px] text-slate-500">
               Weather data first. Panels open on demand.
@@ -2085,10 +2093,11 @@ export default function MesoVortexWorkstation() {
 
       <footer
         className="shrink-0 border-t border-slate-800/40 bg-[#050a12] px-3 py-1 text-center text-[10px] leading-tight text-slate-500"
-        aria-label="Creator note"
+        aria-label="Workstation footer"
       >
         <p className="mx-auto max-w-4xl px-2 text-slate-500/90">
-          &ldquo;He sends the lightning with the rain and brings out the wind from his storehouses.&rdquo; <span className="text-slate-600">&mdash; Psalm 135:7</span>
+          Weather data first. Source-scoped, verified, and non-operational.{' '}
+          <a href="/about" className="text-slate-400 underline hover:text-white">Credits &amp; About</a>
         </p>
       </footer>
     </div>

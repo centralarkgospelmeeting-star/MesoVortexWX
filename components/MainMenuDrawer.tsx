@@ -232,6 +232,12 @@ export function MainMenuDrawer({
           <div className="text-center text-[10px] text-slate-500 font-mono">
             MesoVortexWX v2.0 · Bloomberg Terminal of Weather
           </div>
+          <a
+            href="/about"
+            className="w-full rounded-xl border border-slate-700 py-2 text-center text-xs font-bold text-slate-300 hover:bg-slate-900 hover:text-white transition block"
+          >
+            Credits &amp; About
+          </a>
         </div>
       </aside>
       <div className="flex-1" onClick={onClose} />
