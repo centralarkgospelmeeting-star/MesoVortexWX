@@ -1,192 +1,81 @@
 'use client';
 
-import { useState } from 'react';
-import { CrossSectionResult } from '../lib/cross-section';
+import { useMemo, useState } from 'react';
+import type { LiveCrossSectionResult } from '../lib/radar/cross-section-types';
 
-type Props = {
-  data: CrossSectionResult;
-  onClose: () => void;
-};
+type Props = { data: LiveCrossSectionResult; onClose: () => void };
 
-function getDbzColor(dbz: number): string {
-  if (dbz >= 70) return '#ffffff';
-  if (dbz >= 65) return '#9854c6';
-  if (dbz >= 60) return '#f800fd';
-  if (dbz >= 55) return '#d40000';
-  if (dbz >= 50) return '#fd0000';
-  if (dbz >= 45) return '#fd9500';
-  if (dbz >= 40) return '#e5bc00';
-  if (dbz >= 35) return '#fdf802';
-  if (dbz >= 30) return '#008e00';
-  if (dbz >= 25) return '#01c501';
-  if (dbz >= 20) return '#02fd02';
-  if (dbz >= 15) return '#0300f4';
-  if (dbz >= 10) return '#019ff4';
-  if (dbz >= 5) return '#04e9e7';
-  return 'transparent';
+function dbzColor(value: number): string {
+  if (value >= 70) return '#ffffff';
+  if (value >= 65) return '#9854c6';
+  if (value >= 60) return '#f800fd';
+  if (value >= 55) return '#d40000';
+  if (value >= 50) return '#fd0000';
+  if (value >= 45) return '#fd9500';
+  if (value >= 40) return '#e5bc00';
+  if (value >= 35) return '#fdf802';
+  if (value >= 30) return '#008e00';
+  if (value >= 25) return '#01c501';
+  if (value >= 20) return '#02fd02';
+  if (value >= 15) return '#0300f4';
+  if (value >= 10) return '#019ff4';
+  if (value >= 5) return '#04e9e7';
+  return '#64748b';
 }
 
 export function CrossSectionModal({ data, onClose }: Props) {
-  const [hoverData, setHoverData] = useState<{
-    altFt: number;
-    distNm: number;
-    dbz: number;
-  } | null>(null);
-
-  const numAltRows = data.grid.length;
-  const numDistCols = data.grid[0]?.length || 1;
+  const [hover, setHover] = useState<{ distanceKm: number; heightFt: number; dbz: number; elevation: number } | null>(null);
+  const maxHeightFt = useMemo(() => Math.max(1000, ...data.sweeps.flatMap((s) => s.beamHeightFtAglApprox.filter((v): v is number => v !== null && Number.isFinite(v)))), [data]);
+  const maxDbz = Math.max(0, ...data.sweeps.flatMap((s) => s.reflectivityDbz.filter((v): v is number => v !== null && Number.isFinite(v))));
+  const validGates = data.sweeps.reduce((n, s) => n + s.reflectivityDbz.filter((v) => v !== null).length, 0);
+  const distanceMi = data.lengthKm * 0.621371;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#050a12] p-3 sm:p-5 animate-fade-in select-none font-sans">
-      <div className="flex h-[90vh] w-full max-w-5xl flex-col rounded-3xl border border-sky-700 bg-slate-950 shadow-2xl overflow-hidden font-mono">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/10 px-6 py-3.5 bg-slate-900/80">
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-sky-900/40 text-xl text-sky-400 border border-sky-700">
-              ✂️
-            </span>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm sm:text-base font-extrabold text-white">Vertical Cross-Section (SYNTHETIC / DEMO)</h2>
-                <span className="rounded-full bg-sky-900/40 px-2 py-0.5 text-[9px] font-black uppercase text-sky-300">
-                  SYNTHETIC - NOT REAL VOLUMETRIC
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 font-sans">
-                Cut Length: <b className="text-white">{data.lengthNm} nm</b> ({data.lengthMi} mi) · 0 to 60,000 ft AGL · <span className="text-amber-300 font-bold">SYNTHETIC</span>
-              </p>
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#020617]/95 p-2 sm:p-5 font-sans">
+      <section className="flex h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-sky-700/70 bg-slate-950 shadow-2xl">
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-slate-900 px-4 py-3">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-black text-white">Reflectivity Vertical Cross-Section · XSEC</h2>
+              <span className="rounded-full border border-emerald-500/50 bg-emerald-950/60 px-2 py-0.5 text-[9px] font-black uppercase text-emerald-300">Live Level II measurements</span>
             </div>
+            <p className="mt-1 text-[11px] text-slate-400">{data.siteName} ({data.site}) · Scan {data.scanTime || 'time unavailable'} · {data.source}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-full bg-white/5 p-2 text-slate-400 hover:bg-white/10 hover:text-white transition cursor-pointer"
-          >
-            ✕
-          </button>
+          <button type="button" onClick={onClose} className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-bold text-slate-200 hover:bg-slate-700">Close ✕</button>
+        </header>
+
+        <div className="grid grid-cols-2 gap-2 border-b border-white/10 bg-slate-900/50 p-3 sm:grid-cols-4">
+          <div className="rounded-lg border border-slate-800 bg-slate-900 p-2"><div className="text-[9px] uppercase text-slate-500">Transect length</div><div className="text-sm font-bold text-white">{data.lengthKm.toFixed(1)} km / {distanceMi.toFixed(1)} mi</div></div>
+          <div className="rounded-lg border border-slate-800 bg-slate-900 p-2"><div className="text-[9px] uppercase text-slate-500">Elevation sweeps</div><div className="text-sm font-bold text-white">{data.sweeps.length}</div></div>
+          <div className="rounded-lg border border-slate-800 bg-slate-900 p-2"><div className="text-[9px] uppercase text-slate-500">Measured gates</div><div className="text-sm font-bold text-white">{validGates.toLocaleString()}</div></div>
+          <div className="rounded-lg border border-slate-800 bg-slate-900 p-2"><div className="text-[9px] uppercase text-slate-500">Peak sampled reflectivity</div><div className="text-sm font-bold text-white">{maxDbz.toFixed(0)} dBZ</div></div>
         </div>
 
-        {/* 3 Meteorological Diagnostic Pillars: Updraft, Hail Aloft, Storm Lean */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 border-b border-white/10 p-3.5 bg-slate-950 text-xs font-sans">
-          {/* Updraft Strength */}
-          <div className="rounded-2xl border border-purple-500/30 bg-purple-950/20 p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400">Updraft Strength</span>
-              <span className="text-xs">⚡</span>
+        <div className="min-h-0 flex-1 overflow-auto p-3 sm:p-5">
+          <div className="flex h-full min-h-[340px]">
+            <div className="flex w-14 shrink-0 flex-col justify-between pb-8 pr-2 text-right text-[10px] text-slate-400">
+              <span>{Math.ceil(maxHeightFt / 10000) * 10000 / 1000}k ft</span><span>{(maxHeightFt * .75 / 1000).toFixed(0)}k</span><span>{(maxHeightFt * .5 / 1000).toFixed(0)}k</span><span>{(maxHeightFt * .25 / 1000).toFixed(0)}k</span><span>0 ft</span>
             </div>
-            <div className="text-base font-black text-white mt-0.5">{data.updraftStrength}</div>
-            <p className="text-[10px] text-slate-400 mt-1 font-mono">
-              Overshooting Top: <b className="text-purple-300">{data.echoTopFt.toLocaleString()} ft</b>
-            </p>
-          </div>
-
-          {/* Hail Potential Aloft */}
-          <div className="rounded-2xl border border-rose-500/30 bg-rose-950/20 p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-400">Hail Potential Aloft</span>
-              <span className="text-xs">🧊</span>
+            <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-slate-700 bg-[#030712]" onMouseLeave={() => setHover(null)}>
+              {[25,50,75].map((v) => <div key={v} className="pointer-events-none absolute inset-x-0 border-t border-dashed border-slate-700/70" style={{top:`${100-v}%`}} />)}
+              {data.sweeps.map((sweep, sweepIndex) => sweep.reflectivityDbz.map((dbz, column) => {
+                const height = sweep.beamHeightFtAglApprox[column];
+                if (dbz === null || height === null || !Number.isFinite(height)) return null;
+                const left = data.columns <= 1 ? 0 : column / (data.columns - 1) * 100;
+                const top = 100 - Math.max(0, Math.min(100, height / maxHeightFt * 100));
+                return <div key={`${sweepIndex}-${column}`} onMouseEnter={() => setHover({distanceKm:data.lengthKm*column/Math.max(1,data.columns-1),heightFt:height,dbz,elevation:sweep.elevationDegrees})} title={`${dbz.toFixed(1)} dBZ · ${Math.round(height).toLocaleString()} ft · ${sweep.elevationDegrees.toFixed(2)}°`} className="absolute" style={{left:`${left}%`,top:`${top}%`,width:`${Math.max(.45,100/data.columns)}%`,height:5,backgroundColor:dbzColor(dbz),transform:'translateY(-50%)',opacity:.95}} />;
+              }))}
+              {validGates===0 && <div className="absolute inset-0 flex items-center justify-center p-5 text-center text-sm text-amber-300">No valid reflectivity gates intersected this transect. No synthetic echoes are displayed.</div>}
+              {hover && <div className="pointer-events-none absolute left-2 top-2 z-10 rounded-lg border border-sky-700 bg-slate-950/95 px-3 py-2 text-[11px] text-white shadow-xl">Distance {hover.distanceKm.toFixed(1)} km · Height {Math.round(hover.heightFt).toLocaleString()} ft above radar level · {hover.dbz.toFixed(1)} dBZ · Elevation {hover.elevation.toFixed(2)}°</div>}
             </div>
-            <div className="text-base font-black text-rose-200 mt-0.5">{data.hailPotential}</div>
-            <p className="text-[10px] text-slate-400 mt-1 font-mono">
-              Core Aloft: <b className="text-rose-400">{data.maxDbzAloft} dBZ</b> at {data.maxAltitudeFt.toLocaleString()} ft
-            </p>
           </div>
-
-          {/* Storm Lean / Tilt */}
-          <div className="rounded-2xl border border-sky-700 bg-cyan-950/20 p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-sky-400">Storm Lean / Tilt</span>
-              <span className="text-xs">↗️</span>
-            </div>
-            <div className="text-sm font-black text-cyan-200 mt-0.5 truncate">{data.stormLeanDirection}</div>
-            <p className="text-[10px] text-slate-400 mt-1 font-mono">
-              Displacement: <b className="text-sky-300">{data.stormLeanDisplacementNm} nm</b> downshear
-            </p>
-          </div>
+          <div className="ml-14 flex justify-between pt-2 text-[10px] text-slate-400"><span>Point A · 0 km</span><span>Distance along transect</span><span>Point B · {data.lengthKm.toFixed(1)} km</span></div>
         </div>
 
-        {/* Data honesty warning */}
-        <div className="px-4 py-2 bg-amber-950/40 border-b border-amber-500/30 text-[11px] text-amber-200 font-sans">
-          ⚠ {data.dataHonestyNote || 'SYNTHETIC/MODEL-DERIVED visualization. Not a real volumetric reconstruction. Do not use for operational decisions.'}
-        </div>
-
-        {/* Main RHI Vertical Atmospheric Slicing Grid */}
-        <div className="relative flex-1 p-5 flex flex-col justify-between bg-[#030611] overflow-hidden">
-          {/* 0°C Freezing Level Isotherm */}
-          <div className="pointer-events-none absolute left-14 right-6 top-[63%] border-b border-dashed border-cyan-400/60 flex justify-between text-[9px] text-sky-300 z-10">
-            <span className="bg-slate-950/80 px-1 rounded">0°C Freezing Level (~12,500 ft)</span>
-          </div>
-
-          {/* -20°C Hail Growth Zone Isotherm */}
-          <div className="pointer-events-none absolute left-14 right-6 top-[47%] border-b border-dashed border-amber-400/60 flex justify-between text-[9px] text-amber-300 z-10">
-            <span className="bg-slate-950/80 px-1 rounded">-20°C Hail Growth Zone (~22,000 ft)</span>
-          </div>
-
-          {/* Vertical Matrix View */}
-          <div className="flex flex-1 min-h-0">
-            {/* Y-Axis Altitude Scale */}
-            <div className="flex flex-col justify-between pr-2 text-[10px] text-slate-500 font-bold select-none text-right w-12">
-              <span>60k ft</span>
-              <span>45k ft</span>
-              <span>30k ft</span>
-              <span>15k ft</span>
-              <span>0 ft</span>
-            </div>
-
-            {/* Canvas Sliced Cells */}
-            <div
-              className="relative flex-1 border border-white/15 rounded-2xl overflow-hidden flex flex-col cursor-crosshair bg-[#010309]"
-              onMouseLeave={() => setHoverData(null)}
-            >
-              {data.grid.map((row, rIdx) => {
-                const altFt = Math.round(((numAltRows - 1 - rIdx) / (numAltRows - 1)) * 60000);
-                return (
-                  <div key={rIdx} className="flex flex-1">
-                    {row.map((val, cIdx) => {
-                      const distNm = Math.round((cIdx / (numDistCols - 1)) * data.lengthNm * 10) / 10;
-                      return (
-                        <div
-                          key={cIdx}
-                          style={{ backgroundColor: getDbzColor(val) }}
-                          className="flex-1 hover:brightness-125 transition-all"
-                          onMouseEnter={() =>
-                            setHoverData({
-                              altFt,
-                              distNm,
-                              dbz: val,
-                            })
-                          }
-                        />
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* X-Axis Baseline Scale */}
-          <div className="flex justify-between pl-14 pr-2 pt-2 text-[10px] text-slate-400 font-sans">
-            <span className="font-bold text-sky-400">Point A (0.0 nm)</span>
-            <span className="text-slate-500">Horizontal Cut Length ({data.lengthNm} nm)</span>
-            <span className="font-bold text-purple-400">Point B ({data.lengthNm} nm)</span>
-          </div>
-
-          {/* Live Hover Telemetry Footer */}
-          {hoverData && (
-            <div className="mt-2.5 flex items-center justify-between rounded-xl border border-sky-700 bg-[#111827] px-4 py-2 text-xs animate-fade-in font-mono">
-              <div>
-                <span className="text-slate-400">Altitude:</span> <b className="text-sky-400">{hoverData.altFt.toLocaleString()} ft AGL</b>
-              </div>
-              <div>
-                <span className="text-slate-400">Distance Along Cut:</span> <b className="text-white">{hoverData.distNm} nm</b>
-              </div>
-              <div>
-                <span className="text-slate-400">Reflectivity:</span> <b className="text-emerald-400">{hoverData.dbz} dBZ</b>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+        <footer className="border-t border-amber-500/30 bg-amber-950/30 px-4 py-3 text-[10px] leading-relaxed text-amber-200">
+          {data.note} Heights are approximate above radar level, not terrain-corrected AGL. The display plots measured gates at their estimated beam heights; it does not interpolate a Cartesian 3-D volume. A cross section is a sampling transect, not an updraft, hail-size, or storm-severity diagnosis.
+        </footer>
+      </section>
     </div>
   );
 }
