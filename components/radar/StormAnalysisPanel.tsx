@@ -46,7 +46,7 @@ export function StormAnalysisPanel({siteId,siteName,onClose}:Props){
     <section className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4"><Stat label="Sweeps" value={data.sweepCount}/><Stat label="Scan age" value={data.quality.scanAgeMinutes} unit="min"/><Stat label="Couplets flagged" value={data.rotationCouplets.length}/><Stat label="Source" value="NOAA Level II"/></section>
     <section className="mb-3 rounded-xl border border-slate-800 p-3"><h3 className="mb-2 text-xs font-black uppercase tracking-wide text-cyan-300">Velocity rotation / couplet screening</h3>
      <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-      <Stat label="Dealiasing quality" value={data.sweeps.every(s=>s.velocity.dealiasing.quality==='usable')?'Usable':data.sweeps.some(s=>s.velocity.dealiasing.available)?'Partial':'Unavailable'}/>
+      <Stat label="Nyquist coverage" value={data.sweeps.every(s=>s.velocity.dealiasing.quality==='usable')?'Complete':data.sweeps.some(s=>s.velocity.dealiasing.available)?'Partial':'Unavailable'}/>
       <Stat label="Gates corrected" value={data.sweeps.reduce((n,s)=>n+s.velocity.dealiasing.gatesCorrected,0)}/>
       <Stat label="Suspected folds" value={data.sweeps.reduce((n,s)=>n+s.velocity.dealiasing.gatesSuspected,0)}/>
       <Stat label="Radials with Nyquist" value={data.sweeps.reduce((n,s)=>n+s.velocity.dealiasing.nyquistRadials,0)}/>
