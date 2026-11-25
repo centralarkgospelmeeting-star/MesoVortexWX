@@ -1,5 +1,8 @@
 'use client';
 
+import { useMemo, useState } from 'react';
+import { distanceMeters } from '../../lib/map-tools/geo';
+
 export type ToolMode = 'none' | 'measure-distance' | 'measure-area' | 'draw-point' | 'draw-line' | 'draw-polygon' | 'annotate';
 
 export interface MeasurementRecord {
@@ -31,6 +34,8 @@ export function ToolboxPanel({
   exportBusy,
   exportStatus,
   canExport,
+  cursor,
+  onCopyCoordinates,
 }: {
   toolMode: ToolMode;
   onSetToolMode: (m: ToolMode) => void;
@@ -44,8 +49,24 @@ export function ToolboxPanel({
   exportBusy: boolean;
   exportStatus?: string;
   canExport: boolean;
+  cursor?: { lat: number; lon: number } | null;
+  onCopyCoordinates?: () => void;
 }) {
   const btn = (active: boolean) => `rounded-lg px-2 py-1.5 text-[11px] font-bold border transition ${active ? 'bg-cyan-600 border-cyan-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-200 hover:bg-slate-800'}`;
+  const [motionMinutes, setMotionMinutes] = useState(5);
+  const motion = useMemo(() => {
+    const line = drawings.filter((d) => d.kind === 'line').slice(-1)[0];
+    if (!line || line.points.length < 2) return null;
+    const [a, b] = line.points;
+    const meters = distanceMeters(a, b);
+    const toRad = (d: number) => d * Math.PI / 180;
+    const y = Math.sin(toRad(b[0] - a[0])) * Math.cos(toRad(b[1]));
+    const x = Math.cos(toRad(a[1])) * Math.sin(toRad(b[1])) - Math.sin(toRad(a[1])) * Math.cos(toRad(b[1])) * Math.cos(toRad(b[0] - a[0]));
+    return {
+      bearing: Math.round((Math.atan2(y, x) * 180 / Math.PI + 360) % 360),
+      speedKt: Math.round((meters / 1852) / (motionMinutes / 60)),
+    };
+  }, [drawings, motionMinutes]);
   return (
     <div className="rounded-2xl border border-slate-700 bg-[#0b1220] p-3 shadow-2xl text-slate-100 space-y-3">
       <div>
@@ -61,6 +82,24 @@ export function ToolboxPanel({
         <div className="mt-2 text-[10px] text-slate-400 leading-snug">
           Measurements/drawings are local user annotations (not meteorological data). Double-click to finish line/area. Esc cancels active tool.
         </div>
+        <div className="mt-2 flex items-center justify-between gap-2 rounded border border-slate-800 bg-[#0b1220] px-2 py-1.5">
+          <span className="font-mono text-[10px] text-slate-200">{cursor ? `${cursor.lat.toFixed(4)}, ${cursor.lon.toFixed(4)}` : 'Move cursor over map'}</span>
+          <button type="button" disabled={!cursor} onClick={onCopyCoordinates} className="rounded border border-slate-700 px-1.5 py-0.5 text-[10px] font-bold text-slate-300 disabled:opacity-40 hover:bg-slate-800">Copy lat/lon</button>
+        </div>
+      </div>
+
+      <div className="border-t border-slate-800 pt-2">
+        <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Storm motion estimate</div>
+        <div className="flex items-center gap-2 text-[10px] text-slate-300">
+          <label className="flex items-center gap-1">Interval
+            <input type="number" min={1} max={60} value={motionMinutes} onChange={(e) => setMotionMinutes(Math.max(1, Math.min(60, Number(e.target.value) || 5)))} className="w-14 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 font-mono text-slate-100" />
+          </label>
+          <span>min between positions</span>
+        </div>
+        <div className="mt-1 text-[11px] font-bold text-sky-300">
+          {motion ? `${motion.bearing}° at ${motion.speedKt} kt` : 'Draw a line between two positions.'}
+        </div>
+        <div className="mt-1 text-[10px] text-slate-500">Derived from operator line and interval; not an observed storm track.</div>
       </div>
 
       <div className="border-t border-slate-800 pt-2">

@@ -31,7 +31,9 @@ assert.match(page, /HsiPanel/, 'HSI panel mounted');
 assert.match(fs.readFileSync('components/hsi/HsiPanel.tsx', 'utf8'), /hsi-radar-backdrop/, 'distinct MesoVortexWX HSI visual system');
 
 // 6. Mode-specific overlay profiles gate global switches.
-assert.match(profiles, /export type OverlayMode = 'radar' \| 'satellite' \| 'model'/, 'three overlay modes');
+assert.match(profiles, /export type OverlayMode = 'radar' \| 'satellite' \| 'forecast' \| 'broadcast'/, 'four named workspaces');
+assert.match(profiles, /DEFAULT_WORKSPACE_PANELS/, 'workspaces remember panel visibility');
+assert.match(profiles, /normalizeWorkspacePanels/, 'workspace panel state is normalized on load');
 assert.match(profiles, /DEFAULT_OVERLAY_PROFILES/, 'documented per-mode defaults');
 assert.match(page, /const mapWarnings = showWarnings && overlay\.warnings/, 'warnings gated by profile');
 assert.match(page, /const mapObservations/, 'observations gated by profile');

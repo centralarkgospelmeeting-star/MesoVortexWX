@@ -134,6 +134,7 @@ export interface RadarMapProps {
   onSelectSite?: (siteId: string) => void;
   onSelectWarningFromMap?: (w: any, lat?: number, lon?: number) => void;
   onMapContextClick?: (lat: number, lon: number) => void;
+  onCursorMove?: (lat: number, lon: number) => void;
   alertOutlineThickness?: number;
   onCrossSectionComplete?: (pointA: [number, number], pointB: [number, number]) => void;
   onToolMeasurementsChange?: (items: MapToolMeasurement[]) => void;
@@ -364,6 +365,7 @@ export function RadarMap({
   onSelectSite,
   onSelectWarningFromMap,
   onMapContextClick,
+  onCursorMove,
   alertOutlineThickness = 2,
   onCrossSectionComplete,
   onToolMeasurementsChange,
@@ -517,6 +519,7 @@ export function RadarMap({
   const alertFeaturesRef = useRef<any>(alertFeatures);
   const onSelectWarningRef = useRef(onSelectWarningFromMap);
   const onMapContextClickRef = useRef(onMapContextClick);
+  const onCursorMoveRef = useRef(onCursorMove);
   const alertOutlineThicknessRef = useRef(alertOutlineThickness);
   const towerPillMarkersRef = useRef<maplibregl.Marker[]>([]);
   const showRadarPillsRef = useRef(showRadarPills);
@@ -2286,6 +2289,7 @@ export function RadarMap({
   }, [onSelectWarningFromMap]);
 
   useEffect(() => { onMapContextClickRef.current = onMapContextClick; }, [onMapContextClick]);
+  useEffect(() => { onCursorMoveRef.current = onCursorMove; }, [onCursorMove]);
   useEffect(() => { onCrossSectionCompleteRef.current = onCrossSectionComplete; }, [onCrossSectionComplete]);
   useEffect(() => { if (!crossSectionMode) crossSectionStartRef.current = null; }, [crossSectionMode]);
   useEffect(() => {
@@ -2439,6 +2443,7 @@ export function RadarMap({
         return;
       }
       const mode = toolModeRef.current;
+      if (onCursorMoveRef.current) onCursorMoveRef.current(e.lngLat.lat, e.lngLat.lng);
       if (!mode || mode === 'none' || inspectionMode) {
         const warningFeatures = map.queryRenderedFeatures(e.point, { layers: [WARNINGS_FILL_ID].filter((id) => map.getLayer(id)) });
         if (warningFeatures.length > 0) return;

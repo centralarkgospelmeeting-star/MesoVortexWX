@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ALERT_CATEGORY_META, alertExpiryLabel, formatAlertTime, sortAlerts, type WeatherAlert } from '../lib/alerts/model';
 import { distanceMeters, pointInGeometry } from '../lib/map-tools/geo';
+import type { ReportDetail } from './reports/ReportDetailPopup';
 
 type NearbyReport = { id: string; hazard?: string; notes?: string; timeIso?: string; lat?: number; lon?: number; distanceM?: number; source?: string };
 type NearbyMcd = { id?: string; number?: string; title?: string; distanceM?: number; watchProbability?: string };
@@ -27,6 +28,7 @@ type Props = {
   onSelectNearestRadar: (site: { id: string; name: string; lat: number; lon: number }) => void;
   pinned: boolean;
   onTogglePin: () => void;
+  onSelectReport?: (report: ReportDetail) => void;
 };
 
 function extractStormMotion(text: string): string {
@@ -131,7 +133,7 @@ function WarningCard({ alert, onSelect }: { alert: WeatherAlert; onSelect: (a: W
   );
 }
 
-export function AlertDetailsPanel({ alert, context, onClose, onSelectAlert, onSelectNearestRadar, pinned, onTogglePin }: Props) {
+export function AlertDetailsPanel({ alert, context, onClose, onSelectAlert, onSelectNearestRadar, pinned, onTogglePin, onSelectReport }: Props) {
   const [reportsOpen, setReportsOpen] = useState(false);
   const [fullAlertOpen, setFullAlertOpen] = useState(false);
   const SESSION_KEY = 'mesovortex_alert_panel_session_v1';
@@ -258,14 +260,29 @@ export function AlertDetailsPanel({ alert, context, onClose, onSelectAlert, onSe
               {reportsOpen && (
                 <div className="border-t border-slate-700 px-2.5 py-2 space-y-2">
                   {context.reportsNearby.length ? context.reportsNearby.slice(0, 5).map((r) => (
-                    <div key={r.id} className="text-[11px] text-slate-200">
+                    <button
+                      type="button"
+                      key={r.id}
+                      onClick={() => onSelectReport?.({
+                        id: r.id,
+                        time: r.timeIso || null,
+                        location: Number.isFinite(r.lat) && Number.isFinite(r.lon)
+                          ? `${Number(r.lat).toFixed(3)}, ${Number(r.lon).toFixed(3)} · ${compactDistance(r.distanceM)}`
+                          : compactDistance(r.distanceM),
+                        source: reportSource(r.source),
+                        text: r.notes || r.hazard || 'Data unavailable from source.',
+                        lat: Number.isFinite(r.lat) ? Number(r.lat) : undefined,
+                        lon: Number.isFinite(r.lon) ? Number(r.lon) : undefined,
+                      })}
+                      className="block w-full rounded border border-slate-800 bg-[#0b1220] px-2 py-1.5 text-left text-[11px] text-slate-200 hover:border-sky-500/60"
+                    >
                       <div className="flex items-start justify-between gap-2">
                         <span className="font-semibold text-white">{r.hazard || 'Report'}</span>
                         <span className="shrink-0 text-slate-400">{compactDistance(r.distanceM)}</span>
                       </div>
                       <div className="text-[10px] text-slate-400">{reportSource(r.source)} · {relativeAge(r.timeIso)}</div>
                       {r.notes && <div className="truncate text-[10px] text-slate-300" title={r.notes}>{r.notes}</div>}
-                    </div>
+                    </button>
                   )) : <div className="text-[11px] text-slate-400">No nearby reports loaded.</div>}
                 </div>
               )}

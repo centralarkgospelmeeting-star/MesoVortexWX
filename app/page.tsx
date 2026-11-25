@@ -28,13 +28,17 @@ import {
 import { AlertDetailsPanel, buildLocationContext } from '../components/AlertDetailsPanel';
 import { getCompositeSource, COMPOSITE_SOURCES } from '../lib/radar/composite-sources';
 import { ProductInfoBanner } from '../components/ProductInfoBanner';
+import { ReportDetailPopup, type ReportDetail } from '../components/reports/ReportDetailPopup';
 import { HsiPanel } from '../components/hsi/HsiPanel';
 import {
   DEFAULT_OVERLAY_PROFILES,
+  DEFAULT_WORKSPACE_PANELS,
   normalizeOverlayProfiles,
+  normalizeWorkspacePanels,
   OVERLAY_FIELDS,
   OVERLAY_MODE_FIELDS,
   OVERLAY_MODES,
+  WORKSPACE_PANEL_FIELDS,
   type OverlayMode,
 } from '../lib/overlay-profiles';
 import { METARPanel, type SurfaceSource } from '../components/METARPanel';
@@ -109,6 +113,7 @@ const PROJECTION_STORAGE_KEY = 'mesovortex_projection_mode';
 const PREFS_STORAGE_KEY = 'mesovortex_preferences_v1';
 const HSI_STORAGE_KEY = 'mesovortex_hsi_visible';
 const OVERLAY_STORAGE_KEY = 'mesovortex_overlay_profiles_v1';
+const WORKSPACE_STORAGE_KEY = 'mesovortex_workspace_panels_v1';
 const DEFAULT_MESONET_NETWORK = 'ISUSM';
 const DEFAULT_AWOS_NETWORK = 'IA_ASOS';
 const PANE_MODES: PaneMode[] = ['Radar', 'Satellite', 'Composite', 'Models'];
@@ -382,6 +387,9 @@ export default function MesoVortexWorkstation() {
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
   const [locationContext, setLocationContext] = useState<{ lat: number; lon: number; ts: number } | null>(null);
   const [alertPanelPinned, setAlertPanelPinned] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<ReportDetail | null>(null);
+  const [cursor, setCursor] = useState<{ lat: number; lon: number } | null>(null);
+  const [toolboxOpen, setToolboxOpen] = useState(false);
 
   const [spotterReportsForContext, setSpotterReportsForContext] = useState<any[]>([]);
   const [mcdFeaturesForContext, setMcdFeaturesForContext] = useState<any[]>([]);
@@ -436,6 +444,16 @@ export default function MesoVortexWorkstation() {
     }
   });
   const [mesoaiOpen, setMesoaiOpen] = useState(false);
+  const [broadcastMode, setBroadcastMode] = useState(false);
+  const [workspacePanels, setWorkspacePanels] = useState(() => {
+    if (typeof window === 'undefined') return DEFAULT_WORKSPACE_PANELS;
+    try {
+      const raw = window.localStorage.getItem(WORKSPACE_STORAGE_KEY);
+      return raw ? normalizeWorkspacePanels(JSON.parse(raw)) : DEFAULT_WORKSPACE_PANELS;
+    } catch {
+      return DEFAULT_WORKSPACE_PANELS;
+    }
+  });
   const [dataSourceFilter, setDataSourceFilter] = useState<'ALL' | DataSourceStatus>('ALL');
 
   useEffect(() => {
@@ -455,9 +473,15 @@ export default function MesoVortexWorkstation() {
     try { window.localStorage.setItem(OVERLAY_STORAGE_KEY, JSON.stringify(overlayProfiles)); } catch {}
   }, [overlayProfiles]);
 
+  useEffect(() => {
+    try { window.localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(workspacePanels)); } catch {}
+  }, [workspacePanels]);
+
   // Mode-specific overlay profile gates. Global switches remain the outer gate
   // so a mode can only remove layers, never enable an unverified source.
-  const overlayMode: OverlayMode = tab === 'Satellite' ? 'satellite' : tab === 'Models' || tab === 'Outlooks' ? 'model' : 'radar';
+  const overlayMode: OverlayMode = broadcastMode
+    ? 'broadcast'
+    : tab === 'Satellite' ? 'satellite' : tab === 'Models' || tab === 'Outlooks' ? 'forecast' : 'radar';
   const overlay = overlayProfiles[overlayMode];
   const mapWarnings = showWarnings && overlay.warnings;
   const mapWatches = showWatches && overlay.warnings;
@@ -703,14 +727,36 @@ export default function MesoVortexWorkstation() {
     let cancelled = false;
     const load = async () => {
       try {
-        const [repRes, mcdRes] = await Promise.all([
+        const [repRes, mcdRes, mpingRes] = await Promise.all([
           fetch('/api/spotter?mode=reports', { cache: 'no-store' }).catch(() => null),
           fetch('/api/spc/mcd', { cache: 'no-store' }).catch(() => null),
+          fetch('/api/mping?minutes=60', { cache: 'no-store' }).catch(() => null),
         ]);
         if (cancelled) return;
         if (repRes?.ok) {
           const d = await repRes.json().catch(() => null);
           setSpotterReportsForContext(Array.isArray(d?.features) ? d.features : []);
+        }
+        // mPING is public where available; upstream 401/404 leaves it empty and
+        // the availability note stays DATA UNAVAILABLE rather than fabricated.
+        if (mpingRes?.ok) {
+          const d = await mpingRes.json().catch(() => null);
+          const mping = (Array.isArray(d?.features) ? d.features : []).map((feature: any, index: number) => {
+            const props = feature?.properties || {};
+            return {
+              type: 'Feature',
+              id: `mping-${index}`,
+              geometry: feature?.geometry || null,
+              properties: {
+                id: `mping-${index}`,
+                hazard: String(props.wxcodes || props.report || 'mPING report'),
+                notes: String(props.remark || props.comment || props.report || ''),
+                timeIso: String(props.time || props.observed || props.timestamp || ''),
+                source: 'NSSL mPING',
+              },
+            };
+          });
+          if (mping.length) setSpotterReportsForContext((prev) => [...prev, ...mping]);
         }
         if (mcdRes?.ok) {
           const d = await mcdRes.json().catch(() => null);
@@ -945,6 +991,7 @@ export default function MesoVortexWorkstation() {
       setLocationContext(null);
       if (alertSettings.sidebarAutoHide && !alertSettings.sidebarPinned) setAlertsOpen(false);
     },
+    onCursorMove: (lat: number, lon: number) => setCursor({ lat, lon }),
     focusTarget,
     onSelectSite: (id: string) => setRadarSite(id),
   } as const;
@@ -1505,7 +1552,7 @@ export default function MesoVortexWorkstation() {
       </div>
 
       <div className="relative min-h-0 flex-1 pb-10">
-        {!quadMode && !expertMode && (
+        {!quadMode && !expertMode && workspacePanels[overlayMode].hsi && (
           <HsiPanel
             open={hsiOpen}
             onClose={() => setHsiOpen(false)}
@@ -1520,7 +1567,7 @@ export default function MesoVortexWorkstation() {
           />
         )}
         <MesoAIPanel
-          open={mesoaiOpen}
+          open={mesoaiOpen && workspacePanels[overlayMode].mesoai}
           onClose={() => setMesoaiOpen(false)}
           site={{ id: currentSite.id, name: currentSite.name, lat: currentSite.lat, lon: currentSite.lon }}
           productKey={product}
@@ -1744,11 +1791,37 @@ export default function MesoVortexWorkstation() {
           onSelectAlert={(a) => { setSelectedAlertId(a.id); setAlertsOpen(true); }}
           pinned={alertPanelPinned}
           onTogglePin={() => setAlertPanelPinned((v) => !v)}
+          onSelectReport={(report) => setSelectedReport(report)}
           onSelectNearestRadar={(site) => {
             setRadarSite(site.id);
             setFocusTarget({ lat: site.lat, lon: site.lon, zoom: 8, ts: Date.now() });
           }}
         />
+      )}
+
+      {selectedReport && <ReportDetailPopup report={selectedReport} onClose={() => setSelectedReport(null)} />}
+
+      {toolboxOpen && workspacePanels[overlayMode].toolbox && (
+        <div className="absolute bottom-16 right-3 z-40 w-[min(20rem,calc(100vw-1.5rem))]">
+          <ToolboxPanel
+            toolMode={toolMode}
+            onSetToolMode={setToolMode}
+            measurements={toolMeasurements}
+            drawings={toolDrawings}
+            onClearMeasurements={() => { setToolMeasurements([]); setToolRevision((v) => v + 1); }}
+            onClearDrawings={() => { setToolDrawings([]); setToolRevision((v) => v + 1); }}
+            onUndoDrawing={() => { setToolDrawings((d) => d.slice(0, -1)); }}
+            onExportPng={exportMapPng}
+            onExportGif={exportMapGif}
+            exportBusy={exportBusy}
+            exportStatus={exportStatus}
+            canExport={true}
+            cursor={cursor}
+            onCopyCoordinates={() => {
+              if (cursor) void navigator.clipboard?.writeText(`${cursor.lat.toFixed(5)}, ${cursor.lon.toFixed(5)}`).catch(() => {});
+            }}
+          />
+        </div>
       )}
 
       {alertSettingsOpen && (
@@ -1829,6 +1902,24 @@ export default function MesoVortexWorkstation() {
                 className="w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white"
               >
                 {hsiOpen ? 'Hide' : 'Show'} Hazard Severity Index (HSI)
+              </button>
+              <button
+                key="ForecasterToolbox"
+                type="button"
+                data-menu-toolbox="true"
+                onClick={() => { setToolboxOpen((v) => !v); setMenuOpen(false); }}
+                className="w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white"
+              >
+                {toolboxOpen ? 'Hide' : 'Show'} Forecaster Toolbox
+              </button>
+              <button
+                key="BroadcastWorkspace"
+                type="button"
+                data-menu-broadcast="true"
+                onClick={() => { setBroadcastMode((v) => !v); setMenuOpen(false); }}
+                className="w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white"
+              >
+                {broadcastMode ? 'Exit' : 'Enter'} Broadcast Workspace
               </button>
               <a
                 href="/about"
@@ -2130,6 +2221,26 @@ export default function MesoVortexWorkstation() {
                   </div>
                 ))}
                 <div className="text-[10px] text-slate-500">Profiles only hide layers; global switches remain the outer gate.</div>
+                <div className="mt-2 border-t border-slate-800 pt-2">
+                  <div className="mb-1 text-[10px] font-black uppercase tracking-wider text-slate-400">Workspace panels</div>
+                  {OVERLAY_MODES.map((mode) => (
+                    <div key={mode.id} className="mb-1 rounded border border-slate-800 p-1.5">
+                      <div className="text-[10px] font-bold text-slate-300">{mode.label}</div>
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                        {WORKSPACE_PANEL_FIELDS.map((field) => (
+                          <label key={field.key} className="flex items-center gap-1 text-[10px]">
+                            <input
+                              type="checkbox"
+                              checked={workspacePanels[mode.id][field.key]}
+                              onChange={(e) => setWorkspacePanels((prev) => ({ ...prev, [mode.id]: { ...prev[mode.id], [field.key]: e.target.checked } }))}
+                            />
+                            {field.label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div className="rounded-lg border border-slate-800 bg-[#111827] p-2 space-y-2">
@@ -2197,6 +2308,10 @@ export default function MesoVortexWorkstation() {
                 exportBusy={exportBusy}
                 exportStatus={exportStatus}
                 canExport={true}
+                cursor={cursor}
+                onCopyCoordinates={() => {
+                  if (cursor) void navigator.clipboard?.writeText(`${cursor.lat.toFixed(5)}, ${cursor.lon.toFixed(5)}`).catch(() => {});
+                }}
               />
             </div>
           )}
