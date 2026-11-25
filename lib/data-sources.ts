@@ -138,12 +138,12 @@ export const DATA_SOURCES: DataSourceEntry[] = [
   {
     id: 'canada-eccc',
     category: 'International',
-    data: 'Canadian warnings and radar',
+    data: 'Canadian radar composite (warnings not implemented)',
     source: 'Environment and Climate Change Canada (GeoMet)',
-    status: 'NOT_IMPLEMENTED',
+    status: 'PARTIAL',
     attribution: 'ECCC / MSC GeoMet',
-    url: 'https://eccc-msc.github.io/open-data/',
-    notes: 'Not verified/wired end-to-end in MesoVortexWX.',
+    url: 'https://geo.weather.gc.ca/geomet',
+    notes: 'ECCC RADAR_1KM_RRAI WMS composite is VERIFIED and wired in the Composite selector. Canadian warnings and forecast zones are not implemented.',
   },
   {
     id: 'germany-dwd',

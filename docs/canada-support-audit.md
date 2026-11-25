@@ -2,7 +2,7 @@
 
 ## Summary
 
-Canada support is **partial and metadata-only** today. ECCC (Environment and Climate Change Canada / MSC GeoMet) endpoints have been verified at the WMS GetCapabilities and GetMap level, and the MSC GeoMet model WMS is partially wired (temperature and wind fields). No Canadian radar layer, Canadian warnings, or Canadian forecast zones are rendered in the app yet. Everything Canada-related is honestly marked `NOT_IMPLEMENTED` / `planned` / `DATA UNAVAILABLE`.
+Canada support is **partial**. ECCC (Environment and Climate Change Canada / MSC GeoMet) endpoints have been verified at the WMS GetCapabilities and GetMap level, and the ECCC national radar composite is now wired as a verified WMS raster source in the Composite selector. The MSC GeoMet model WMS is partially wired (temperature and wind fields). Canadian warnings and Canadian forecast zones are still not rendered; they remain honestly marked `NOT_IMPLEMENTED` / `planned` / `DATA UNAVAILABLE`.
 
 ## 1. What exists
 
@@ -12,12 +12,12 @@ Canada support is **partial and metadata-only** today. ECCC (Environment and Cli
 | ECCC GeoMet WMS GetCapabilities | verified | `https://geo.weather.gc.ca/geomet?SERVICE=WMS&REQUEST=GetCapabilities` returns 200 (39MB capabilities). |
 | ECCC GetMap tile (RADAR_1KM_RRAI) | verified | GetMap returns 256×256 PNG with `Radar-Rain_14colors` style. |
 | MSC GeoMet model WMS (GDPS-GEML) | partial | `lib/model-registry.ts` — temperature and wind fields marked `READY_NOW` with verified WMS layers; other fields `NEEDS_SOURCE`. |
-| Composite source registry entry | unavailable | `lib/radar/composite-sources.ts` — `canada_composite` listed as `UNAVAILABLE`. |
+| Composite source registry entry | verified (radar) | `lib/radar/composite-sources.ts` — `canada_composite` marked `VERIFIED` with the ECCC `RADAR_1KM_RRAI` WMS GetMap URL; live tile probe 2026-11-25. |
 | Data source registry entry | not implemented | `lib/data-sources.ts` — `canada-eccc` `NOT_IMPLEMENTED`. |
 
 ## 2. What is missing
 
-- **Environment Canada radar layer** — no ECCC WMS raster is mounted in `RadarMap.tsx`. The US single-site/radar and IEM composite paths are the only rendered radar.
+- **Environment Canada radar layer** — now available through the Composite selector (`canada_composite`, ECCC WMS). It is a national composite raster, not a station-level or tilt-aware product.
 - **Canadian warnings** — no adapter. NWS `/api/alerts` and `/api/warnings` are US-only. ECCC CAP alerts exist under `https://dd.weather.gc.ca/today/alerts/cap/` as `.cap` XML, organized by forecast office and hour, but no parser/adapter exists.
 - **Canadian forecast zones** — no zone geometry or forecast-zone rendering for Canada. ECCC forecast zones are exposed via GeoMet WMS/WFS and the CAP alerts, but not consumed.
 - **Canadian composite in the composite selector** — listed but `UNAVAILABLE`.

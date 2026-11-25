@@ -34,6 +34,7 @@ assert.match(radarMap, /category === 'watch'.*showWatchesRef\.current/s, 'watch 
 assert.doesNotMatch(radarMap, /if \(showWarningsRef\.current\) updateWarnings/, 'watch-only view must not be gated by showWarnings');
 assert.doesNotMatch(radarMap, /getLayer\('radar-layer'\)/, 'layer ordering must use the canonical RADAR_LAYER_ID');
 assert.match(radarMap, /satelliteSourceConfigRef/, 'satellite bounds/maxzoom changes must rebuild the source');
+assert.match(radarMap, /\[mode, product, compositeSource, tilt/, 'composite source selection must rebuild the raster source');
 assert.doesNotMatch(radarMap, /getSatelliteProbeTile\(satSel\)\s*\|\|\s*'0\/0\/0'/, 'unstable satellite probes must not fall back to a blank world tile');
 assert.doesNotMatch(radarMap, /setSweepAngle/, 'reveal animation must not set React state per frame');
 

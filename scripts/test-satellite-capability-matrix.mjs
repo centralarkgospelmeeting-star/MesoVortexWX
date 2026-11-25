@@ -58,7 +58,7 @@ const {
   getSatelliteTileUrl,
 } = satellite;
 
-const fixedSectors = ['conus', 'fulldisk', 'puertorico', 'alaska'];
+const fixedSectors = ['conus', 'fulldisk', 'puertorico', 'alaska', 'meteosat-fes'];
 const movingSectors = ['mesoscale-1', 'mesoscale-2'];
 const expectedMaxzoom = {
   conus: 8,
@@ -67,6 +67,7 @@ const expectedMaxzoom = {
   alaska: 7,
   'mesoscale-1': 8,
   'mesoscale-2': 8,
+  'meteosat-fes': 6,
 };
 
 for (const sector of fixedSectors) {
@@ -108,7 +109,7 @@ const iemChannels = Array.from({ length: 16 }, (_, i) => String(i + 1).padStart(
 // Live IEM WMS capabilities 2026-11-24/25: GOES-East PR defines only ch01-10,13,15.
 const missingPuertoRicoChannels = new Set(['11', '12', '14', '16']);
 for (const bird of SATELLITE_BIRDS.map((b) => b.id)) {
-  if (bird === 'himawari') continue;
+  if (bird === 'himawari' || bird === 'meteosat') continue;
   const prefix = bird === 'goes-east' ? 'east' : 'west';
   for (const { id: sector } of SATELLITE_SECTORS) {
     if (!isSectorSupported(bird, sector)) continue;
@@ -128,8 +129,8 @@ for (const bird of SATELLITE_BIRDS.map((b) => b.id)) {
     const probe = getSatelliteProbeTile(selection);
     const bounds = getSatelliteTileBounds(sector);
 
-    if (movingSectors.includes(sector)) {
-      if (probe !== null) { console.error(`FAIL probe ${bird}/${sector}: moving sector must have null probe`); fail++; }
+    if (movingSectors.includes(sector) || bird === 'meteosat') {
+      if (probe !== null) { console.error(`FAIL probe ${bird}/${sector}: moving/WMS sector must have null fixed tile probe`); fail++; }
     } else {
       const parsed = typeof probe === 'string' && probe.match(/^(\d+)\/(\d+)\/(\d+)$/);
       if (!parsed) {
@@ -157,6 +158,17 @@ for (const bird of SATELLITE_BIRDS.map((b) => b.id)) {
       }
       const isHimawariCh02 = bird === 'himawari' && (product.id === 'visible' || product.id === 'ch02');
       const isMissingChannel = bird === 'goes-east' && sector === 'puertorico' && missingPuertoRicoChannels.has(product.channel);
+      if (bird === 'meteosat') {
+        const verifiedMeteosat = new Set(['visible', 'ir', 'wv-upper']);
+        if (verifiedMeteosat.has(product.id)) {
+          if (!result.url?.startsWith('https://view.eumetsat.int/geoserver/wms?') || !result.url.includes('{bbox-epsg-3857}')) {
+            console.error(`FAIL url meteosat/${product.id}: expected verified EUMETSAT WMS GetMap URL, got ${result.url}`); fail++;
+          }
+        } else if (result.url !== null) {
+          console.error(`FAIL url meteosat/${product.id}: unverified MSG SEVIRI product emitted a URL`); fail++;
+        }
+        continue;
+      }
       if (bird === 'himawari' && !isHimawariCh02) {
         if (result.url !== null) { console.error(`FAIL url himawari/${product.id}: only legacy ch02 is verified`); fail++; }
         continue;

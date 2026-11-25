@@ -1,5 +1,5 @@
-export type SatelliteBird = 'goes-east' | 'goes-west' | 'himawari';
-export type SatelliteSector = 'conus' | 'fulldisk' | 'mesoscale-1' | 'mesoscale-2' | 'puertorico' | 'alaska';
+export type SatelliteBird = 'goes-east' | 'goes-west' | 'himawari' | 'meteosat';
+export type SatelliteSector = 'conus' | 'fulldisk' | 'mesoscale-1' | 'mesoscale-2' | 'puertorico' | 'alaska' | 'meteosat-fes';
 
 export type SatelliteProductId =
   | 'geocolor'
@@ -53,6 +53,7 @@ export const SATELLITE_BIRDS: Array<{ id: SatelliteBird; label: string }> = [
   { id: 'goes-east', label: 'GOES-East' },
   { id: 'goes-west', label: 'GOES-West' },
   { id: 'himawari', label: 'Himawari' },
+  { id: 'meteosat', label: 'Meteosat' },
 ];
 
 export const SATELLITE_SECTORS: Array<{ id: SatelliteSector; label: string; birds: SatelliteBird[] }> = [
@@ -62,9 +63,17 @@ export const SATELLITE_SECTORS: Array<{ id: SatelliteSector; label: string; bird
   { id: 'mesoscale-2', label: 'Meso Sector 2', birds: ['goes-east', 'goes-west'] },
   { id: 'puertorico', label: 'Puerto Rico', birds: ['goes-east'] },
   { id: 'alaska', label: 'Alaska', birds: ['goes-west'] },
+  { id: 'meteosat-fes', label: 'Meteosat Full Earth Disk', birds: ['meteosat'] },
 ];
 
 const IEM_UNAVAILABLE = 'No verified real XYZ tile source in current IEM/GOES feed';
+
+/** EUMETSAT MSG SEVIRI WMS layers verified by live GetMap on 2026-11-25. */
+const METEOSAT_WMS_LAYERS: Partial<Record<SatelliteProductId, string>> = {
+  visible: 'msg_fes:vis006',
+  ir: 'msg_fes:ir108',
+  'wv-upper': 'msg_fes:wv062',
+};
 
 export const SATELLITE_PRODUCTS: SatelliteProductDef[] = [
   { id: 'geocolor', label: 'GeoColor', shortLabel: 'GeoColor', group: 'Featured', description: 'True color day / multispectral IR night', available: false, unavailableReason: 'No verified real public XYZ tile endpoint; NOAA STAR provides static imagery only' },
@@ -151,6 +160,8 @@ const FIXED_SATELLITE_TILE_BOUNDS: Partial<Record<SatelliteSector, [number, numb
   puertorico: [-79, 7, -54, 29],
   // GOES-West Alaska spans 150.47E through the dateline to 89.39W and to 78.99N.
   alaska: [-180, 40, 180, 80],
+  // EUMETSAT GetCapabilities 2026-11-25: msg_fes (full Earth SEVIRI) bounds -77..77 lat/lon.
+  'meteosat-fes': [-77, -77, 77, 77],
 };
 
 export function getSatelliteTileBounds(sector: SatelliteSector): [number, number, number, number] | undefined {
@@ -206,6 +217,9 @@ const VERIFIED_SATELLITE_TILE_MAXZOOM: Record<SatelliteSector, number> = {
   puertorico: 8,
   'mesoscale-1': 8,
   'mesoscale-2': 8,
+  // SEVIRI full-disk native pixel size is coarser than GOES ABI CONUS; stop
+  // at z6 rather than claiming detail the WMS source does not publish.
+  'meteosat-fes': 6,
 };
 
 /** Native-detail ceiling. Beyond this MapLibre overzooms existing tiles instead of asking IEM for upscaled tiles. */
@@ -219,6 +233,19 @@ export function getSatelliteTileUrl(sel: SatelliteSelection): { url: string | nu
 
   if (!product.available || !product.channel) {
     return { url: null, unavailableReason: product.unavailableReason || IEM_UNAVAILABLE };
+  }
+
+  // Meteosat: real EUMETSAT MSG SEVIRI WMS layers, verified by live GetMap.
+  // Only the three verified channels are mapped; ABI channel names are not
+  // valid for SEVIRI and are not aliased to a different sensor.
+  if (selection.bird === 'meteosat') {
+    const layer = METEOSAT_WMS_LAYERS[selection.productId];
+    if (!layer) {
+      return { url: null, unavailableReason: 'Meteosat WMS product not verified for MSG SEVIRI (VIS006, IR10.8, WV6.2 only)' };
+    }
+    return {
+      url: `https://view.eumetsat.int/geoserver/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${encodeURIComponent(layer)}&STYLES=&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&FORMAT=image/png`,
+    };
   }
 
   // Himawari: only the legacy IEM ch02 name was verified. Live tile.py serves a

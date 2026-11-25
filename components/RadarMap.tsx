@@ -1682,7 +1682,7 @@ export function RadarMap({
         );
       }
     },
-    [mode, product, tilt, maxRefWindow, site.radarId, radarOpacity, fastScanEnabled, onNewScan, playbackIndex, playbackActive, startReveal, satelliteSelection?.bird, satelliteSelection?.sector, satelliteSelection?.productId]
+    [mode, product, compositeSource, tilt, maxRefWindow, site.radarId, radarOpacity, fastScanEnabled, onNewScan, playbackIndex, playbackActive, startReveal, satelliteSelection?.bird, satelliteSelection?.sector, satelliteSelection?.productId]
   );
 
   /**
