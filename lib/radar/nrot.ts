@@ -4,8 +4,8 @@
  * This is an openly documented approximation, not GR2 Analyst's proprietary
  * NROT implementation. It uses a local quadratic least-squares surface fit
  * over 5x5 polar samples (3x3 fallback), then normalizes azimuthal shear with
- * a published Stumpf-style range curve. Input Level-II velocities are NOT
- * dealiased here; output is therefore explicitly alias-sensitive.
+ * a published Stumpf-style range curve. It accepts a separate continuity-
+ * dealiased velocity field and carries its quality/alias-sensitivity flags.
  */
 export type NrotMoment = {
   moment_data?: Array<number | null>;
