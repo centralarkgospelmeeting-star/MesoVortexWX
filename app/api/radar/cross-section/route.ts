@@ -40,7 +40,6 @@ function inverse(origin: Point, target: Point) {
 
 function beamHeightKm(slantRangeKm: number, elevationDegrees: number) {
   const elevation = elevationDegrees * Math.PI / 180;
-  const groundAngle = Math.asin(Math.min(1, (slantRangeKm * Math.cos(elevation)) / EFFECTIVE_EARTH_KM));
   return Math.sqrt(
     EFFECTIVE_EARTH_KM ** 2 + slantRangeKm ** 2
       + 2 * EFFECTIVE_EARTH_KM * slantRangeKm * Math.sin(elevation),
