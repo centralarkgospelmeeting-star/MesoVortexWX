@@ -19,7 +19,7 @@ export const DATA_SOURCES: DataSourceEntry[] = [
   {
     id: 'radar-mrms-geoserver',
     category: 'Radar',
-    data: 'MRMS national mosaic, super-resolution NEXRAD reflectivity and velocity',
+    data: 'MRMS national mosaic, NEXRAD reflectivity and velocity',
     source: 'NOAA/NWS GeoServer (radar.weather.gov backend)',
     status: 'NOT_IMPLEMENTED',
     attribution: 'NOAA/NWS',
@@ -53,7 +53,7 @@ export const DATA_SOURCES: DataSourceEntry[] = [
     status: 'PARTIAL',
     attribution: 'NOAA MRMS / AWS Open Data',
     url: 'https://registry.opendata.aws/noaa-mrms-pds/',
-    notes: 'Listing/scaffold only; no verified GRIB2 decode/tile/render.',
+    notes: 'AWS object listing is a scaffold. Verified MRMS products in MesoVortexWX use the NOAA/NCEP HTTPS GRIB2 decode path in lib/radar/mrms-grib2.ts, not this listing.',
   },
   {
     id: 'radar-archive-past-time',
@@ -69,10 +69,10 @@ export const DATA_SOURCES: DataSourceEntry[] = [
     category: 'Radar',
     data: 'NEXRAD Level II and III files (Pro mode, and its archive back to 1995)',
     source: 'NOAA Open Data on AWS',
-    status: 'NOT_IMPLEMENTED',
+    status: 'PARTIAL',
     attribution: 'NOAA NEXRAD on AWS Open Data',
     url: 'https://registry.opendata.aws/noaa-nexrad/',
-    notes: 'No verified raw Level II/III decode/render/archive pipeline in MesoVortexWX.',
+    notes: 'Verified live NEXRAD Level II decode/render exists for supported moments via NOAA AWS; raw archive playback is still not claimed.',
   },
   {
     id: 'radar-hrrr-future-reflectivity',

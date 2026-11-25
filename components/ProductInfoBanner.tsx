@@ -16,7 +16,6 @@ import {
 // UI-only IDs that do not have a 1:1 capability-matrix id. These are aliases,
 // not new products or new scale definitions.
 const CAPABILITY_ID_ALIASES: Record<string, string> = {
-  comp_ref: 'ref',
   ref_x: 'ref',
   norm_vel: 'nrot',
 };
@@ -35,9 +34,34 @@ function capabilityDescription(cap: RadarProductCapability): string {
   return `${detail}${honesty}`;
 }
 
+/** Display-only provenance derived from the authoritative capability matrix. */
+function capabilityProvenance(cap: RadarProductCapability, radarSite?: string, tilt?: string): Array<{ label: string; value: string }> {
+  const elevation = cap.tiltSupport.length === 0
+    ? 'National grid / no tilt'
+    : tilt && cap.tiltSupport.includes(tilt)
+      ? `${tilt}°`
+      : cap.tiltSupport.map((t) => `${t}°`).join(' · ');
+  const domain = cap.id === 'composite_n0q' || cap.source.type === 'NOAA_AWS_MRMS'
+    ? 'MULTI-RADAR / MRMS'
+    : cap.source.type === 'NONE'
+      ? 'UNVERIFIED'
+      : 'SINGLE RADAR';
+  return [
+    { label: 'Domain', value: domain },
+    { label: 'Source', value: cap.source.provider },
+    { label: 'Grid', value: cap.source.productCode || cap.shortLabel },
+    ...(radarSite && cap.tiltSupport.length > 0 ? [{ label: 'Site', value: radarSite }] : []),
+    { label: 'Elevation', value: elevation },
+    { label: 'Verification', value: `${cap.verification.level} · ${cap.verification.lastCheckedAt}` },
+    { label: 'Support', value: `${cap.playbackSupport} · archive ${cap.archiveSupport}` },
+  ];
+}
+
 type Props = {
   tab: string;
   product: string;
+  radarSite?: string;
+  tilt?: string;
   satelliteLabel?: string;
   satelliteDescription?: string;
   outlookDay?: string;
@@ -53,6 +77,7 @@ type BannerInfo = {
   steps: readonly ProductLegendStep[];
   legendLabel: string;
   hasVerifiedScale: boolean;
+  provenance: Array<{ label: string; value: string }>;
 };
 
 function alertHeadline(alert: WeatherAlert): string {
@@ -61,7 +86,7 @@ function alertHeadline(alert: WeatherAlert): string {
   return `NEW ${event} ISSUED FOR ${area}`;
 }
 
-function radarBannerInfo(product: string): BannerInfo {
+function radarBannerInfo(product: string, radarSite?: string, tilt?: string): BannerInfo {
   const legend = getProductLegendInfo(product);
   const cap = getRadarCapability(capabilityId(product));
   const legendLabel = legend.hasVerifiedScale ? legend.legendLabel : NO_VERIFIED_SCALE_LABEL;
@@ -73,6 +98,7 @@ function radarBannerInfo(product: string): BannerInfo {
       steps: legend.steps,
       legendLabel,
       hasVerifiedScale: legend.hasVerifiedScale,
+      provenance: capabilityProvenance(cap, radarSite, tilt),
     };
   }
 
@@ -82,6 +108,7 @@ function radarBannerInfo(product: string): BannerInfo {
     steps: legend.steps,
     legendLabel,
     hasVerifiedScale: legend.hasVerifiedScale,
+    provenance: [],
   };
 }
 
@@ -93,6 +120,7 @@ function satelliteBannerInfo(label?: string, description?: string): BannerInfo {
     steps: legend.steps,
     legendLabel: legend.hasVerifiedScale ? legend.legendLabel : NO_VERIFIED_SCALE_LABEL,
     hasVerifiedScale: legend.hasVerifiedScale,
+    provenance: [],
   };
 }
 
@@ -104,6 +132,7 @@ function outlookBannerInfo(day?: string): BannerInfo {
     steps: legend.steps,
     legendLabel: legend.hasVerifiedScale ? legend.legendLabel : NO_VERIFIED_SCALE_LABEL,
     hasVerifiedScale: legend.hasVerifiedScale,
+    provenance: [],
   };
 }
 
@@ -114,6 +143,7 @@ function modelBannerInfo(props: Props): BannerInfo {
     steps: [],
     legendLabel: NO_VERIFIED_SCALE_LABEL,
     hasVerifiedScale: false,
+    provenance: [],
   };
 }
 
@@ -134,7 +164,7 @@ export function ProductInfoBanner(props: Props) {
 
   const info = useMemo<BannerInfo>(() => {
     if (props.tab === 'Radar' || props.tab === 'Composite') {
-      return radarBannerInfo(props.product);
+      return radarBannerInfo(props.product, props.radarSite, props.tilt);
     }
     if (props.tab === 'Satellite') {
       return satelliteBannerInfo(props.satelliteLabel, props.satelliteDescription);
@@ -149,6 +179,8 @@ export function ProductInfoBanner(props: Props) {
   }, [
     props.tab,
     props.product,
+    props.radarSite,
+    props.tilt,
     props.satelliteLabel,
     props.satelliteDescription,
     props.outlookDay,
@@ -167,12 +199,21 @@ export function ProductInfoBanner(props: Props) {
         </div>
       )}
       <div className="mx-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-        <div className="min-w-0">
+        <div className="min-w-0 max-w-[min(46rem,70vw)]">
           <div className="text-[10px] font-black uppercase tracking-[0.14em] text-sky-300">Product Information</div>
           <div className="flex items-baseline gap-2">
-            <span className="text-sm font-black text-white">{info.title}</span>
-            <span className="hidden md:inline text-[11px] text-slate-400 truncate">{info.desc}</span>
+            <span className="shrink-0 text-sm font-black text-white">{info.title}</span>
+            <span className="truncate text-[11px] text-slate-400" title={info.desc}>{info.desc}</span>
           </div>
+          {info.provenance.length > 0 && (
+            <div data-provenance="radar" className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[9px] text-slate-500">
+              {info.provenance.map((p) => (
+                <span key={p.label} className="whitespace-nowrap">
+                  <span className="font-bold uppercase tracking-wide text-slate-600">{p.label}:</span> {p.value}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         {info.hasVerifiedScale && info.steps.length > 0 ? (
           <div className="flex min-w-[220px] flex-1 items-center gap-2">

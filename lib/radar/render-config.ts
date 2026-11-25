@@ -4,6 +4,12 @@
  * Inspired by Supercell-Wx's separation of product/view state from rendering:
  * rendering decisions are centralized and explicit. This module is intentionally
  * conservative: it does not enable unverified products or fabricate data.
+ *
+ * Phase 4B quality note: the normal single-site N0B-family path uses 256 px
+ * IEM RIDGE raster tiles with nearest-neighbor resampling and no maxzoom cap.
+ * Overzoom is preserved without blur interpolation. This is a display choice
+ * for already-rendered tiles; it does not claim raw super-resolution Level II
+ * gate decoding, app-side downsampling, or a perceptually verified A/B upgrade.
  */
 
 export type RadarRasterResampling = 'nearest' | 'linear';

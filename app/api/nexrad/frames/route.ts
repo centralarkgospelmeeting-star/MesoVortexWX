@@ -180,7 +180,11 @@ export async function GET(request: Request) {
     latestTileUrl = `${IEM_TILE}/ridge::${sector}-${productCode}-0/{z}/{x}/{y}.png`;
   }
 
-  const playbackSupport = 'LIVE_ONLY' as const;
+  // Support metadata comes from the authoritative capability matrix. The app
+  // still returns one verified/live frame only; loopAvailable below is the
+  // actual workstation capability, not a claimed archive loop.
+  const playbackSupport = cap.playbackSupport;
+  const archiveSupport = cap.archiveSupport;
   const compositeTileUrl = `${IEM_TILE}/nexrad-n0q-900913/{z}/{x}/{y}.png`;
 
   let scanTime: string | null = null;
@@ -222,7 +226,7 @@ export async function GET(request: Request) {
       available: true,
       reason: notes.length ? notes.join(' ') : null,
       playbackSupport,
-      archiveSupport: 'NONE',
+      archiveSupport,
       verificationLevel: cap.verification.level,
       provider,
       station: site.radarId,

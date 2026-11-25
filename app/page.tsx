@@ -9,6 +9,7 @@ import { ToolboxPanel } from '../components/map-tools/ToolboxPanel';
 import { WeatherWiseAlertsPanel } from '../components/WeatherWiseAlertsPanel';
 import { AlertSettingsPanel } from '../components/AlertSettingsPanel';
 import { RADAR_SITES } from '../lib/radar-config';
+import { getRadarCapability } from '../lib/radar/capability-matrix';
 import { useFastAlerts } from '../lib/alerts/use-fast-alerts';
 import { DATA_SOURCES, DATA_SOURCE_STATUS_LABEL, type DataSourceStatus } from '../lib/data-sources';
 import {
@@ -51,10 +52,39 @@ type RadarProduct =
   | 'vil'
   | 'hhc'
   | 'qpe'
-  | 'volume_scan';
+  | 'volume_scan'
+  | 'comp_ref'
+  | 'azshear'
+  | 'rotation_tracks'
+  | 'mesh'
+  | 'hail_detection'
+  | 'vil_density'
+  | 'precip_rate'
+  | 'rain_mix_snow'
+  | 'gate_to_gate_shear'
+  | 'cross_section'
+  | 'storm_analysis'
+  | 'tilt_selection'
+  | 'super_res_ref'
+  | 'super_res_vel';
 
 type SpcDay = 'Day 1' | 'Day 2' | 'Day 3';
 type PaneMode = 'Radar' | 'Satellite' | 'Composite' | 'Models';
+
+type FrameMetadata = {
+  provider?: string;
+  product?: string;
+  capabilityId?: string;
+  tilt?: string;
+  network?: string;
+  station?: string;
+  scanTime?: string | null;
+  scanTimeAvailable?: boolean;
+  playbackSupport?: string;
+  archiveSupport?: string;
+  verificationLevel?: string;
+  loopAvailable?: boolean;
+};
 
 const BASEMAP_STORAGE_KEY = 'mesovortex_basemap_preference';
 const PROJECTION_STORAGE_KEY = 'mesovortex_projection_mode';
@@ -72,6 +102,7 @@ type UserPrefs = {
   loopPauseMs: number;
   favorites: string[];
   product: RadarProduct;
+  tilt: string;
   radarSite: string;
   colorTable: string;
   showRadarPills: boolean;
@@ -101,6 +132,7 @@ const DEFAULT_PREFS: UserPrefs = {
   loopPauseMs: 500,
   favorites: ['ref', 'vel', 'srvel', 'cc'],
   product: 'ref',
+  tilt: '0.5',
   radarSite: 'KLZK',
   colorTable: 'nws',
   showRadarPills: true,
@@ -145,6 +177,7 @@ function loadUserPrefs(): UserPrefs {
       loopPauseMs,
       favorites: Array.isArray(p.favorites) ? p.favorites.filter((x): x is string => typeof x === 'string') : DEFAULT_PREFS.favorites,
       product: typeof p.product === 'string' ? (p.product as RadarProduct) : DEFAULT_PREFS.product,
+      tilt: typeof p.tilt === 'string' && /^\d+(?:\.\d+)?$/.test(p.tilt) ? p.tilt : DEFAULT_PREFS.tilt,
       radarSite: typeof p.radarSite === 'string' ? p.radarSite : DEFAULT_PREFS.radarSite,
       colorTable: typeof p.colorTable === 'string' ? p.colorTable : DEFAULT_PREFS.colorTable,
       alertsOpen: typeof p.alertsOpen === 'boolean' ? p.alertsOpen : DEFAULT_PREFS.alertsOpen,
@@ -160,7 +193,8 @@ export default function MesoVortexWorkstation() {
   const [tab, setTab] = useState<ModeTab>('Radar');
   const [spcDay, setSpcDay] = useState<SpcDay>('Day 1');
   const [product, setProduct] = useState<RadarProduct>(initialPrefs.product);
-  const [tilt, setTilt] = useState('0.5');
+  const [tilt, setTilt] = useState(initialPrefs.tilt);
+  const [volumeInspectorOpen, setVolumeInspectorOpen] = useState(false);
   const [radarSite, setRadarSite] = useState(initialPrefs.radarSite);
   const [maxRefWindow, setMaxRefWindow] = useState(10);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -209,7 +243,11 @@ export default function MesoVortexWorkstation() {
     { mode: 'Satellite', product: 'ref', satelliteSelection: DEFAULT_SATELLITE_SELECTION, modelId: 'gdps-geml', modelField: 'temp' },
   ]);
   const [playbackFrames, setPlaybackFrames] = useState<Array<{ time: string; tileUrl: string; label: string }>>([]);
+  const [playbackMeta, setPlaybackMeta] = useState<FrameMetadata | null>(null);
   const [playbackIndex, setPlaybackIndex] = useState(0);
+  // The frames API is authoritative: one live frame is not a loop, regardless
+  // of how many times the UI might replay the same tile.
+  const timelineLoopAvailable = Boolean(playbackMeta?.loopAvailable) && playbackFrames.length > 1;
 
   const [basemap, setBasemap] = useState<BasemapType>('satellite-streets');
   const [basemapStatus, setBasemapStatus] = useState('Satellite Streets (Default)');
@@ -270,10 +308,6 @@ export default function MesoVortexWorkstation() {
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
   const [locationContext, setLocationContext] = useState<{ lat: number; lon: number; ts: number } | null>(null);
 
-  useEffect(() => {
-    (window as any).__mvSelectRadarSite = (id: string) => { if (id) setRadarSite(id); };
-    return () => { try { delete (window as any).__mvSelectRadarSite; } catch {} };
-  }, []);
   const [spotterReportsForContext, setSpotterReportsForContext] = useState<any[]>([]);
   const [mcdFeaturesForContext, setMcdFeaturesForContext] = useState<any[]>([]);
 
@@ -291,6 +325,7 @@ export default function MesoVortexWorkstation() {
         loopPauseMs,
         favorites: favoriteProducts,
         product,
+        tilt,
         radarSite,
         colorTable,
         showRadarPills,
@@ -310,7 +345,7 @@ export default function MesoVortexWorkstation() {
       };
       localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(prefs));
     } catch {}
-  }, [projectionMode, mapPitch, showRangeRings, radarOpacity, smoothing, playbackSpeed, playbackDirection, loopPauseMs, favoriteProducts, product, radarSite, colorTable, showRadarPills, showLightning, showLSR, showWatches, showWarnings, showMCD, showSpotters, showSpotterReports, showStormTracks, showCounties, showTornadoAnalysis, showHurricanes, alertsOpen]);
+  }, [projectionMode, mapPitch, showRangeRings, radarOpacity, smoothing, playbackSpeed, playbackDirection, loopPauseMs, favoriteProducts, product, tilt, radarSite, colorTable, showRadarPills, showLightning, showLSR, showWatches, showWarnings, showMCD, showSpotters, showSpotterReports, showStormTracks, showCounties, showTornadoAnalysis, showHurricanes, alertsOpen]);
   const [alertSettings, setAlertSettings] = useState<AlertSettings>(DEFAULT_ALERT_SETTINGS);
   const [menuOpen, setMenuOpen] = useState(false);
   const [dataSourceFilter, setDataSourceFilter] = useState<'ALL' | DataSourceStatus>('ALL');
@@ -427,9 +462,26 @@ export default function MesoVortexWorkstation() {
           ? data.frames.map((f: any) => ({ time: String(f.time), tileUrl: String(f.tileUrl), label: String(f.label || '') }))
           : [];
         setPlaybackFrames(frames);
+        setPlaybackMeta({
+          provider: data.provider ? String(data.provider) : undefined,
+          product: data.product ? String(data.product) : undefined,
+          capabilityId: data.capabilityId ? String(data.capabilityId) : undefined,
+          tilt: data.tilt ? String(data.tilt) : undefined,
+          network: data.network ? String(data.network) : undefined,
+          station: data.station ? String(data.station) : undefined,
+          scanTime: data.scanTime ? String(data.scanTime) : null,
+          scanTimeAvailable: Boolean(data.scanTimeAvailable),
+          playbackSupport: data.playbackSupport ? String(data.playbackSupport) : undefined,
+          archiveSupport: data.archiveSupport ? String(data.archiveSupport) : undefined,
+          verificationLevel: data.verificationLevel ? String(data.verificationLevel) : undefined,
+          loopAvailable: Boolean(data.loopAvailable),
+        });
         setPlaybackIndex((prev) => (frames.length ? Math.min(prev, frames.length - 1) : 0));
       } catch {
-        if (!cancelled) setPlaybackFrames([]);
+        if (!cancelled) {
+          setPlaybackFrames([]);
+          setPlaybackMeta(null);
+        }
       }
     };
     load();
@@ -438,7 +490,7 @@ export default function MesoVortexWorkstation() {
   }, [currentSite.radarId]);
 
   useEffect(() => {
-    if (!isPlaying || playbackFrames.length < 2) return;
+    if (!isPlaying || !timelineLoopAvailable) return;
     const frameMs = Math.max(120, Math.round(900 / playbackSpeed));
     let timer: ReturnType<typeof setTimeout> | null = null;
     const step = () => {
@@ -461,7 +513,7 @@ export default function MesoVortexWorkstation() {
     };
     timer = setTimeout(step, frameMs);
     return () => { if (timer) clearTimeout(timer); };
-  }, [isPlaying, playbackFrames.length, playbackSpeed, playbackDirection, loopPauseMs]);
+  }, [isPlaying, timelineLoopAvailable, playbackSpeed, playbackDirection, loopPauseMs]);
 
   const handleSelectBasemap = (selected: BasemapType) => {
     setBasemap(selected);
@@ -499,14 +551,13 @@ export default function MesoVortexWorkstation() {
   const styledBanner = useMemo(() => (alertBanner ? applyAlertSettingsToAlert(alertBanner, alertSettings) : null), [alertBanner, alertSettings]);
 
   // Alerts rendered on the map honor the category filters and visibility toggles.
-  const mapAlertFeatures = useMemo(() => {
-    const visible = styledFilteredAlerts.filter((alert) => {
-      if (alert.category === 'warning') return showWarnings;
-      if (alert.category === 'watch') return showWatches;
-      return true;
-    });
-    return alertsToFeatureCollection(visible);
-  }, [styledFilteredAlerts, showWarnings, showWatches]);
+  // The location card uses the same set so a hidden layer cannot reappear as a popup.
+  const visibleMapAlerts = useMemo(() => styledFilteredAlerts.filter((alert) => {
+    if (alert.category === 'warning') return showWarnings;
+    if (alert.category === 'watch') return showWatches;
+    return true;
+  }), [styledFilteredAlerts, showWarnings, showWatches]);
+  const mapAlertFeatures = useMemo(() => alertsToFeatureCollection(visibleMapAlerts), [visibleMapAlerts]);
 
   const selectedAlert = useMemo(() => styledAlerts.find((a) => a.id === selectedAlertId) || null, [styledAlerts, selectedAlertId]);
   useEffect(() => {
@@ -514,7 +565,7 @@ export default function MesoVortexWorkstation() {
     const load = async () => {
       try {
         const [repRes, mcdRes] = await Promise.all([
-          fetch('/api/spotters/reports', { cache: 'no-store' }).catch(() => null),
+          fetch('/api/spotter?mode=reports', { cache: 'no-store' }).catch(() => null),
           fetch('/api/spc/mcd', { cache: 'no-store' }).catch(() => null),
         ]);
         if (cancelled) return;
@@ -535,8 +586,8 @@ export default function MesoVortexWorkstation() {
 
   const alertLocationContext = useMemo(() => {
     if (!locationContext) return null;
-    return buildLocationContext(locationContext.lat, locationContext.lon, styledAlerts, RADAR_SITES as any, spotterReportsForContext, mcdFeaturesForContext);
-  }, [locationContext, styledAlerts, spotterReportsForContext, mcdFeaturesForContext]);
+    return buildLocationContext(locationContext.lat, locationContext.lon, visibleMapAlerts, RADAR_SITES as any, spotterReportsForContext, mcdFeaturesForContext);
+  }, [locationContext, visibleMapAlerts, spotterReportsForContext, mcdFeaturesForContext]);
 
   const paneProps = {
     radarSite,
@@ -554,6 +605,7 @@ export default function MesoVortexWorkstation() {
     showMCD,
     showSpotters,
     showSpotterReports,
+    showStormTracks,
     showHurricanes,
     projectionMode,
     mapPitch,
@@ -583,6 +635,18 @@ export default function MesoVortexWorkstation() {
   } as const;
 
   const currentPlaybackFrame = playbackFrames[playbackIndex] || null;
+
+  // Selecting a product must not leave a tilt that the frames route rejects.
+  // Products with no tilt semantics (national grids, derived fields) keep the
+  // persisted value but the UI/banner state explicitly reports "no tilt".
+  const selectRadarProduct = (next: string) => {
+    const id = String(next);
+    setProduct(id as RadarProduct);
+    const cap = getRadarCapability(id);
+    if (cap && cap.tiltSupport.length > 0 && !cap.tiltSupport.includes(tilt)) {
+      setTilt(cap.tiltSupport[0]);
+    }
+  };
 
   const parseLatLon = (q: string): { lat: number; lon: number } | null => {
     const m = q.trim().match(/^\s*(-?\d{1,2}(?:\.\d+)?)\s*[,\s]\s*(-?\d{1,3}(?:\.\d+)?)\s*$/);
@@ -716,7 +780,7 @@ export default function MesoVortexWorkstation() {
         </div>
         {paneMode === 'Radar' && (
           <div className="rounded-lg border border-slate-700 bg-[#0b1220] px-2.5 py-1 text-[10px] font-bold text-slate-200 shadow-xl">
-            {paneProduct.toUpperCase()} · {tilt}°
+            {paneProduct.toUpperCase()} · {RADAR_SITES.find((s) => s.id === radarSite || s.radarId === radarSite)?.network === 'TDWR' ? 'TDWR FIXED' : getRadarCapability(paneProduct)?.tiltSupport.length ? `${tilt}°` : 'NO TILT'}
           </div>
         )}
         {paneMode === 'Satellite' && (
@@ -729,7 +793,7 @@ export default function MesoVortexWorkstation() {
             {(getModelById(modelId)?.name || modelId).split('(')[0].trim()} · {activeModelField.label}{activeModelField.status !== 'READY_NOW' ? ' · DATA UNAVAILABLE' : ''}
           </div>
         )}
-        {isPlaying && playbackFrames.length > 1 && (
+        {isPlaying && timelineLoopAvailable && (
           <div className="rounded-lg border border-slate-700 bg-[#0b1220] px-2.5 py-1 text-[10px] font-bold text-amber-300 shadow-xl">
             {currentPlaybackFrame?.label || 'PLAYBACK'}
           </div>
@@ -766,7 +830,7 @@ export default function MesoVortexWorkstation() {
         satelliteSelection={paneSatelliteSelection}
         syncGroup={syncGroup}
         playbackIndex={playbackIndex}
-        playbackActive={isPlaying && playbackFrames.length > 1}
+        playbackActive={isPlaying && timelineLoopAvailable}
         toolMode={toolMode}
         toolRevision={toolRevision}
         onToolMeasurementsChange={setToolMeasurements}
@@ -810,6 +874,8 @@ export default function MesoVortexWorkstation() {
         <ProductInfoBanner
           tab={tab}
           product={bannerProduct}
+          radarSite={currentSite.id}
+          tilt={tilt}
           satelliteLabel={activeSatDef?.label}
           satelliteDescription={activeSatDef?.description}
           outlookDay={spcDay}
@@ -888,6 +954,10 @@ export default function MesoVortexWorkstation() {
                   key={modeTab}
                   onClick={() => {
                     setTab(modeTab);
+                    // Keep the compact control and banner honest when switching
+                    // between single-site and national product domains.
+                    if (modeTab === 'Composite') setProduct('comp_ref');
+                    if (modeTab === 'Radar') setProduct('ref');
                     setExpertMode(false);
                     setQuadMode(false);
                   }}
@@ -1122,7 +1192,7 @@ export default function MesoVortexWorkstation() {
             satelliteSelection={satelliteSelection}
             syncGroup={null}
             playbackIndex={playbackIndex}
-            playbackActive={isPlaying && playbackFrames.length > 1}
+            playbackActive={isPlaying && timelineLoopAvailable}
             toolMode={toolMode}
             toolRevision={toolRevision}
             onToolMeasurementsChange={setToolMeasurements}
@@ -1130,11 +1200,18 @@ export default function MesoVortexWorkstation() {
             onToolModeChange={setToolMode}
           />
         )}
-        {product === 'volume_scan' && !quadMode && !expertMode && tab === 'Radar' && (
+        {volumeInspectorOpen && !quadMode && !expertMode && tab === 'Radar' && (
           <VolumeScanInspector
             siteId={currentSite.id}
-            onSelectProduct={(next) => setProduct(next as RadarProduct)}
+            onSelectProduct={selectRadarProduct}
             onSelectTilt={setTilt}
+            onSelectMoment={(nextProduct, nextTilt) => {
+              // Moment selection must not close the volume inspector: it is the
+              // workflow that lets an operator keep exploring elevation cuts.
+              setProduct(nextProduct as RadarProduct);
+              setTilt(nextTilt);
+            }}
+            onClose={() => setVolumeInspectorOpen(false)}
           />
         )}
       </div>
@@ -1147,8 +1224,13 @@ export default function MesoVortexWorkstation() {
           product={product}
           tilt={tilt}
           maxRefWindow={maxRefWindow}
+          loopAvailable={timelineLoopAvailable}
+          frameMetadata={playbackMeta ?? undefined}
           isPlaying={isPlaying}
-          onSelectProduct={(p) => setProduct(p as RadarProduct)}
+          onSelectProduct={(p) => {
+            selectRadarProduct(p);
+            setVolumeInspectorOpen(p === 'volume_scan');
+          }}
           onSelectTilt={(t) => setTilt(t)}
           onSelectMaxRefWindow={(w) => setMaxRefWindow(w)}
           onTogglePlay={() => setIsPlaying((p) => !p)}
@@ -1161,6 +1243,8 @@ export default function MesoVortexWorkstation() {
           onToggleRangeRings={() => setShowRangeRings((v) => !v)}
           favorites={favoriteProducts}
           onToggleFavorite={(key) => setFavoriteProducts((prev) => prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key])}
+          showStormTracks={showStormTracks}
+          onToggleStormTracks={() => setShowStormTracks((v) => !v)}
           showRadarPills={showRadarPills}
           onToggleRadarPills={() => { setShowRadarPills((v) => !v); setShowRadarSites((v) => !v); }}
           inspectionMode={inspectionMode}
@@ -1189,7 +1273,7 @@ export default function MesoVortexWorkstation() {
           spcDay={spcDay}
           onSelectSpcDay={(d) => setSpcDay(d as SpcDay)}
           compositeProduct={product}
-          onSelectCompositeProduct={(id) => setProduct(id as RadarProduct)}
+          onSelectCompositeProduct={selectRadarProduct}
         />
       ) : (
         <button type="button" onClick={() => setBottomBarOpen(true)} className="absolute bottom-14 left-3 z-30 rounded-md border border-slate-700 bg-[#111827] px-3 py-2 text-[11px] font-bold text-slate-200 shadow-xl hover:bg-slate-900">Controls ▴</button>
@@ -1237,6 +1321,10 @@ export default function MesoVortexWorkstation() {
           context={alertLocationContext}
           onClose={() => { setSelectedAlertId(null); setLocationContext(null); }}
           onSelectAlert={(a) => { setLocationContext(null); setSelectedAlertId(a.id); setAlertsOpen(true); }}
+          onSelectNearestRadar={(site) => {
+            setRadarSite(site.id);
+            setFocusTarget({ lat: site.lat, lon: site.lon, zoom: 8, ts: Date.now() });
+          }}
         />
       )}
 

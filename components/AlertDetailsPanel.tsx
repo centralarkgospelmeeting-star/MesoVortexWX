@@ -1,8 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { alertExpiryLabel, formatAlertTime, type WeatherAlert } from '../lib/alerts/model';
-import { formatDistance, distanceMeters, pointInGeometry } from '../lib/map-tools/geo';
+import { ALERT_CATEGORY_META, alertExpiryLabel, formatAlertTime, sortAlerts, type WeatherAlert } from '../lib/alerts/model';
+import { distanceMeters, pointInGeometry } from '../lib/map-tools/geo';
 
 type NearbyReport = { id: string; hazard?: string; notes?: string; timeIso?: string; lat?: number; lon?: number; distanceM?: number; source?: string };
 type NearbyMcd = { id?: string; number?: string; title?: string; distanceM?: number; watchProbability?: string };
@@ -11,7 +11,8 @@ type LocationContext = {
   lat: number;
   lon: number;
   alerts: WeatherAlert[];
-  nearestRadarSites: Array<{ id: string; name: string; distanceM: number; bearingDeg: number }>;
+  nearestRadarSites: Array<{ id: string; name: string; lat: number; lon: number; distanceM: number; bearingDeg: number }>;
+  reportsNearby: NearbyReport[];
   spotterReportsNearby: NearbyReport[];
   lsrNearby: NearbyReport[];
   mcdNearby: NearbyMcd[];
@@ -23,24 +24,12 @@ type Props = {
   context: LocationContext | null;
   onClose: () => void;
   onSelectAlert: (alert: WeatherAlert) => void;
+  onSelectNearestRadar: (site: { id: string; name: string; lat: number; lon: number }) => void;
 };
 
 function isPds(alert: WeatherAlert): boolean {
   const hay = `${alert.headline} ${alert.description} ${alert.event} ${(alert.parameters?.VTEC || []).join(' ')}`.toLowerCase();
   return hay.includes('particularly dangerous situation') || /\bpds\b/.test(hay);
-}
-
-function warningPriority(alert: WeatherAlert): number {
-  const e = alert.event.toLowerCase();
-  let base = 0;
-  if (e.includes('tornado emergency')) base = 600;
-  else if (e.includes('tornado warning')) base = 500;
-  else if (e.includes('severe thunderstorm warning')) base = 400;
-  else if (e.includes('flash flood warning')) base = 300;
-  else if (e.includes('warning')) base = 200;
-  else if (e.includes('watch')) base = 100;
-  if (isPds(alert)) base += 50;
-  return base;
 }
 
 function bearingDeg(fromLat: number, fromLon: number, toLat: number, toLon: number): number {
@@ -50,13 +39,41 @@ function bearingDeg(fromLat: number, fromLon: number, toLat: number, toLon: numb
   const x = Math.cos(toRad(fromLat)) * Math.sin(toRad(toLat)) - Math.sin(toRad(fromLat)) * Math.cos(toRad(toLat)) * Math.cos(toRad(toLon - fromLon));
   return (toDeg(Math.atan2(y, x)) + 360) % 360;
 }
+
 function bearingCardinal(deg: number): string {
   const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
   return dirs[Math.round(deg / 22.5) % 16];
 }
 
+/** Compact single-unit distance for a small context card. */
+function compactDistance(meters?: number): string {
+  if (meters == null || !Number.isFinite(meters)) return 'Unavailable';
+  if (meters < 160934) return `${(meters / 1609.344).toFixed(1)} mi`;
+  return `${(meters / 1000).toFixed(0)} km`;
+}
+
+function relativeAge(timeIso?: string): string {
+  if (!timeIso) return 'Time unavailable';
+  const ms = Date.parse(timeIso);
+  if (!Number.isFinite(ms)) return 'Time unavailable';
+  const minutes = Math.max(0, Math.round((Date.now() - ms) / 60000));
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+
+function reportSource(source?: string): string {
+  const value = String(source || '').toLowerCase();
+  if (value.includes('nws') || value.includes('lsr')) return 'NWS LSR';
+  if (value.includes('spotter')) return 'Spotter';
+  return source || 'Report';
+}
+
+/** One canonical alert priority is used by the sidebar and the map context card. */
 export function sortAlertsForContext(alerts: WeatherAlert[]): WeatherAlert[] {
-  return [...alerts].sort((a, b) => warningPriority(b) - warningPriority(a) || Date.parse(b.sent || '') - Date.parse(a.sent || ''));
+  return sortAlerts(alerts);
 }
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -70,12 +87,16 @@ function Row({ label, value }: { label: string; value: string }) {
 
 function WarningCard({ alert, onSelect }: { alert: WeatherAlert; onSelect: (a: WeatherAlert) => void }) {
   const [open, setOpen] = useState(false);
+  const meta = ALERT_CATEGORY_META[alert.category] || ALERT_CATEGORY_META.warning;
   return (
     <div className="rounded-md border border-slate-700 bg-[#0f172a]">
       <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left hover:bg-[#162033]">
         <div className="min-w-0">
-          <div className="text-[11px] font-bold text-slate-100 truncate"><span className="text-amber-300 mr-1">⚠</span>{isPds(alert) ? 'PDS ' : ''}{alert.event}</div>
-          <div className="text-[10px] text-slate-500 truncate">{alert.wfo || 'Office unavailable'} · {alertExpiryLabel(alert)}</div>
+          <div className="flex items-center gap-1.5">
+            <span className={`rounded px-1.5 py-0.5 text-[8px] font-black uppercase ${meta.badge}`}>{meta.singular}</span>
+            <span className="truncate text-[11px] font-bold text-slate-100">{isPds(alert) ? 'PDS ' : ''}{alert.event}</span>
+          </div>
+          <div className="mt-0.5 truncate text-[10px] text-slate-500">{alert.wfo || 'Office unavailable'} · {alertExpiryLabel(alert)}</div>
         </div>
         <span className="text-[10px] text-slate-400">{open ? '▾' : '▸'}</span>
       </button>
@@ -101,67 +122,69 @@ function WarningCard({ alert, onSelect }: { alert: WeatherAlert; onSelect: (a: W
   );
 }
 
-export function AlertDetailsPanel({ alert, context, onClose, onSelectAlert }: Props) {
+export function AlertDetailsPanel({ alert, context, onClose, onSelectAlert, onSelectNearestRadar }: Props) {
   const [reportsOpen, setReportsOpen] = useState(false);
-  const [lsrOpen, setLsrOpen] = useState(false);
   const [fullAlertOpen, setFullAlertOpen] = useState(false);
   const contextAlerts = useMemo(() => sortAlertsForContext(context?.alerts || []), [context?.alerts]);
+  const warningCount = contextAlerts.filter((a) => a.category === 'warning').length;
   if (!alert && !context) return null;
   const nearest = context?.nearestRadarSites?.[0];
 
   return (
-    <div className="absolute left-3 top-14 z-40 w-[320px] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-xl border border-slate-700 bg-[#111827] shadow-lg text-slate-100">
-      <div className="flex items-center justify-between border-b border-slate-700 px-2.5 py-2">
+    <div className="absolute left-3 top-14 z-40 w-[292px] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-xl border border-slate-700 bg-[#111827] shadow-lg text-slate-100">
+      <div className="flex items-center justify-between border-b border-slate-700 px-2.5 py-1.5">
         <div className="text-[10px] font-black uppercase tracking-wider text-sky-300">{context ? 'What matters here' : 'Alert details'}</div>
         <button type="button" onClick={onClose} className="rounded-full px-2 py-0.5 text-slate-400 hover:bg-slate-800 hover:text-white text-xs">✕</button>
       </div>
-      <div className="max-h-[min(58vh,calc(100vh-8rem))] overflow-auto p-2.5 space-y-2">
+      <div className="max-h-[min(50vh,calc(100vh-8rem))] overflow-auto p-2.5 space-y-2">
         {context && (
           <>
-            <div className="rounded-md border border-slate-700 bg-[#0f172a] px-2 py-1.5">
-              <div className="text-[9px] font-black uppercase tracking-wider text-slate-500">Nearest Radar</div>
-              {nearest ? (
-                <button type="button" onClick={() => (window as any).__mvSelectRadarSite?.(nearest.id)} className="mt-0.5 w-full text-left hover:text-sky-300">
-                  <div className="text-[12px] font-black text-slate-100">{nearest.id}</div>
-                  <div className="text-[10px] text-slate-400">{formatDistance(nearest.distanceM)} · {bearingCardinal(nearest.bearingDeg)} ({Math.round(nearest.bearingDeg)}°)</div>
-                </button>
-              ) : <div className="text-[10px] text-slate-500">Unavailable</div>}
-            </div>
-
-            <div>
-              <div className="mb-1 text-[9px] font-black uppercase tracking-wider text-slate-500">Active warnings affecting point</div>
+            <section data-section="alerts" aria-label="Warnings and alerts">
+              <div className="mb-1 flex items-center justify-between">
+                <div className="text-[9px] font-black uppercase tracking-wider text-slate-500">Active warnings affecting point</div>
+                <span className="rounded-full bg-red-950 px-1.5 py-0.5 text-[9px] font-black text-red-200">{warningCount} warning{warningCount === 1 ? '' : 's'}</span>
+              </div>
               {contextAlerts.length ? (
                 <div className="space-y-1">
-                  {contextAlerts.map((a) => <WarningCard key={a.id} alert={a} onSelect={onSelectAlert} />)}
+                  {contextAlerts.slice(0, 4).map((a) => <WarningCard key={a.id} alert={a} onSelect={onSelectAlert} />)}
                 </div>
-              ) : <div className="rounded-md border border-slate-700 bg-[#0f172a] px-2 py-1.5 text-[10px] text-slate-500">No active warnings at this point.</div>}
-            </div>
+              ) : <div className="rounded-md border border-slate-700 bg-[#0f172a] px-2 py-1.5 text-[10px] text-slate-500">No active alerts at this point.</div>}
+            </section>
 
-            <div className="rounded-md border border-slate-700 bg-[#0f172a]">
+            <section data-section="radar" aria-label="Nearest radar" className="rounded-md border border-slate-700 bg-[#0f172a] px-2 py-1.5">
+              <div className="text-[9px] font-black uppercase tracking-wider text-slate-500">Nearest radar</div>
+              {nearest ? (
+                <button
+                  type="button"
+                  onClick={() => onSelectNearestRadar(nearest)}
+                  className="mt-0.5 w-full text-left hover:text-sky-300"
+                  title={`Select ${nearest.id} and center the map`}
+                >
+                  <div className="text-[12px] font-black text-slate-100">{nearest.id} <span className="text-[10px] font-medium text-slate-400">{nearest.name}</span></div>
+                  <div className="text-[10px] text-slate-400">{compactDistance(nearest.distanceM)} · {bearingCardinal(nearest.bearingDeg)} ({Math.round(nearest.bearingDeg)}°)</div>
+                </button>
+              ) : <div className="mt-0.5 text-[10px] text-slate-500">Unavailable</div>}
+            </section>
+
+            <section data-section="reports" aria-label="Nearby reports" className="rounded-md border border-slate-700 bg-[#0f172a]">
               <button type="button" onClick={() => setReportsOpen(v=>!v)} className="flex w-full items-center justify-between px-2 py-1.5 text-[11px] font-bold text-slate-200 hover:bg-[#162033]">
-                <span>Spotter Reports ({context.spotterReportsNearby.length})</span><span className="text-slate-500">{reportsOpen?'▾':'▸'}</span>
+                <span>Reports ({context.reportsNearby.length})</span><span className="text-slate-500">{reportsOpen?'▾':'▸'}</span>
               </button>
               {reportsOpen && (
-                <div className="border-t border-slate-700 px-2 py-1.5 space-y-1">
-                  {context.spotterReportsNearby.length ? context.spotterReportsNearby.slice(0,5).map((r) => (
-                    <div key={r.id} className="text-[10px] text-slate-300">{r.hazard || 'Report'} <span className="text-slate-500">{r.distanceM!=null ? `· ${formatDistance(r.distanceM)}` : ''}</span></div>
-                  )) : <div className="text-[10px] text-slate-500">No nearby spotter reports loaded.</div>}
+                <div className="border-t border-slate-700 px-2 py-1.5 space-y-1.5">
+                  {context.reportsNearby.length ? context.reportsNearby.slice(0, 5).map((r) => (
+                    <div key={r.id} className="text-[10px] text-slate-300">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-semibold text-slate-100">{r.hazard || 'Report'}</span>
+                        <span className="shrink-0 text-slate-500">{compactDistance(r.distanceM)}</span>
+                      </div>
+                      <div className="text-[9px] text-slate-500">{reportSource(r.source)} · {relativeAge(r.timeIso)}</div>
+                      {r.notes && <div className="truncate text-[9px] text-slate-400" title={r.notes}>{r.notes}</div>}
+                    </div>
+                  )) : <div className="text-[10px] text-slate-500">No nearby reports loaded.</div>}
                 </div>
               )}
-            </div>
-
-            <div className="rounded-md border border-slate-700 bg-[#0f172a]">
-              <button type="button" onClick={() => setLsrOpen(v=>!v)} className="flex w-full items-center justify-between px-2 py-1.5 text-[11px] font-bold text-slate-200 hover:bg-[#162033]">
-                <span>Local Storm Reports ({context.lsrNearby.length})</span><span className="text-slate-500">{lsrOpen?'▾':'▸'}</span>
-              </button>
-              {lsrOpen && (
-                <div className="border-t border-slate-700 px-2 py-1.5 space-y-1">
-                  {context.lsrNearby.length ? context.lsrNearby.slice(0,5).map((r) => (
-                    <div key={r.id} className="text-[10px] text-slate-300">{r.hazard || 'LSR'} <span className="text-slate-500">{r.distanceM!=null ? `· ${formatDistance(r.distanceM)}` : ''}</span></div>
-                  )) : <div className="text-[10px] text-slate-500">No nearby local storm reports loaded.</div>}
-                </div>
-              )}
-            </div>
+            </section>
           </>
         )}
 
@@ -191,7 +214,7 @@ export function AlertDetailsPanel({ alert, context, onClose, onSelectAlert }: Pr
 export function buildLocationContext(lat: number, lon: number, alerts: WeatherAlert[], radarSites: Array<{id:string;name:string;lat:number;lon:number}>, reports: any[], mcdFeatures: any[]): LocationContext {
   const containing = alerts.filter((a) => a.geometry && pointInGeometry([lon, lat], a.geometry));
   const nearestRadarSites = radarSites.map((s) => ({
-    id: s.id, name: s.name,
+    id: s.id, name: s.name, lat: s.lat, lon: s.lon,
     distanceM: distanceMeters([lon,lat],[s.lon,s.lat]),
     bearingDeg: bearingDeg(lat, lon, s.lat, s.lon),
   })).sort((a,b)=>a.distanceM-b.distanceM).slice(0,3);
@@ -204,6 +227,7 @@ export function buildLocationContext(lat: number, lon: number, alerts: WeatherAl
   }).filter((r:any)=>r.distanceM!=null && r.distanceM <= 160934).sort((a:any,b:any)=>(a.distanceM||0)-(b.distanceM||0));
   const lsrNearby = nearbyReports.filter((r:any)=>String(r.source||'').toLowerCase().includes('nws') || String(r.source||'').toLowerCase().includes('lsr'));
   const spotterReportsNearby = nearbyReports.filter((r:any)=>!lsrNearby.includes(r));
+  const reportsNearby = nearbyReports;
   const mcdNearby = (mcdFeatures || []).map((f:any, idx:number) => {
     const id = String(f?.properties?.id || f?.properties?.mcdNumber || idx);
     const title = String(f?.properties?.name || f?.properties?.title || `MCD ${f?.properties?.mcdNumber || ''}`);
@@ -214,5 +238,5 @@ export function buildLocationContext(lat: number, lon: number, alerts: WeatherAl
     { label: 'MCDs', status: (mcdFeatures?.length ? 'Available' : 'Unavailable') as 'Available'|'Unavailable', detail: mcdFeatures?.length ? `${mcdFeatures.length} loaded` : 'No MCD features loaded' },
     { label: 'MPDs', status: 'Unavailable' as const, detail: 'No verified MPD feed integrated in this view' },
   ];
-  return { lat, lon, alerts: sortAlertsForContext(containing), nearestRadarSites, spotterReportsNearby, lsrNearby, mcdNearby, spcProducts };
+  return { lat, lon, alerts: sortAlertsForContext(containing), nearestRadarSites, reportsNearby, spotterReportsNearby, lsrNearby, mcdNearby, spcProducts };
 }

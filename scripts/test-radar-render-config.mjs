@@ -10,6 +10,8 @@ assert.match(src, /rasterResampling:\s*'nearest'/, 'radar should default to near
 assert.match(src, /rasterResampling:\s*'linear'/, 'satellite should use linear');
 assert.match(src, /does not enable unverified products/i, 'must document no unverified enablement');
 assert.doesNotMatch(src, /availability:\s*'WORKING'/, 'render config must not alter capability availability');
+assert.match(src, /does not claim raw super-resolution Level II/i, 'render config must disclaim super-resolution decoding');
+assert.match(src, /no maxzoom cap/i, 'render config must document preserved overzoom');
 
 const radarMap = fs.readFileSync('components/RadarMap.tsx', 'utf8');
 assert.match(radarMap, /getRadarRasterRenderConfig\(\{ mode, product \}\)/, 'RadarMap must use render config');
@@ -34,5 +36,13 @@ assert.doesNotMatch(radarMap, /getLayer\('radar-layer'\)/, 'layer ordering must 
 assert.match(radarMap, /satelliteSourceConfigRef/, 'satellite bounds/maxzoom changes must rebuild the source');
 assert.doesNotMatch(radarMap, /getSatelliteProbeTile\(satSel\)\s*\|\|\s*'0\/0\/0'/, 'unstable satellite probes must not fall back to a blank world tile');
 assert.doesNotMatch(radarMap, /setSweepAngle/, 'reveal animation must not set React state per frame');
+
+// Phase 4B: active product labels must not claim super-resolution when the
+// capability matrix says superResolutionSupport is UNKNOWN and the app renders
+// IEM-provided raster tiles.
+for (const file of ['components/WeatherWiseRadarCard.tsx', 'components/FloatingProductPanel.tsx', 'components/SynchronizedQuadView.tsx', 'lib/data-sources.ts']) {
+  const text = fs.readFileSync(file, 'utf8');
+  assert.doesNotMatch(text, /Super[- ]Res(?:olution)?/i, `${file} must not claim super-resolution`);
+}
 
 console.log('PASS: radar render config and map integrity contract');

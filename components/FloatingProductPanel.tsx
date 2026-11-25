@@ -5,6 +5,12 @@ import { getRadarCapability } from '../lib/radar/capability-matrix';
 import { getSatelliteCapability } from '../lib/satellite/capability-matrix';
 import { MainNavTab, SpcDay } from './MainNavbar';
 import { RADAR_SITES } from '../lib/radar-config';
+import {
+  getCatalogProductViews,
+  PRODUCT_DOMAINS,
+  categoriesForDomain,
+  type ProductDomain,
+} from '../lib/radar/product-catalog';
 
 type Props = {
   tab: MainNavTab;
@@ -56,53 +62,9 @@ type Props = {
   onSelectSpcDay?: (day: SpcDay) => void;
 };
 
-type RadarCategory = 'Reflectivity' | 'Velocity' | 'Dual-Pol' | 'Severe Weather' | 'Derived Products' | 'Research';
-
-const RADAR_PRODUCT_KEYS: Array<{ key: string; capId: string; short: string; label: string; category: RadarCategory }> = [
-  { key: 'ref', capId: 'ref', short: 'REF', label: 'Super-Resolution Reflectivity', category: 'Reflectivity' },
-  { key: 'max_ref', capId: 'max_ref', short: 'MAX', label: 'Maximum Reflectivity', category: 'Reflectivity' },
-  { key: 'vel', capId: 'vel', short: 'VEL', label: 'Super-Resolution Velocity', category: 'Velocity' },
-  { key: 'srvel', capId: 'srvel', short: 'SRV', label: 'Storm-Relative Velocity', category: 'Velocity' },
-  { key: 'sw', capId: 'sw', short: 'SW', label: 'Spectrum Width', category: 'Velocity' },
-  { key: 'cc', capId: 'cc', short: 'CC', label: 'Correlation Coefficient', category: 'Dual-Pol' },
-  { key: 'zdr', capId: 'zdr', short: 'ZDR', label: 'Differential Reflectivity', category: 'Dual-Pol' },
-  { key: 'kdp', capId: 'kdp', short: 'KDP', label: 'Specific Differential Phase', category: 'Dual-Pol' },
-  { key: 'hhc', capId: 'hhc', short: 'HHC', label: 'Hydrometeor Classification', category: 'Dual-Pol' },
-  { key: 'min_cc', capId: 'min_cc', short: 'MCC', label: 'Minimum Correlation Coefficient', category: 'Dual-Pol' },
-  { key: 'norm_vel', capId: 'nrot', short: 'NROT', label: 'Normalized Rotation', category: 'Severe Weather' },
-  { key: 'azshear', capId: 'azshear', short: 'AZ', label: 'Azimuthal Shear', category: 'Severe Weather' },
-  { key: 'rotation_tracks', capId: 'rotation_tracks', short: 'TRK', label: 'Rotation Tracks', category: 'Severe Weather' },
-  { key: 'hail_detection', capId: 'hail_detection', short: 'HAIL', label: 'Hail Severity Index (SHI)', category: 'Severe Weather' },
-  { key: 'mesh', capId: 'mesh', short: 'MESH', label: 'Maximum Estimated Size of Hail', category: 'Severe Weather' },
-  { key: 'tops', capId: 'tops', short: 'ET', label: 'Echo Tops', category: 'Derived Products' },
-  { key: 'vil', capId: 'vil', short: 'VIL', label: 'Vertically Integrated Liquid', category: 'Derived Products' },
-  { key: 'vil_density', capId: 'vil_density', short: 'VILD', label: 'VIL Density', category: 'Derived Products' },
-  { key: 'qpe', capId: 'qpe', short: 'QPE', label: '1-Hour MultiSensor QPE', category: 'Derived Products' },
-  { key: 'precip_rate', capId: 'precip_rate', short: 'RATE', label: 'Precipitation Rate', category: 'Derived Products' },
-  { key: 'rain_mix_snow', capId: 'rain_mix_snow', short: 'RMS', label: 'Surface Precipitation Type', category: 'Derived Products' },
-  { key: 'cross_section', capId: 'cross_section', short: 'XSEC', label: 'Reflectivity Cross Sections', category: 'Research' },
-  { key: 'gate_to_gate_shear', capId: 'gate_to_gate_shear', short: 'GATE', label: 'Gate-to-Gate Velocity Shear', category: 'Research' },
-  { key: 'storm_analysis', capId: 'storm_analysis', short: 'ANLZ', label: 'Radar-Derived Storm Analysis', category: 'Research' },
-  { key: 'volume_scan', capId: 'volume_scan', short: 'VOL', label: 'Volume Scans / Elevation Selection', category: 'Research' },
-  { key: 'tilt_selection', capId: 'tilt_selection', short: 'TILT', label: 'Individual Tilt Selection', category: 'Research' },
-];
-
-const RADAR_CATEGORIES: RadarCategory[] = ['Reflectivity', 'Velocity', 'Dual-Pol', 'Severe Weather', 'Derived Products', 'Research'];
-
-function radarProductsWithAvailability() {
-  return RADAR_PRODUCT_KEYS.map((p) => {
-    const cap = getRadarCapability(p.capId);
-    const available = cap?.availability === 'WORKING' || cap?.availability === 'PARTIAL';
-    const reason = !available ? (cap?.unavailableReason || 'DATA UNAVAILABLE - No verified source.') : undefined;
-    const warning = cap?.availability === 'PARTIAL' ? 'PARTIAL - Limited verification' : undefined;
-    return { ...p, available, reason, warning };
-  });
-}
-const RADAR_PRODUCTS = radarProductsWithAvailability();
-
-const COMPOSITE_PRODUCTS = [
-  { key: 'comp_ref', label: 'Composite Reflectivity (N0Q)' },
-];
+const CATALOG_PRODUCTS = getCatalogProductViews();
+const RADAR_PRODUCTS = CATALOG_PRODUCTS.filter((p) => p.domain === 'RADAR');
+const COMPOSITE_PRODUCTS = CATALOG_PRODUCTS.filter((p) => p.domain === 'COMPOSITE');
 
 const SATELLITE_PRODUCTS = [
   { key: 'goes_east', capId: 'goes_east', label: 'GOES-East' },
@@ -221,6 +183,64 @@ export function FloatingProductPanel({
   const productTilts = getRadarCapability(product)?.tiltSupport;
   const supportedTilts = productTilts?.length ? productTilts : ['0.5'];
 
+  const renderDomainList = (domain: ProductDomain, items: typeof CATALOG_PRODUCTS, onSelect: (key: string) => void) => {
+    const definition = PRODUCT_DOMAINS.find((d) => d.id === domain);
+    return (
+      <div data-product-domain-group={domain}>
+        <div className="mb-1">
+          <div className="text-[10px] font-black uppercase tracking-wider text-sky-400">{definition?.label || domain}</div>
+          <div className="text-[9px] leading-snug text-slate-500">{definition?.description}</div>
+        </div>
+        <div className="max-h-64 overflow-auto rounded-md border border-slate-700 bg-[#0f172a]">
+          {categoriesForDomain(domain).map((category) => {
+            const categoryItems = items.filter((p) => p.category === category);
+            if (!categoryItems.length) return null;
+            return (
+              <div key={category} className="border-b border-slate-700 last:border-b-0">
+                <div className="sticky top-0 bg-[#111827] px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-slate-500 border-b border-slate-700">{category}</div>
+                {categoryItems.map((p) => {
+                  const active = p.key === product;
+                  const unavailable = !p.available;
+                  const status = unavailable ? 'DATA UNAVAILABLE' : p.warning ? 'PARTIAL' : 'AVAILABLE';
+                  const style = (p.key === 'ref' || p.key === 'max_ref')
+                    ? 'bg-gradient-to-br from-emerald-900/60 via-yellow-900/40 to-red-900/50'
+                    : (p.key === 'vel' || p.key === 'srvel' || p.key === 'sw')
+                    ? 'bg-gradient-to-r from-green-900/50 to-red-900/50'
+                    : (p.key === 'cc' || p.key === 'min_cc' || p.key === 'zdr' || p.key === 'kdp')
+                    ? 'bg-gradient-to-br from-sky-900/50 via-emerald-900/30 to-amber-900/40'
+                    : (p.key === 'azshear' || p.key === 'rotation_tracks')
+                    ? 'bg-gradient-to-r from-fuchsia-900/50 to-indigo-900/50'
+                    : 'bg-gradient-to-br from-slate-800 to-slate-900';
+                  return (
+                    <button
+                      key={p.key}
+                      type="button"
+                      disabled={unavailable}
+                      data-product-domain={domain}
+                      data-product-category={p.category}
+                      onClick={() => !unavailable && onSelect(p.key)}
+                      title={unavailable ? p.reason : p.warning || p.label}
+                      className={`grid w-full grid-cols-[3.5rem_minmax(0,1fr)_auto] items-center gap-2 border-t border-slate-700 px-2 py-1.5 text-left first:border-t-0 ${active ? 'bg-[#162033]' : unavailable ? 'opacity-55 cursor-not-allowed' : 'hover:bg-[#162033]'}`}
+                    >
+                      <div className={`flex h-11 items-center justify-center rounded border ${active ? 'border-sky-600' : 'border-slate-700'} ${style}`}>
+                        <span className="text-base font-black tracking-wide text-slate-100">{p.short}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="truncate text-[11px] font-bold text-slate-200">{p.label}</div>
+                        <div className={`text-[9px] font-bold uppercase tracking-wide ${unavailable ? 'text-slate-500' : p.warning ? 'text-amber-300' : 'text-emerald-400'}`}>{status}</div>
+                      </div>
+                      {active ? <span className="text-[9px] font-black text-sky-300 pr-1">SELECTED</span> : <span className="w-10" />}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="absolute bottom-4 left-4 z-30 w-80 sm:w-84 max-h-[82vh] flex flex-col rounded-3xl border border-slate-800 bg-[#0b1220] font-sans text-slate-100 shadow-2xl select-none overflow-hidden transition-all">
       {/* Header with Title and Minimize Button (Section 3) */}
@@ -317,55 +337,8 @@ export function FloatingProductPanel({
           {/* DYNAMIC PRODUCT CONTROLS: RADAR / 3D RADAR */}
           {(tab === 'Radar' || tab === '3D Radar') && (
             <>
-              {/* Product Selector */}
-              <div>
-                <div className="mb-1 flex items-center justify-between">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Radar Product</label>
-                  <span className="text-[9px] text-slate-500">Verified availability shown</span>
-                </div>
-                <div className="max-h-64 overflow-auto rounded-md border border-slate-700 bg-[#0f172a]">
-                  {RADAR_CATEGORIES.map((category) => {
-                    const items = RADAR_PRODUCTS.filter((p) => p.category === category);
-                    if (!items.length) return null;
-                    return (
-                      <div key={category} className="border-b border-slate-700 last:border-b-0">
-                        <div className="sticky top-0 bg-[#111827] px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-slate-500 border-b border-slate-700">{category}</div>
-                        {items.map((p) => {
-                          const active = p.key === product;
-                          const unavailable = !p.available;
-                          const status = unavailable ? 'DATA UNAVAILABLE' : p.warning ? 'PARTIAL' : 'AVAILABLE';
-                          const style = (p.key === 'ref' || p.key === 'max_ref' || p.key === 'ref_x')
-                            ? 'bg-gradient-to-br from-emerald-900/60 via-yellow-900/40 to-red-900/50'
-                            : (p.key === 'vel' || p.key === 'srvel' || p.key === 'norm_vel' || p.key === 'sw')
-                            ? 'bg-gradient-to-r from-green-900/50 to-red-900/50'
-                            : (p.key === 'cc' || p.key === 'min_cc' || p.key === 'zdr' || p.key === 'kdp')
-                            ? 'bg-gradient-to-br from-sky-900/50 via-emerald-900/30 to-amber-900/40'
-                            : 'bg-gradient-to-br from-slate-800 to-slate-900';
-                          return (
-                            <button
-                              key={p.key}
-                              type="button"
-                              disabled={unavailable}
-                              onClick={() => !unavailable && onSelectProduct(p.key)}
-                              title={unavailable ? p.reason : p.warning || p.label}
-                              className={`grid w-full grid-cols-[3.5rem_minmax(0,1fr)_auto] items-center gap-2 border-t border-slate-700 px-2 py-1.5 text-left first:border-t-0 ${active ? 'bg-[#162033]' : unavailable ? 'opacity-55 cursor-not-allowed' : 'hover:bg-[#162033]'}`}
-                            >
-                              <div className={`flex h-11 items-center justify-center rounded border ${active ? 'border-sky-600' : 'border-slate-700'} ${style}`}>
-                                <span className="text-base font-black tracking-wide text-slate-100">{p.short}</span>
-                              </div>
-                              <div className="min-w-0">
-                                <div className="truncate text-[11px] font-bold text-slate-200">{p.label}</div>
-                                <div className={`text-[9px] font-bold uppercase tracking-wide ${unavailable ? 'text-slate-500' : p.warning ? 'text-amber-300' : 'text-emerald-400'}`}>{status}</div>
-                              </div>
-                              {active ? <span className="text-[9px] font-black text-sky-300 pr-1">SELECTED</span> : <span className="w-10" />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              {/* Product Selector — single-site radar products only. */}
+              {renderDomainList('RADAR', RADAR_PRODUCTS, onSelectProduct)}
 
               {/* Station Selector */}
               <div>
@@ -409,25 +382,8 @@ export function FloatingProductPanel({
             </>
           )}
 
-          {/* DYNAMIC PRODUCT CONTROLS: COMPOSITE */}
-          {tab === 'Composite' && (
-            <div>
-              <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Composite Product
-              </label>
-              <select
-                value={product}
-                onChange={(e) => onSelectProduct(e.target.value)}
-                className="w-full rounded-md border border-slate-700 bg-slate-900 p-2 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none"
-              >
-                {COMPOSITE_PRODUCTS.map((p) => (
-                  <option key={p.key} value={p.key}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* DYNAMIC PRODUCT CONTROLS: COMPOSITE — multi-radar products only. */}
+          {tab === 'Composite' && renderDomainList('COMPOSITE', COMPOSITE_PRODUCTS, onSelectProduct)}
 
           {/* DYNAMIC PRODUCT CONTROLS: SATELLITE */}
           {tab === 'Satellite' && (
@@ -653,7 +609,7 @@ export function FloatingProductPanel({
               { label: '⚡ Blitzortung Live Lightning', checked: showLightning, toggle: onToggleLightning },
               { label: '🌪️ Local Storm Reports (LSR)', checked: showLSR, toggle: onToggleLSR },
               { label: '🛡️ Severe Watch Boxes', checked: showWatches, toggle: onToggleWatches },
-              { label: '↗️ SCIT Storm Tracks', checked: showStormTracks, toggle: onToggleStormTracks },
+              { label: '↗️ MRMS Rotation Tracks (30-min raster)', checked: showStormTracks, toggle: onToggleStormTracks },
               { label: '📡 Radar Station Badges', checked: showRadarPills, toggle: onToggleRadarPills },
               { label: '⭕ Radar Range Rings (50-150nm)', checked: showRangeRings, toggle: onToggleRangeRings },
               { label: '🗺️ County Boundaries', checked: showCountyBoundaries, toggle: onToggleCountyBoundaries },

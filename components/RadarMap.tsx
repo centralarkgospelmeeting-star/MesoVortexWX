@@ -1,13 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { RADAR_SITES } from '../lib/radar-config';
 import { computeMaxReflectivityCanvas, interpolateReflectivityFrames } from '../lib/max-reflectivity';
 import { registerSyncedMap } from '../lib/map-sync';
-import { ALERT_CATEGORY_META, formatAlertTime, type WeatherAlert } from '../lib/alerts/model';
 import {
   DEFAULT_SATELLITE_SELECTION,
   getSatelliteProbeTile,
@@ -20,6 +19,7 @@ import {
 import { buildBasemapStyle } from '../lib/map/basemap-styles';
 import { getModelById } from '../lib/model-registry';
 import { getRadarRasterRenderConfig } from '../lib/radar/render-config';
+import { getProductLegendInfo } from './UniversalLegend';
 import { distanceMeters, formatArea, formatDistance, polygonAreaMeters2, polylineMeters, type LngLat } from '../lib/map-tools/geo';
 
 // Next/webpack bundles maplibre-gl, so the library's relative worker URL
@@ -81,6 +81,8 @@ export interface RadarMapProps {
   showMCD?: boolean;
   showSpotters?: boolean; // people/positions layer
   showSpotterReports?: boolean; // report events layer
+  /** Overlay the live MRMS 30-minute rotation-track raster on single-site radar. */
+  showStormTracks?: boolean;
   spotterFilters?: {
     tornado?: boolean;
     funnel?: boolean;
@@ -136,6 +138,8 @@ const RADAR_PREVIOUS_SOURCE_ID = 'mv-radar-previous-source';
 const RADAR_PREVIOUS_LAYER_ID = 'mv-radar-previous-layer';
 const SATELLITE_SOURCE_ID = 'mv-satellite-source';
 const SATELLITE_LAYER_ID = 'mv-satellite-layer';
+const ROTATION_SOURCE_ID = 'mv-rotation-tracks-source';
+const ROTATION_LAYER_ID = 'mv-rotation-tracks-layer';
 const RASTER_SOURCE_IDS = [RADAR_SOURCE_ID, RADAR_PREVIOUS_SOURCE_ID, SATELLITE_SOURCE_ID];
 const FASTSCAN_REVEAL_MS = 6000;
 const WARNINGS_SOURCE_ID = 'mv-warnings-source';
@@ -309,6 +313,7 @@ export function RadarMap({
   showMCD = true,
   showSpotters = false,
   showSpotterReports = false,
+  showStormTracks = false,
   spotterFilters = {
     tornado: true,
     funnel: true,
@@ -350,6 +355,8 @@ export function RadarMap({
   const [scanIngesting, setScanIngesting] = useState(false);
   const [scanIngestDismissed, setScanIngestDismissed] = useState(false);
   const [fastScanStatus, setFastScanStatus] = useState<{ available: boolean; scanTime: string | null; source: string | null }>({ available: false, scanTime: null, source: null });
+  const [rotationStatus, setRotationStatus] = useState<{ visible: boolean; time: string | null; source: string | null; error: string | null }>({ visible: false, time: null, source: null, error: null });
+  const rotationLegend = useMemo(() => getProductLegendInfo('rotation_tracks').steps, []);
   const [inspectionResult, setInspectionResult] = useState<{ lat: number; lon: number; product: string; site: string; tilt: string; time: string; value: string; note?: string } | null>(null);
   const [toolMeasurements, setToolMeasurements] = useState<MapToolMeasurement[]>([]);
   const [toolDrawings, setToolDrawings] = useState<MapToolDrawing[]>([]);
@@ -362,6 +369,11 @@ export function RadarMap({
   const lastFrameRef = useRef<{ time: string; product: string; site: string; tilt: string }>({ time: '', product: '', site: '', tilt: '' });
   const isRadarMode = mode === 'Radar' || mode === '3D Radar';
   const radarVisualsEnabled = isRadarMode; // beam/sweep/towers/pills/range rings/scan-ingest visuals
+  const normalizedProduct = String(product || '').trim().toLowerCase();
+  const rotationIsBaseProduct = normalizedProduct === 'rotation_tracks' || normalizedProduct === 'trk';
+  // The overlay is live MRMS raster imagery, not SCIT track objects. When the
+  // rotation raster is already the base product, do not draw it twice.
+  const rotationOverlayEnabled = radarVisualsEnabled && showStormTracks && !rotationIsBaseProduct;
   const fastScanEnabled = radarVisualsEnabled && (fastScanProp ?? showFastScan);
   // The beam is not decoration: it only exists during a verified scan reveal.
   const sweepEnabled = radarVisualsEnabled && scanIngesting;
@@ -776,34 +788,9 @@ export function RadarMap({
       map.on('click', WARNINGS_FILL_ID, (e) => {
         const props = e.features?.[0]?.properties;
         if (!props) return;
+        // One compact AlertDetailsPanel owns the workflow; do not open a second
+        // raw MapLibre popup for the same warning click.
         if (onSelectWarningRef.current) onSelectWarningRef.current(props);
-
-        const category = String(props.category || 'warning');
-        const meta = ALERT_CATEGORY_META[category as keyof typeof ALERT_CATEGORY_META] || ALERT_CATEGORY_META.warning;
-        const headline = escapeHtml(props.headline || props.event || 'Active Alert');
-        const area = escapeHtml(props.areaDesc || '');
-        const event = escapeHtml(props.event || 'Weather Alert');
-        const severity = escapeHtml(props.severity || 'Unknown');
-        const expires = props.expires ? escapeHtml(formatAlertTime(String(props.expires))) : 'Unavailable';
-        const color = escapeHtml(String(props.color || '#dc2626'));
-
-        new maplibregl.Popup({ closeButton: true, offset: 12, maxWidth: '320px' })
-          .setLngLat(e.lngLat)
-          .setHTML(
-            `<div style="font-family:system-ui;padding:8px;max-width:300px;color:#0f172a;">
-              <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
-                <span style="background:${color};color:#fff;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:900;text-transform:uppercase;">
-                  ${escapeHtml(meta.singular)}
-                </span>
-                <span style="font-size:10px;font-weight:700;color:#475569;">${severity}</span>
-              </div>
-              <div style="font-size:12px;font-weight:800;line-height:1.35;color:#0f172a;">${event}</div>
-              <div style="font-size:11px;color:#334155;margin-top:5px;line-height:1.35;">${headline}</div>
-              ${area ? `<div style="font-size:10px;color:#64748b;margin-top:6px;">${area}</div>` : ''}
-              <div style="font-size:10px;color:#64748b;margin-top:4px;">Expires: ${expires}</div>
-            </div>`
-          )
-          .addTo(map);
       });
       map.on('mouseenter', WARNINGS_FILL_ID, () => {
         map.getCanvas().style.cursor = 'pointer';
@@ -915,10 +902,10 @@ export function RadarMap({
               : null;
           const info = props.info ? escapeHtml(props.info).slice(0, 280) : '';
 
-          new maplibregl.Popup({ closeButton: true, offset: 12, maxWidth: '320px' })
+          new maplibregl.Popup({ closeButton: true, offset: 12, maxWidth: '280px', className: 'mv-spotter-popup' })
             .setLngLat(e.lngLat)
             .setHTML(
-              `<div style="font-family:system-ui;padding:8px;background:#faf5ff;color:#1e1b4b;border-radius:10px;max-width:310px;border:1px solid #d8b4fe;">
+              `<div style="font-family:system-ui;padding:8px;background:#faf5ff;color:#1e1b4b;border-radius:10px;max-width:270px;border:1px solid #d8b4fe;">
                 <div style="display:inline-block;background:#9333ea;color:#fff;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:900;letter-spacing:0.04em;">SPC MCD</div>
                 <div style="font-size:13px;font-weight:800;margin-top:6px;line-height:1.3;">${escapeHtml(props.name || `Mesoscale Discussion ${props.discussionNumber || ''}`)}</div>
                 <div style="font-size:10px;color:#6b21a8;margin-top:5px;line-height:1.5;">
@@ -1078,9 +1065,9 @@ export function RadarMap({
           const source = escapeHtml(props.advisorySource || 'NHC');
           const wind = props.maxWindKt !== '' && props.maxWindKt != null ? `${escapeHtml(String(props.maxWindKt))} kt` : 'Unavailable';
           const pres = props.pressureMb !== '' && props.pressureMb != null ? `${escapeHtml(String(props.pressureMb))} mb` : 'Unavailable';
-          new maplibregl.Popup({ closeButton: true, offset: 12, maxWidth: '340px' })
+          new maplibregl.Popup({ closeButton: true, offset: 12, maxWidth: '280px', className: 'mv-spotter-popup' })
             .setLngLat(e.lngLat)
-            .setHTML(`<div style="font-family:system-ui;padding:10px;color:#0f172a;max-width:320px;">
+            .setHTML(`<div style="font-family:system-ui;padding:10px;color:#0f172a;max-width:270px;">
               <div style="display:inline-block;background:#dc2626;color:#fff;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:900;letter-spacing:0.04em;">ACTIVE TROPICAL CYCLONE</div>
               <div style="font-size:15px;font-weight:900;margin-top:6px;color:#111827;">${name}</div>
               <div style="font-size:11px;color:#334155;margin-top:6px;line-height:1.55;">
@@ -1487,6 +1474,76 @@ export function RadarMap({
     },
     [mode, product, tilt, maxRefWindow, site.radarId, radarOpacity, fastScanEnabled, onNewScan, playbackIndex, playbackActive, startReveal, satelliteSelection?.bird, satelliteSelection?.sector, satelliteSelection?.productId]
   );
+
+  /**
+   * Live MRMS rotation-track overlay. This uses the existing verified
+   * RotationTrack30min raster route only. It is a rolling 30-minute grid
+   * maximum: no track objects, mesocyclone IDs, or temporal history are
+   * synthesized. When the rotation grid is the base product, no duplicate
+   * overlay is added.
+   */
+  const updateRotationTracks = useCallback(async (map: MapLibreMap) => {
+    if (!rotationOverlayEnabled) {
+      if (map.getLayer(ROTATION_LAYER_ID)) map.removeLayer(ROTATION_LAYER_ID);
+      if (map.getSource(ROTATION_SOURCE_ID)) map.removeSource(ROTATION_SOURCE_ID);
+      setRotationStatus({ visible: false, time: null, source: null, error: null });
+      return;
+    }
+
+    const tileUrl = '/api/radar/mrms-tile?product=rotation_tracks&z={z}&x={x}&y={y}';
+    const beforeId = map.getLayer(WARNINGS_FILL_ID) ? WARNINGS_FILL_ID : undefined;
+    const existing = map.getSource(ROTATION_SOURCE_ID) as any;
+    if (existing && typeof existing.setTiles === 'function') {
+      existing.setTiles([tileUrl]);
+    } else {
+      if (map.getLayer(ROTATION_LAYER_ID)) map.removeLayer(ROTATION_LAYER_ID);
+      if (existing) map.removeSource(ROTATION_SOURCE_ID);
+      map.addSource(ROTATION_SOURCE_ID, {
+        type: 'raster',
+        tiles: [tileUrl],
+        tileSize: 256,
+        scheme: 'xyz',
+      });
+    }
+    if (!map.getLayer(ROTATION_LAYER_ID)) {
+      map.addLayer(
+        {
+          id: ROTATION_LAYER_ID,
+          type: 'raster',
+          source: ROTATION_SOURCE_ID,
+          paint: {
+            'raster-opacity': 0.62,
+            'raster-resampling': 'nearest',
+            'raster-fade-duration': 0,
+          },
+        },
+        beforeId
+      );
+    }
+
+    try {
+      // Probe the same endpoint once to surface real grid time from response
+      // headers. MapLibre fetches the visible tiles directly; headers are not
+      // available from those tile requests.
+      const probe = await fetch('/api/radar/mrms-tile?product=rotation_tracks&z=0&x=0&y=0', { cache: 'no-store' });
+      if (!probe.ok) throw new Error(`HTTP ${probe.status}`);
+      setRotationStatus({
+        visible: true,
+        time: probe.headers.get('X-MesoVortex-Time'),
+        source: probe.headers.get('X-MesoVortex-Source') || 'MRMS-RotationTrack30min',
+        error: null,
+      });
+    } catch (e: any) {
+      if (map.getLayer(ROTATION_LAYER_ID)) map.removeLayer(ROTATION_LAYER_ID);
+      if (map.getSource(ROTATION_SOURCE_ID)) map.removeSource(ROTATION_SOURCE_ID);
+      setRotationStatus({
+        visible: false,
+        time: null,
+        source: null,
+        error: `DATA UNAVAILABLE - MRMS rotation raster failed: ${String(e?.message || e)}`,
+      });
+    }
+  }, [rotationOverlayEnabled]);
 
   const updateRangeRings = useCallback((map: MapLibreMap, lat: number, lon: number) => {
     const geojson = makeRangeRings(lat, lon);
@@ -1994,6 +2051,12 @@ export function RadarMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
+    void updateRotationTracks(map);
+  }, [mapReady, rotationOverlayEnabled, updateRotationTracks]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
     if (!radarVisualsEnabled || !showRangeRings) {
       removeRangeRings(map);
       return;
@@ -2281,6 +2344,31 @@ export function RadarMap({
           {fastScanStatus.available
             ? `FASTSCAN READY · VERIFIED ${fastScanStatus.scanTime?.replace('T', ' ').replace('Z', ' UTC') || 'SCAN'}`
             : 'FASTSCAN LIVE ONLY · NO VERIFIED SCAN TIME'}
+        </div>
+      )}
+
+      {rotationOverlayEnabled && (
+        <div data-rotation-status="mrms" className="absolute bottom-24 right-3 z-30 w-[min(16rem,calc(100vw-1.5rem))] rounded-xl border border-fuchsia-500/50 bg-[#0b1220]/95 px-2.5 py-2 font-mono text-[10px] text-slate-200 shadow-2xl">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-bold text-fuchsia-300">MRMS ROTATION TRACKS</span>
+            <span className="text-slate-500">30-MIN MAX</span>
+          </div>
+          {rotationStatus.error ? (
+            <div className="mt-1 text-amber-300">{rotationStatus.error}</div>
+          ) : (
+            <div className="mt-1 truncate text-slate-400">
+              {rotationStatus.source || 'MRMS-RotationTrack30min'} ·{' '}
+              {rotationStatus.time ? `VERIFIED ${rotationStatus.time.replace('T', ' ').replace('Z', ' UTC')}` : 'LOADING LIVE GRID'}
+            </div>
+          )}
+          <div className="mt-1.5 flex h-2 overflow-hidden rounded-full border border-slate-700">
+            {rotationLegend.map((step, i) => (
+              <div key={`${step.label}-${i}`} className="flex-1" style={{ background: step.color }} title={`${step.label} — ${step.meaning}`} />
+            ))}
+          </div>
+          <div className="mt-1 text-[9px] leading-snug text-slate-500">
+            Rolling grid maximum. No mesocyclone IDs or projected track objects are claimed.
+          </div>
         </div>
       )}
 

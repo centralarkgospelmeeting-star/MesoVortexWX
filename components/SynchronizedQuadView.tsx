@@ -11,7 +11,7 @@ type QuadProps = {
 };
 
 const QUAD_PRODUCTS = [
-  { key: 'N0B', label: 'Super-Res Reflectivity (0.5°)', code: 'ref' },
+  { key: 'N0B', label: 'Reflectivity (0.5°)', code: 'ref' },
   { key: 'N0U', label: 'Base Velocity (0.5°)', code: 'vel' },
   { key: 'N0C', label: 'Correlation Coefficient (CC)', code: 'cc' },
   { key: 'N0S', label: 'Storm Relative Motion (SRM)', code: 'srvel' },
