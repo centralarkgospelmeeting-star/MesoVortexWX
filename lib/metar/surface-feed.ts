@@ -60,8 +60,16 @@ export function buildUpstreamUrl(query: SurfaceQuery): string | null {
   const url = new URL('https://aviationweather.gov/api/data/metar');
   url.searchParams.set('format', 'geojson');
   url.searchParams.set('hours', String(normalizedHours(query.hours)));
-  if (ids) url.searchParams.set('ids', ids.join(','));
-  if (bbox) url.searchParams.set('bbox', bbox.join(','));
+  if (ids) {
+    url.searchParams.set('ids', ids.join(','));
+  }
+  if (bbox) {
+    // AviationWeather requires bbox + zoom/density and rejects float noise
+    // (e.g. 31.700000000000003), so round to 3 decimals and send both params.
+    url.searchParams.set('bbox', bbox.map((n) => Number(n.toFixed(3))).join(','));
+    url.searchParams.set('zoom', '6');
+    url.searchParams.set('density', '1');
+  }
   return url.toString();
 }
 

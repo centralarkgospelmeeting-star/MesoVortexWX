@@ -28,6 +28,10 @@ Optional fields:
 - **Visibility / pressure tendency / sea-level pressure** are shown only where reported. Pressure tendency is NDBC `PTDY` only; it is never inferred for METAR/IEM/PWS.
 - Derived relative humidity is explicitly labeled `87% (derived)` and computed only from reported temperature and dew point.
 
+### Upstream API note (AviationWeather bbox contract)
+
+AviationWeather tightened `/api/data/metar`: a `bbox` request now also requires `zoom` and `density`, and coordinates with float noise (e.g. `31.700000000000003`) are rejected with HTTP 400 (`Must specify station IDs or bounding box, zoom, and density`). `buildUpstreamUrl` rounds the bbox to 3 decimals and sends `zoom=6&density=1`, so METAR/AVIATION layers return 200 with real reports. The Phase 4C guard asserts this contract to prevent regression.
+
 ## 2. Supported station networks (plotted today)
 
 - **METAR + SPECI** (AviationWeather.gov) — METAR layer.

@@ -69,6 +69,9 @@ const metarFeed = read('lib/metar/surface-feed.ts');
 assert.match(metarFeed, /altimHpa \/ 33\.8638866667/, 'AWC altim hPa must be converted to inHg');
 assert.match(metarFeed, /seaLevelPressureHpa/, 'real AWC sea-level pressure must be preserved');
 assert.match(metarFeed, /\^SPECI\\b/, 'SPECI reports must be classified from the real raw report');
+assert.match(metarFeed, /zoom/, 'AWC bbox requests must include zoom');
+assert.match(metarFeed, /density/, 'AWC bbox requests must include density');
+assert.match(metarFeed, /toFixed\(3\)/, 'AWC bbox must be rounded to avoid float-noise 400s');
 
 const iemResponse = read('lib/surface/iem-response.ts');
 assert.match(iemResponse, /api\/1\/currents\.geojson/, 'IEM currents endpoint must be used');
