@@ -17,7 +17,7 @@
     "test:capability-consistency": "node scripts/test-capability-consistency.mjs",
     "test:fake-data": "node scripts/test-fake-data-guards.mjs",
     "test:archive": "node scripts/test-archive-integrity.mjs",
-    "test:verify": "node scripts/test-capability-matrix.mjs && node scripts/test-satellite-capability-matrix.mjs && node scripts/test-observation-capabilities.mjs && node scripts/test-severe-capabilities.mjs && node scripts/test-aviation-marine-capabilities.mjs && node scripts/test-platform-capabilities.mjs && node scripts/test-sounding-capabilities.mjs && node scripts/test-radar-render-config.mjs && node scripts/test-fake-data-guards.mjs && node scripts/test-archive-integrity.mjs && node scripts/test-capability-consistency.mjs && node scripts/test-alert-integrity.mjs && node scripts/test-legend-integrity.mjs && node scripts/test-rotation-workflow.mjs && node scripts/test-tilt-workflow.mjs && node scripts/test-product-catalog.mjs",
+    "test:verify": "node scripts/test-capability-matrix.mjs && node scripts/test-satellite-capability-matrix.mjs && node scripts/test-observation-capabilities.mjs && node scripts/test-severe-capabilities.mjs && node scripts/test-aviation-marine-capabilities.mjs && node scripts/test-platform-capabilities.mjs && node scripts/test-sounding-capabilities.mjs && node scripts/test-radar-render-config.mjs && node scripts/test-fake-data-guards.mjs && node scripts/test-archive-integrity.mjs && node scripts/test-capability-consistency.mjs && node scripts/test-alert-integrity.mjs && node scripts/test-legend-integrity.mjs && node scripts/test-rotation-workflow.mjs && node scripts/test-tilt-workflow.mjs && node scripts/test-product-catalog.mjs && node scripts/test-mesoai-m1.mjs",
     "test:satellite-capability": "node scripts/test-satellite-capability-matrix.mjs",
     "test:observation-capabilities": "node scripts/test-observation-capabilities.mjs",
     "test:severe-capabilities": "node scripts/test-severe-capabilities.mjs",
@@ -26,7 +26,8 @@
     "test:sounding-capabilities": "node scripts/test-sounding-capabilities.mjs",
     "test:radar-render-config": "node scripts/test-radar-render-config.mjs",
     "test:alert-integrity": "node scripts/test-alert-integrity.mjs",
-    "test:legend-integrity": "node scripts/test-legend-integrity.mjs"
+    "test:legend-integrity": "node scripts/test-legend-integrity.mjs",
+    "test:mesoai-m1": "node scripts/test-mesoai-m1.mjs"
   },
   "dependencies": {
     "axios": "^1.7.2",

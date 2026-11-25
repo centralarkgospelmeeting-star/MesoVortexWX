@@ -15,8 +15,9 @@ assert.match(radarMap, /updateRotationTracks/, 'RadarMap must apply the rotation
 assert.match(radarMap, /ROTATION_SOURCE_ID/, 'rotation overlay must own a dedicated raster source');
 assert.match(radarMap, /ROTATION_LAYER_ID/, 'rotation overlay must own a dedicated raster layer');
 assert.match(radarMap, /\/api\/radar\/mrms-tile\?product=rotation_tracks/, 'overlay must use the verified MRMS route');
-assert.match(radarMap, /data-rotation-status="mrms"/, 'overlay must expose an observable DOM status surface');
-assert.match(radarMap, /No mesocyclone IDs or projected track objects are claimed/, 'overlay must disclaim invented track objects');
+assert.match(radarMap, /no track objects, mesocyclone IDs, or temporal history are\s+\* synthesized/, 'overlay code must disclaim invented track objects');
+assert.doesNotMatch(radarMap, /data-rotation-status="mrms"|rotationStatus|rotationLegend/, 'map must not render a duplicate product information card');
+assert.doesNotMatch(radarMap, /getProductLegendInfo/, 'map must not duplicate the compact banner spectrum');
 assert.doesNotMatch(radarMap, /scit-engine|demoTrack|hardcodedTrack/, 'overlay must not use demo track objects');
 
 assert.match(page, /showStormTracks,\n    showHurricanes,/, 'pane props must include the rotation toggle');

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -19,7 +19,6 @@ import {
 import { buildBasemapStyle } from '../lib/map/basemap-styles';
 import { getModelById } from '../lib/model-registry';
 import { getRadarRasterRenderConfig } from '../lib/radar/render-config';
-import { getProductLegendInfo } from './UniversalLegend';
 import { distanceMeters, formatArea, formatDistance, polygonAreaMeters2, polylineMeters, type LngLat } from '../lib/map-tools/geo';
 
 // Next/webpack bundles maplibre-gl, so the library's relative worker URL
@@ -355,8 +354,6 @@ export function RadarMap({
   const [scanIngesting, setScanIngesting] = useState(false);
   const [scanIngestDismissed, setScanIngestDismissed] = useState(false);
   const [fastScanStatus, setFastScanStatus] = useState<{ available: boolean; scanTime: string | null; source: string | null }>({ available: false, scanTime: null, source: null });
-  const [rotationStatus, setRotationStatus] = useState<{ visible: boolean; time: string | null; source: string | null; error: string | null }>({ visible: false, time: null, source: null, error: null });
-  const rotationLegend = useMemo(() => getProductLegendInfo('rotation_tracks').steps, []);
   const [inspectionResult, setInspectionResult] = useState<{ lat: number; lon: number; product: string; site: string; tilt: string; time: string; value: string; note?: string } | null>(null);
   const [toolMeasurements, setToolMeasurements] = useState<MapToolMeasurement[]>([]);
   const [toolDrawings, setToolDrawings] = useState<MapToolDrawing[]>([]);
@@ -1488,7 +1485,6 @@ export function RadarMap({
     if (!rotationOverlayEnabled) {
       if (map.getLayer(ROTATION_LAYER_ID)) map.removeLayer(ROTATION_LAYER_ID);
       if (map.getSource(ROTATION_SOURCE_ID)) map.removeSource(ROTATION_SOURCE_ID);
-      setRotationStatus({ visible: false, time: null, source: null, error: null });
       return;
     }
 
@@ -1524,26 +1520,14 @@ export function RadarMap({
     }
 
     try {
-      // Probe the same endpoint once to surface real grid time from response
-      // headers. MapLibre fetches the visible tiles directly; headers are not
-      // available from those tile requests.
-      const probe = await fetch('/api/radar/mrms-tile?product=rotation_tracks&z=0&x=0&y=0', { cache: 'no-store' });
+      // Probe the same endpoint once to verify the live grid is reachable.
+      // MapLibre fetches visible tiles directly; no duplicate status card is
+      // rendered for this probe.
+      const probe = await fetch('/api/radar/mrms-tile?product=rotation_tracks&z=0&x=0&y=0', { cache: 'no-store', signal: AbortSignal.timeout(20_000) });
       if (!probe.ok) throw new Error(`HTTP ${probe.status}`);
-      setRotationStatus({
-        visible: true,
-        time: probe.headers.get('X-MesoVortex-Time'),
-        source: probe.headers.get('X-MesoVortex-Source') || 'MRMS-RotationTrack30min',
-        error: null,
-      });
-    } catch (e: any) {
+    } catch {
       if (map.getLayer(ROTATION_LAYER_ID)) map.removeLayer(ROTATION_LAYER_ID);
       if (map.getSource(ROTATION_SOURCE_ID)) map.removeSource(ROTATION_SOURCE_ID);
-      setRotationStatus({
-        visible: false,
-        time: null,
-        source: null,
-        error: `DATA UNAVAILABLE - MRMS rotation raster failed: ${String(e?.message || e)}`,
-      });
     }
   }, [rotationOverlayEnabled]);
 
@@ -2359,31 +2343,6 @@ export function RadarMap({
           {fastScanStatus.available
             ? `FASTSCAN READY · VERIFIED ${fastScanStatus.scanTime?.replace('T', ' ').replace('Z', ' UTC') || 'SCAN'}`
             : 'FASTSCAN LIVE ONLY · NO VERIFIED SCAN TIME'}
-        </div>
-      )}
-
-      {rotationOverlayEnabled && (
-        <div data-rotation-status="mrms" className="absolute bottom-24 right-3 z-30 w-[min(16rem,calc(100vw-1.5rem))] rounded-xl border border-fuchsia-500/50 bg-[#0b1220]/95 px-2.5 py-2 font-mono text-[10px] text-slate-200 shadow-2xl">
-          <div className="flex items-center justify-between gap-2">
-            <span className="font-bold text-fuchsia-300">MRMS ROTATION TRACKS</span>
-            <span className="text-slate-500">30-MIN MAX</span>
-          </div>
-          {rotationStatus.error ? (
-            <div className="mt-1 text-amber-300">{rotationStatus.error}</div>
-          ) : (
-            <div className="mt-1 truncate text-slate-400">
-              {rotationStatus.source || 'MRMS-RotationTrack30min'} ·{' '}
-              {rotationStatus.time ? `VERIFIED ${rotationStatus.time.replace('T', ' ').replace('Z', ' UTC')}` : 'LOADING LIVE GRID'}
-            </div>
-          )}
-          <div className="mt-1.5 flex h-2 overflow-hidden rounded-full border border-slate-700">
-            {rotationLegend.map((step, i) => (
-              <div key={`${step.label}-${i}`} className="flex-1" style={{ background: step.color }} title={`${step.label} — ${step.meaning}`} />
-            ))}
-          </div>
-          <div className="mt-1 text-[9px] leading-snug text-slate-500">
-            Rolling grid maximum. No mesocyclone IDs or projected track objects are claimed.
-          </div>
         </div>
       )}
 

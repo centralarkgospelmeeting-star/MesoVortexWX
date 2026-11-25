@@ -69,9 +69,11 @@ assert.match(page, /product=\{bannerProduct\}/, 'banner must reflect the selecte
 assert.match(page, /modeTab === 'Composite'\) setProduct\('comp_ref'\)/, 'entering composite mode must start from the verified national product');
 assert.match(page, /modeTab === 'Radar'\) setProduct\('ref'\)/, 'returning to radar mode must start from the verified single-site product');
 
-// The banner states the domain so an operator can identify the source class immediately.
-assert.match(banner, /'Domain', value: domain/, 'banner provenance must include the product domain');
-assert.match(banner, /MULTI-RADAR \/ MRMS/, 'banner must identify national/MRMS products');
-assert.match(banner, /SINGLE RADAR/, 'banner must identify single-site products');
+// Phase M1: the banner no longer carries domain provenance text. Source-domain
+// honesty remains in the shared catalog and capability matrix, not in the
+// permanent banner.
+assert.doesNotMatch(banner, /'Domain', value: domain/, 'banner must not render provenance rows');
+assert.doesNotMatch(banner, /MULTI-RADAR \/ MRMS|SINGLE RADAR/, 'banner must not render source-domain prose');
+assert.match(banner, /data-spectrum-product=\{legend\.key \|\| 'unverified'\}/, 'banner must expose the selected spectrum product');
 
 console.log('PASS: radar/composite product catalog separation contract');
