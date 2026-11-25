@@ -189,8 +189,8 @@ export function dealiasVelocity<T extends DealiasRadial>(input: T[]): DealiasRes
       velocity: { ...sourceMoment, moment_data: corrected[sortedIndex] },
     };
   }
-  const total = corrected.reduce((sum, row) => sum + row.filter(v => v != null).length, 0);
-  const changed = corrected.reduce((sum, row, ri) => sum + row.reduce((n, value, gi) =>
+  const total = corrected.reduce<number>((sum, row) => sum + row.filter(v => v != null).length, 0);
+  const changed = corrected.reduce<number>((sum, row, ri) => sum + row.reduce<number>((n, value, gi) =>
     n + (value != null && raw[ri][gi] != null && Math.abs(value - raw[ri][gi]!) > 1e-6 ? 1 : 0), 0), 0);
   return {
     radials: output,
