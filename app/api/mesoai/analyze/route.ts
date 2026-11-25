@@ -6,6 +6,7 @@ import { saveAnalysis } from '@/lib/mesoai/feedback-store';
 import { renderAnalysis } from '@/lib/mesoai/qwen-adapter';
 import type { AnalysisMode, AnalysisRequest, ModelContext, WarningContext } from '@/lib/mesoai/types';
 import { getModelById } from '@/lib/model-registry';
+import type { SatelliteSelection } from '@/lib/satellite';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -80,6 +81,12 @@ export async function POST(request: Request) {
   }
 
   const productKey = typeof body.productKey === 'string' ? body.productKey.slice(0, 80) : null;
+  const satelliteInput = body.satelliteSelection as Record<string, unknown> | undefined;
+  const satelliteSelection: Partial<SatelliteSelection> | null = satelliteInput ? {
+    bird: (typeof satelliteInput.bird === 'string' ? satelliteInput.bird.slice(0, 32) : undefined) as SatelliteSelection['bird'] | undefined,
+    sector: (typeof satelliteInput.sector === 'string' ? satelliteInput.sector.slice(0, 32) : undefined) as SatelliteSelection['sector'] | undefined,
+    productId: (typeof satelliteInput.productId === 'string' ? satelliteInput.productId.slice(0, 32) : undefined) as SatelliteSelection['productId'] | undefined,
+  } : null;
   const needsRadar = mode === 'storm';
   const needsAlerts = mode === 'storm' || mode === 'warning';
 
@@ -144,6 +151,7 @@ export async function POST(request: Request) {
     metar: metarResult.status === 'fulfilled' ? metarResult.value : null,
     lsr: lsrResult.status === 'fulfilled' ? lsrResult.value : null,
     mcd: mcdResult.status === 'fulfilled' ? mcdResult.value : null,
+    satelliteSelection,
     includeSatelliteContext: needsRadar,
   });
   const detections = runDetections(observations);

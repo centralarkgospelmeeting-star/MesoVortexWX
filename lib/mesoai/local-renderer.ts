@@ -95,7 +95,13 @@ function detectionSentence(detection: Detection): string {
     case 'lightning-density': {
       const count = num('flashCount');
       const minutes = num('minutes') ?? 5;
-      return `${count === null ? 'A measured' : `${Math.round(count)}`} flash${count === 1 ? '' : 'es'} were measured in ${minutes.toFixed(0)} minutes.`;
+      const rate = num('flashesPerMinute');
+      const cells = num('occupiedCells01Deg');
+      const base = `${count === null ? 'A measured' : `${Math.round(count)}`} flash${count === 1 ? '' : 'es'} were measured in ${minutes.toFixed(0)} minutes.`;
+      const detail = rate === null && cells === null
+        ? ''
+        : ` Derived from those points: ${rate === null ? 'an unavailable rate' : `${rate.toFixed(2)} flashes/min`}${cells === null ? '' : ` across ${Math.round(cells)} occupied 0.1-degree cells`}; this is not the official FED grid.`;
+      return base + detail;
     }
     case 'spc-categorical-guidance':
       return `The Day ${values.day || '1'} SPC category at the site is ${String(values.category || 'unknown')}.`;

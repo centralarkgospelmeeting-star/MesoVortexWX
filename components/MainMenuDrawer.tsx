@@ -98,7 +98,7 @@ export function MainMenuDrawer({
             </div>
 
             <div className="rounded-xl p-2 hover:bg-slate-900 text-slate-300 font-medium transition cursor-pointer flex items-center gap-2">
-              <span>⚡</span> Lightning Blitzortung Grid
+              <span>⚡</span> GLM Optical Lightning (GOES-19)
             </div>
           </div>
 

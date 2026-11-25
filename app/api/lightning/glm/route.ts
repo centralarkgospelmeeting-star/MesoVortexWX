@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import { normalizeGlmResponse } from '../../../../lib/lightning/glm-metrics';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +34,8 @@ function run(minutes: number): Promise<any> {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const minutes = Math.max(1, Math.min(15, Number(searchParams.get('minutes') || 5)));
+  const requested = Number(searchParams.get('minutes') ?? 5);
+  const minutes = Number.isFinite(requested) ? Math.max(1, Math.min(15, requested)) : 5;
   const data = await run(minutes);
-  return NextResponse.json(data, { status: 200, headers: { 'Cache-Control': 'no-store' } });
+  return NextResponse.json(normalizeGlmResponse(data, minutes), { status: 200, headers: { 'Cache-Control': 'no-store' } });
 }

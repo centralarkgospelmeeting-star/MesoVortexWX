@@ -325,7 +325,7 @@ export function lightningToInput(payload: any): LightningIntensityInput {
   return {
     available: available && count > 0,
     flashCount: available ? count : null,
-    minutes: finite(payload?.minutes),
+    minutes: finite(payload?.minutes) ?? finite(payload?.windowMinutes),
   };
 }
 

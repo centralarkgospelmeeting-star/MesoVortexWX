@@ -20,6 +20,7 @@ type Props = {
   tab: string;
   product: string;
   satelliteLabel?: string;
+  satelliteProductId?: string;
   outlookDay?: string;
   modelLabel?: string;
   modelFieldId?: string;
@@ -42,8 +43,18 @@ function modelLegendKey(fieldId?: string): string {
   return '';
 }
 
+/**
+ * Only the clean longwave IR channel has a verified brightness-temperature
+ * palette here. Visible and water-vapor tiles have no independently verified
+ * numeric scale, so they stay neutral instead of borrowing the IR spectrum.
+ */
+function satelliteLegendKey(productId?: string): string {
+  const id = (productId || '').trim().toLowerCase();
+  return id === 'ir' || id === 'ch13' ? 'satellite' : '';
+}
+
 function bannerLegend(props: Props): ProductLegendInfo {
-  if (props.tab === 'Satellite') return getProductLegendInfo('satellite');
+  if (props.tab === 'Satellite') return getProductLegendInfo(satelliteLegendKey(props.satelliteProductId));
   if (props.tab === 'Outlooks') return getProductLegendInfo('spc');
   if (props.tab === 'Models') return getProductLegendInfo(modelLegendKey(props.modelFieldId));
   return getProductLegendInfo(normalizedProduct(props.product));

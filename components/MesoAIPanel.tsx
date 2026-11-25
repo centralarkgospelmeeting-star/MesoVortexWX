@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { AnalysisMode, AnalysisResult, Detection, WatcherSummary, WarningContext, WeatherObservation } from '../lib/mesoai/types';
+import type { SatelliteSelection } from '../lib/satellite';
 
 type Props = {
   open: boolean;
@@ -9,6 +10,7 @@ type Props = {
   site: { id: string; name: string; lat: number; lon: number };
   productKey: string;
   warning: WarningContext | null;
+  satelliteSelection: SatelliteSelection;
 };
 
 const MODES: Array<{ id: AnalysisMode; label: string }> = [
@@ -24,7 +26,7 @@ type AnalyzeResponse = {
   observations: WeatherObservation[];
 };
 
-export function MesoAIPanel({ open, onClose, site, productKey, warning }: Props) {
+export function MesoAIPanel({ open, onClose, site, productKey, warning, satelliteSelection }: Props) {
   const [mode, setMode] = useState<AnalysisMode>('storm');
   const [response, setResponse] = useState<AnalyzeResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -45,7 +47,7 @@ export function MesoAIPanel({ open, onClose, site, productKey, warning }: Props)
     fetch('/api/mesoai/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode, site, productKey, warning }),
+      body: JSON.stringify({ mode, site, productKey, warning, satelliteSelection }),
       signal: AbortSignal.timeout(95_000),
     })
       .then(async (res) => {
@@ -64,7 +66,7 @@ export function MesoAIPanel({ open, onClose, site, productKey, warning }: Props)
       });
 
     return () => { cancelled = true; };
-  }, [open, mode, site.id, site.name, site.lat, site.lon, productKey, warning?.event]);
+  }, [open, mode, site.id, site.name, site.lat, site.lon, productKey, warning?.event, satelliteSelection.bird, satelliteSelection.sector, satelliteSelection.productId]);
 
   useEffect(() => {
     if (!open) return;

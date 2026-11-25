@@ -6,7 +6,9 @@
  */
 
 import { getCatalogProduct } from '../radar/product-catalog';
-import { SATELLITE_CAPABILITY_MATRIX } from '../satellite/capability-matrix';
+import { SATELLITE_CAPABILITY_MATRIX, getSatelliteCapability } from '../satellite/capability-matrix';
+import { getSatelliteProductDef, getSatelliteTileUrl, normalizeSatelliteSelection, type SatelliteSelection } from '../satellite';
+import { deriveGlmMetrics } from '../lightning/glm-metrics';
 import {
   alertsNearSite,
   lightningToInput,
@@ -29,6 +31,7 @@ export type RawWeatherInputs = {
   lsr?: unknown;
   mcd?: unknown;
   includeSatelliteContext?: boolean;
+  satelliteSelection?: Partial<SatelliteSelection> | null;
 };
 
 export function productContext(key: string | null | undefined): ProductContext | null {
@@ -81,18 +84,29 @@ function radarObservation(payload: unknown): WeatherObservation | null {
 function lightningObservation(payload: unknown): WeatherObservation | null {
   const lightning = lightningToInput((payload as object | null) ?? {});
   if (!lightning.available) return null;
+  const metrics = deriveGlmMetrics(payload);
   return {
     id: 'obs-lightning-glm',
     domain: 'OBSERVATION',
     source: 'GOES-R GLM',
     productCode: 'flash-density',
     verification: 'VERIFIED',
-    observedAt: null,
+    observedAt: isoOrNull((payload as { generatedAt?: unknown } | null)?.generatedAt),
     values: {
       flashCount: lightning.flashCount ?? null,
       minutes: lightning.minutes ?? null,
+      flashesPerMinute: metrics?.flashesPerMinute ?? null,
+      occupiedCells01Deg: metrics?.occupiedCells01Deg ?? null,
+      extentLatKm: metrics?.extentLatKm ?? null,
+      extentLonKm: metrics?.extentLonKm ?? null,
+      meanEnergyJ: metrics?.meanEnergyJ ?? null,
+      maxEnergyJ: metrics?.maxEnergyJ ?? null,
     },
-    caveats: ['Flash counts are a short-window density proxy, not a severe-weather confirmation.'],
+    caveats: [
+      'Flash counts are a short-window density proxy, not a severe-weather confirmation.',
+      'Density, 0.1-degree cell occupancy, extent, and energy values are derived from real GLM flash points; this is not the official GOES Flash Extent Density product.',
+      'GLM optical flashes cannot distinguish cloud-to-ground from intra-cloud flashes; no CG strike count or lightning track is claimed.',
+    ],
   };
 }
 
@@ -181,6 +195,61 @@ function satelliteObservation(enabled: boolean): WeatherObservation | null {
       'Satellite context is source availability only; no pixel value, cloud-top temperature, or imagery-derived feature is claimed.',
       'Mesoscale sector footprints move, so no fixed bounds or object track is asserted.',
     ],
+  };
+}
+
+/** Maps a UI satellite product id to the capability-matrix source of truth. */
+function satelliteCapabilityId(productId: string): string | null {
+  if (productId === 'ir') return 'infrared';
+  if (productId === 'wv-upper') return 'wv_upper';
+  if (productId === 'wv-mid') return 'wv_mid';
+  if (productId === 'wv-lower') return 'wv_lower';
+  if (productId === 'airmass') return 'airmass_rgb';
+  if (productId === 'dust') return 'dust_rgb';
+  if (productId === 'day-cloud-phase') return 'cloud_phase';
+  if (productId === 'fire-temperature') return 'fire_smoke';
+  if (/^ch\d{2}$/.test(productId)) return 'abi_channels';
+  return SATELLITE_CAPABILITY_MATRIX.some((entry) => entry.id === productId) ? productId : null;
+}
+
+/**
+ * The user's current satellite selection is normalized against the same
+ * verified URL builder and capability matrix used by the map. Only source
+ * status is reported; imagery values are deliberately absent.
+ */
+function satelliteSelectionObservation(selection: Partial<SatelliteSelection>): WeatherObservation | null {
+  const normalized = normalizeSatelliteSelection(selection);
+  const def = getSatelliteProductDef(normalized.productId);
+  const tile = getSatelliteTileUrl(normalized);
+  const capability = getSatelliteCapability(satelliteCapabilityId(normalized.productId) || '');
+  const caveats = [
+    'Only the tile URL and capability status are verified; no pixel value, cloud-top temperature, or imagery-derived feature is claimed.',
+  ];
+  if (normalized.sector.startsWith('mesoscale')) {
+    caveats.push('Mesoscale sector footprints move, so no fixed bounds or object track is asserted.');
+  }
+  if (!tile.url) caveats.push(tile.unavailableReason || 'No verified tile source for this selection.');
+  if (def.group === 'RGB' || def.id === 'geocolor') {
+    caveats.push('RGB and GeoColor imagery are not available from a verified public XYZ source.');
+  }
+  return {
+    id: 'obs-satellite-selection',
+    domain: 'SATELLITE',
+    source: 'GOES/ABI verified IEM tile feed',
+    productCode: def.channel ? `abi-ch${def.channel}` : def.id,
+    verification: tile.url ? 'PARTIAL' : 'UNAVAILABLE',
+    observedAt: null,
+    values: {
+      bird: normalized.bird,
+      sector: normalized.sector,
+      productId: normalized.productId,
+      label: def.label,
+      channel: def.channel ?? null,
+      tileUrlAvailable: Boolean(tile.url),
+      capabilityStatus: capability?.availability ?? 'UNVERIFIED',
+      reason: tile.unavailableReason ?? null,
+    },
+    caveats,
   };
 }
 
@@ -296,7 +365,9 @@ export function buildObservations(input: RawWeatherInputs): WeatherObservation[]
     alertObservation(input.alerts, input.site),
     productObservation(input.productKey),
     mrmsObservation(input.mrms),
-    satelliteObservation(input.includeSatelliteContext === true),
+    input.satelliteSelection
+      ? satelliteSelectionObservation(input.satelliteSelection)
+      : satelliteObservation(input.includeSatelliteContext === true),
     metarObservation(input.metar),
     lsrObservation(input.lsr),
     mcdObservation(input.mcd),

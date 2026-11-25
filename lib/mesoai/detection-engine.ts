@@ -131,14 +131,22 @@ function lightningDetections(observation: WeatherObservation): Detection[] {
   const count = finiteNumber(observation.values.flashCount);
   if (count === null || count < 5) return [];
   const minutes = finiteNumber(observation.values.minutes) ?? 5;
+  const rate = finiteNumber(observation.values.flashesPerMinute);
+  const cells = finiteNumber(observation.values.occupiedCells01Deg);
+  const evidence = [`${Math.round(count)} flashes in ${minutes.toFixed(0)} minutes`];
+  if (rate !== null) evidence.push(`${rate.toFixed(2)} flashes/min derived from the real flash points`);
+  if (cells !== null) evidence.push(`${Math.round(cells)} occupied 0.1-degree cells, a derived proxy and not the official FED grid`);
   return [emit(
     observation,
     'lightning-density',
     'det-lightning',
     count >= 20 ? 'MODERATE' : 'LOW',
-    [`${Math.round(count)} flashes in ${minutes.toFixed(0)} minutes`],
-    { flashCount: count, minutes },
-    ['Flash density supports electrical activity, not a severity confirmation.']
+    evidence,
+    { flashCount: count, minutes, flashesPerMinute: rate, occupiedCells01Deg: cells },
+    [
+      'Flash density supports electrical activity, not a severity confirmation.',
+      'GLM optical flashes do not resolve CG/IC type; no strike count or track is claimed.',
+    ]
   )];
 }
 

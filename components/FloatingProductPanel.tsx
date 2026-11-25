@@ -606,7 +606,7 @@ export function FloatingProductPanel({
               Map Overlays
             </span>
             {[
-              { label: '⚡ Blitzortung Live Lightning', checked: showLightning, toggle: onToggleLightning },
+              { label: '⚡ GLM Optical Flashes (GOES-19)', checked: showLightning, toggle: onToggleLightning },
               { label: '🌪️ Local Storm Reports (LSR)', checked: showLSR, toggle: onToggleLSR },
               { label: '🛡️ Severe Watch Boxes', checked: showWatches, toggle: onToggleWatches },
               { label: '↗️ MRMS Rotation Tracks (30-min raster)', checked: showStormTracks, toggle: onToggleStormTracks },

@@ -952,6 +952,7 @@ export default function MesoVortexWorkstation() {
           tab={tab}
           product={bannerProduct}
           satelliteLabel={activeSatDef?.label}
+          satelliteProductId={activeSatSel.productId}
           outlookDay={spcDay}
           modelLabel={activeModel?.name}
           modelFieldId={activeModelField?.id}
@@ -1237,6 +1238,7 @@ export default function MesoVortexWorkstation() {
           site={{ id: currentSite.id, name: currentSite.name, lat: currentSite.lat, lon: currentSite.lon }}
           productKey={product}
           warning={mesoaiWarning}
+          satelliteSelection={activeSatSel}
         />
         {quadMode ? (
           <>

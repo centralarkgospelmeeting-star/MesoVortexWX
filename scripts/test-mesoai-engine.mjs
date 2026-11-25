@@ -74,6 +74,23 @@ for (const id of ['obs-mrms-aws-listing', 'obs-satellite-capability', 'obs-surfa
   assert.ok(dataEngine.includes(id), `data engine must normalize ${id}`);
 }
 assert.doesNotMatch(dataEngine, /fetch\(/, 'data engine must perform no network requests');
+assert.match(dataEngine, /deriveGlmMetrics/, 'lightning metrics must come from the real GLM payload');
+assert.match(dataEngine, /obs-satellite-selection/, 'selected satellite context must be normalized');
+assert.match(dataEngine, /getSatelliteTileUrl/, 'satellite selection must reuse the verified URL builder');
+
+const glmRoute = fs.readFileSync('app/api/lightning/glm/route.ts', 'utf8');
+assert.match(glmRoute, /normalizeGlmResponse/, 'GLM route must normalize source fields');
+const glmMetricsSource = fs.readFileSync('lib/lightning/glm-metrics.ts', 'utf8');
+assert.doesNotMatch(glmMetricsSource, /fetch\(|Math\.random\(/, 'GLM metrics must stay deterministic and network-free');
+assert.match(glmMetricsSource, /Flash Extent Density/, 'derived metrics must disclaim FED');
+
+const capabilitySource = fs.readFileSync('lib/capabilities/severe-capabilities.ts', 'utf8');
+for (const id of ['cg_strike_count', 'flash_extent_density_grid', 'lightning_tracks']) {
+  assert.ok(capabilitySource.includes(`id: '${id}'`), `lightning gap must be explicitly unavailable: ${id}`);
+}
+for (const stale of ['Blitzortung Live Lightning', 'Lightning Blitzortung Grid']) {
+  assert.ok(!fs.readFileSync('components/FloatingProductPanel.tsx', 'utf8').includes(stale) && !fs.readFileSync('components/MainMenuDrawer.tsx', 'utf8').includes(stale), `stale source label must be gone: ${stale}`);
+}
 
 const outcomeRoute = fs.readFileSync('app/api/mesoai/outcome/route.ts', 'utf8');
 assert.match(outcomeRoute, /OUTCOMES/, 'outcome route must validate labels');
@@ -302,6 +319,53 @@ const broaderText = render.renderLocalAnalysis({
 }, broaderDetections);
 assert.match(broaderText.explanation, /mesoscale discussion/i, 'renderer must explain MCD context');
 assert.doesNotMatch(`${broaderText.headline} ${broaderText.explanation}`, render.GATED_CLAIM_PATTERN, 'broader output avoids gated claims');
+
+// ---------- GLM-derived metrics and selected satellite context ----------
+const glm = require(path.join(outDir, 'lightning', 'glm-metrics.js'));
+const glmPayload = {
+  available: true,
+  source: 'NOAA GOES-R GLM (GOES-East, noaa-goes19 S3)',
+  generatedAt: '2026-11-24T12:00:00Z',
+  windowMinutes: 5,
+  count: 3,
+  features: {
+    type: 'FeatureCollection',
+    features: [
+      { geometry: { coordinates: [-92.25, 34.85] }, properties: { energy_j: 10 } },
+      { geometry: { coordinates: [-92.26, 34.86] }, properties: { energy_j: 20 } },
+      { geometry: { coordinates: [-93, 35.5] }, properties: { energy_j: null } },
+    ],
+  },
+};
+const normalizedGlm = glm.normalizeGlmResponse(glmPayload, 5);
+assert.equal(normalizedGlm.minutes, 5, 'windowMinutes must normalize to minutes');
+assert.equal(normalizedGlm.flashCount, 3, 'count must normalize to flashCount');
+assert.equal(normalizedGlm.metrics.flashesPerMinute, 0.6, 'rate must derive from real flashes only');
+assert.equal(normalizedGlm.metrics.occupiedCells01Deg, 2, 'cell occupancy must derive from real coordinates');
+assert.ok(normalizedGlm.metrics.extentLatKm > 72 && normalizedGlm.metrics.extentLatKm < 73, 'extent must derive from real coordinates');
+assert.equal(normalizedGlm.metrics.meanEnergyJ, 15, 'mean energy must ignore missing values');
+assert.equal(normalizedGlm.metrics.maxEnergyJ, 20, 'max energy must come from the source field');
+assert.equal(glm.deriveGlmMetrics({ available: false }), null, 'unavailable GLM must produce no metrics');
+const passthrough = glm.normalizeGlmResponse({ available: false, reason: 'DATA UNAVAILABLE - no feed' }, 5);
+assert.ok(!('metrics' in passthrough) && !('flashCount' in passthrough), 'unavailable GLM must pass through without derived fields');
+const glmObservation = data.buildObservations({ site, lightning: normalizedGlm }).find((item) => item.id === 'obs-lightning-glm');
+assert.ok(glmObservation, 'real GLM payload must produce a lightning observation');
+assert.equal(glmObservation.observedAt, '2026-11-24T12:00:00Z', 'observation time must come from the source');
+assert.equal(glmObservation.values.flashesPerMinute, 0.6, 'MesoAI must receive the derived rate');
+assert.ok(glmObservation.caveats.some((text) => /Flash Extent Density/.test(text)), 'MesoAI must disclaim the official FED product');
+assert.ok(glmObservation.caveats.some((text) => /CG strike count/.test(text)), 'MesoAI must disclaim CG strike counts');
+
+const irSelection = data.buildObservations({ site, satelliteSelection: { bird: 'goes-east', sector: 'conus', productId: 'ir' } })
+  .find((item) => item.id === 'obs-satellite-selection');
+assert.ok(irSelection, 'selected satellite channel must produce an observation');
+assert.equal(irSelection.verification, 'PARTIAL', 'verified IR tile selection stays PARTIAL');
+assert.equal(irSelection.values.channel, '13', 'channel must come from the real product definition');
+assert.equal(irSelection.values.tileUrlAvailable, true, 'IR tile URL must be verified');
+const rgbSelection = data.buildObservations({ site, satelliteSelection: { bird: 'goes-east', sector: 'conus', productId: 'geocolor' } })
+  .find((item) => item.id === 'obs-satellite-selection');
+assert.equal(rgbSelection.verification, 'UNAVAILABLE', 'GeoColor must fail closed');
+assert.equal(rgbSelection.values.tileUrlAvailable, false, 'no RGB tile URL may be claimed');
+assert.ok(rgbSelection.caveats.some((text) => /RGB and GeoColor/.test(text)), 'RGB unavailability must be explicit');
 
 delete process.env.MESOAI_ENABLED;
 assert.equal(qwenAdapter.qwenConfig(), null, 'model renderer must fail closed when disabled');

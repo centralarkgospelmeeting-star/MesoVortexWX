@@ -9,6 +9,8 @@ assert.match(banner, /getProductLegendInfo/, 'banner must use the shared legend 
 assert.doesNotMatch(banner, /const REF:|const VEL:|const SAT:|const CC:|const ZDR:/, 'banner must not duplicate local scale tables');
 assert.doesNotMatch(banner, /scale: REF, legendLabel: 'Scale'/, 'unknown products must not fall back to reflectivity');
 assert.match(banner, /NO_VERIFIED_SCALE_LABEL/, 'unknown products must show an explicit neutral scale state');
+assert.match(banner, /satelliteLegendKey/, 'satellite scale must be selected per verified channel');
+assert.match(banner, /id === 'ir' \|\| id === 'ch13'/, 'only clean longwave IR may use the temperature spectrum');
 
 // Phase M1: the banner is spectrum-only. No prose, provenance, alert marquee,
 // or metadata rows are allowed to consume permanent banner space.
@@ -66,6 +68,7 @@ const bannerMount = page.slice(page.indexOf('<ProductInfoBanner'), page.indexOf(
 assert.match(bannerMount, /tab=\{tab\}/, 'banner must receive the active mode tab');
 assert.match(bannerMount, /product=\{bannerProduct\}/, 'banner must receive the selected radar or composite product');
 assert.match(bannerMount, /modelFieldId=\{activeModelField\?\.id\}/, 'banner must receive the model field id for spectrum selection');
+assert.match(bannerMount, /satelliteProductId=\{activeSatSel\.productId\}/, 'banner must receive the selected satellite channel');
 for (const removed of ['radarSite=', 'tilt=', 'satelliteDescription=', 'modelStatus=', 'alertBanner=']) {
   assert.ok(!bannerMount.includes(removed), `banner mount must stay compact: ${removed}`);
 }
