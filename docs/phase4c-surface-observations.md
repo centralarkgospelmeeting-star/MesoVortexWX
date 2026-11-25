@@ -42,6 +42,20 @@ The surface layer panel now exposes a single **OBSERVATIONS** master toggle inst
 
 Duplicate stations reported by multiple networks (for example ASOS is a strict subset of genuine METAR) are resolved by source priority (`SURFACE_SOURCE_PRIORITY` in `lib/surface/station-model.ts`); the highest-priority source wins and lower-priority duplicates are not plotted twice.
 
+### Global observation display and dynamic declustering
+
+Observation requests follow the camera: at overview zoom (`zoom <= 2`) the feed requests the entire world bbox (`-90,-180,90,180`); at higher zoom the bbox scales down with zoom. No geographic filter is applied to any network, so real worldwide METAR reports (Europe, Asia, Australia, etc.) are plotted.
+
+The canvas applies screen-space declustering (`declusterStationPlots` in `lib/surface/station-model.ts`):
+
+- cell size is derived from zoom (about 96 px of minimum screen separation between representatives);
+- one representative per cell, chosen by source priority then observation age, with a deterministic station-id tie-break;
+- each representative draws a compact density badge with the real `clusterCount` instead of overlapping full station models;
+- at `zoom >= 9` declustering is off and every station is drawn as an individual workstation station model;
+- clicking a density marker zooms into it so the individual plots appear.
+
+Declustering reduces drawn density only — it never removes stations from the underlying feed and never hides a geographic region.
+
 ## 2. Supported station networks (plotted today)
 
 - **METAR + SPECI** (AviationWeather.gov) — METAR layer.

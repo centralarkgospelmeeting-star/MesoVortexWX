@@ -20,7 +20,7 @@ import { buildBasemapStyle } from '../lib/map/basemap-styles';
 import { getModelById } from '../lib/model-registry';
 import { getRadarRasterRenderConfig } from '../lib/radar/render-config';
 import { distanceMeters, formatArea, formatDistance, polygonAreaMeters2, polylineMeters, type LngLat } from '../lib/map-tools/geo';
-import { normalizeStationPlots, stationDetailFields, DATA_UNAVAILABLE } from '../lib/surface/station-model';
+import { declusterStationPlots, normalizeStationPlots, stationDetailFields, DATA_UNAVAILABLE } from '../lib/surface/station-model';
 import { drawStationModels, hitTestStationModels, type PositionedStationPlot } from '../lib/surface/draw-station-model';
 import { getCompositeSource, COMPOSITE_SOURCES } from '../lib/radar/composite-sources';
 import type { SurfaceLayerId, StationPlot } from '../lib/surface/types';
@@ -995,8 +995,9 @@ export function RadarMap({
       canvas.style.width = `${width}px`;
       canvas.style.height = `${height}px`;
     }
+    const zoom = map.getZoom();
     const positioned: PositionedStationPlot[] = [];
-    for (const plot of stationPlotsRef.current) {
+    for (const plot of declusterStationPlots(stationPlotsRef.current, zoom)) {
       try {
         const point = map.project([plot.lon, plot.lat]);
         if (Number.isFinite(point.x) && Number.isFinite(point.y)) positioned.push({ ...plot, x: point.x, y: point.y });
@@ -1083,6 +1084,11 @@ export function RadarMap({
       if (!stationVisibleRef.current) return;
       const station = locate(event.point);
       if (!station) return;
+      // A density marker expands into individual station plots on click.
+      if ((station.clusterCount ?? 1) > 1) {
+        map.easeTo({ center: [station.lon, station.lat], zoom: Math.min(15, map.getZoom() + 2.2), duration: 700 });
+        return;
+      }
       const fields = stationDetailFields(station);
       // Group fields into WeatherWise-style sections.
       const section = (title: string, rows: string) =>

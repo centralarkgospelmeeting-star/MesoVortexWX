@@ -94,5 +94,9 @@ assert.match(page, /surfaceLayers/, 'independent layer state must be persisted')
 assert.match(page, /surfaceNetwork/, 'combined feed must tag each station network');
 assert.match(page, /OBSERVATIONS \(all supported networks\)/, 'settings must expose the master OBSERVATIONS toggle');
 assert.match(page, /Network-specific controls \(advanced\)/, 'settings must expose granular network controls for advanced users');
+assert.match(page, /globalView|halfLat/, 'observation feed must scale its bbox with zoom for worldwide display');
+assert.match(page, /mapCenter\.zoom/, 'zoom-scaled observation bbox must refetch when the camera zoom changes');
+assert.match(radarMap, /declusterStationPlots/, 'canvas must decluster station models by zoom');
+assert.match(draw, /clusterCount/, 'canvas must draw compact density markers for clusters');
 
 console.log('PASS: Phase 4C surface station network and workstation model contracts');

@@ -723,10 +723,18 @@ export default function MesoVortexWorkstation() {
     const load = async () => {
       setSurfaceStatus('loading');
       setSurfaceError(null);
-      const lat0 = Math.max(-90, mapCenter.lat - 3);
-      const lat1 = Math.min(90, mapCenter.lat + 3);
-      const lon0 = Math.max(-180, mapCenter.lon - 3.5);
-      const lon1 = Math.min(180, mapCenter.lon + 3.5);
+      // Global observation display: request the whole world at overview zoom
+      // and a zoom-scaled region when zoomed in. No geographic restriction is
+      // applied to any network; only the upstream viewport changes.
+      const zoom = Number.isFinite(mapCenter.zoom) ? mapCenter.zoom : 7;
+      const globalView = zoom <= 2;
+      const halfLat = globalView ? 90 : Math.min(90, 60 / Math.pow(2, zoom - 3));
+      const halfLon = globalView ? 180 : Math.min(180, halfLat * 1.8);
+      const round = (n: number) => Number(n.toFixed(3));
+      const lat0 = round(Math.max(-90, mapCenter.lat - halfLat));
+      const lat1 = round(Math.min(90, mapCenter.lat + halfLat));
+      const lon0 = round(Math.max(-180, mapCenter.lon - halfLon));
+      const lon1 = round(Math.min(180, mapCenter.lon + halfLon));
       const bbox = `${lat0},${lon0},${lat1},${lon1}`;
       const queries: Array<{ layer: SurfaceLayerId; network: string; url: string }> = [];
       if (requested.metar) queries.push({ layer: 'metar', network: 'metar', url: `/api/metar/geojson?${new URLSearchParams({ bbox, hours: '3', source: 'metar' })}` });
@@ -800,7 +808,7 @@ export default function MesoVortexWorkstation() {
       window.clearTimeout(start);
       window.clearInterval(poll);
     };
-  }, [surfaceLayers, openPanel, surfaceSource, mapCenter.lat, mapCenter.lon]);
+  }, [surfaceLayers, openPanel, surfaceSource, mapCenter.lat, mapCenter.lon, mapCenter.zoom]);
 
   const surfaceStationPlots = useMemo<StationPlot[]>(
     () => normalizeStationPlots(surfaceGeoJson, { layer: 'metar', network: 'metar', sourceLabel: 'Real surface observation' }),

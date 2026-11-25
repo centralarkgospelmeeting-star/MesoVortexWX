@@ -54,6 +54,83 @@ export function dedupeStationPlots(plots: StationPlot[]): StationPlot[] {
   return Array.from(byStation.values());
 }
 
+export interface DeclusteredStationPlot extends StationPlot {
+  /** Number of real stations represented by this plot (1 = individual station). */
+  clusterCount: number;
+}
+
+/** At this zoom and above every station is drawn individually. */
+export const DECLUSTER_OFF_ZOOM = 9;
+/** Approximate minimum screen separation (px) between representatives. */
+const DECLUSTER_MIN_SEPARATION_PX = 96;
+
+/**
+ * Zoom-derived cell size in degrees. Returns null when declustering is off.
+ * The grid is screen-aware: fewer, wider cells when zoomed out, so a global
+ * field stays readable without hiding any geographic region.
+ */
+export function stationCellDegrees(zoom: number): number | null {
+  if (!Number.isFinite(zoom)) return 0.01;
+  if (zoom >= DECLUSTER_OFF_ZOOM) return null;
+  const degreesPerPixel = 360 / (256 * Math.pow(2, Math.max(0, zoom)));
+  return Math.max(0.01, degreesPerPixel * DECLUSTER_MIN_SEPARATION_PX);
+}
+
+function representativeRank(plot: StationPlot): [number, number, number] {
+  return [
+    -surfaceSourcePriority(plot.network),
+    plot.ageMinutes === null ? Number.MAX_SAFE_INTEGER : plot.ageMinutes,
+    0,
+  ];
+}
+
+function betterRepresentative(candidate: StationPlot, current: StationPlot): boolean {
+  const a = representativeRank(candidate);
+  const b = representativeRank(current);
+  if (a[0] !== b[0]) return a[0] < b[0];
+  if (a[1] !== b[1]) return a[1] < b[1];
+  return candidate.stationId.localeCompare(current.stationId) < 0;
+}
+
+/**
+ * Dynamic declustering: one representative per zoom-derived cell, selected by
+ * source priority then observation freshness (deterministic tie-break by id).
+ * Every region is kept; only screen-space density is reduced. No field is
+ * invented and no station is discarded from the underlying feed.
+ */
+export function declusterStationPlots(plots: StationPlot[], zoom: number): DeclusteredStationPlot[] {
+  const cell = stationCellDegrees(zoom);
+  if (cell === null) return plots.map((plot) => ({ ...plot, clusterCount: 1 }));
+
+  const groups = new Map<string, DeclusteredStationPlot[]>();
+  for (const plot of plots) {
+    const col = Math.floor(plot.lon / cell);
+    const row = Math.floor(plot.lat / cell);
+    const key = `${row}:${col}`;
+    const entry: DeclusteredStationPlot = { ...plot, clusterCount: 1 };
+    const group = groups.get(key);
+    if (group) group.push(entry);
+    else groups.set(key, [entry]);
+  }
+
+  const representatives: DeclusteredStationPlot[] = [];
+  for (const group of Array.from(groups.values())) {
+    let best = group[0];
+    for (let i = 1; i < group.length; i += 1) {
+      if (betterRepresentative(group[i], best)) best = group[i];
+    }
+    representatives.push({ ...best, clusterCount: group.length });
+  }
+  representatives.sort((a, b) => {
+    const rankA = representativeRank(a);
+    const rankB = representativeRank(b);
+    if (rankA[0] !== rankB[0]) return rankA[0] - rankB[0];
+    if (rankA[1] !== rankB[1]) return rankA[1] - rankB[1];
+    return a.stationId.localeCompare(b.stationId);
+  });
+  return representatives;
+}
+
 export interface NormalizeOptions {
   layer: SurfaceLayerId;
   network: SurfaceNetworkId;

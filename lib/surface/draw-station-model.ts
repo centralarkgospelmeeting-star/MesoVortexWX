@@ -11,6 +11,8 @@ import type { PresentWeatherCode, StationPlot } from './types';
 export interface PositionedStationPlot extends StationPlot {
   x: number;
   y: number;
+  /** >1 means this is a representative density marker, not a single station. */
+  clusterCount?: number;
 }
 
 const COLORS = {
@@ -167,6 +169,21 @@ export function drawStationModels(
     const color = qualityColor(plot);
     ctx.save();
     ctx.translate(Math.round(plot.x), Math.round(plot.y));
+
+    // Zoomed-out density marker: one compact, honest count per screen-space
+    // cell instead of dozens of overlapping full station models.
+    if ((plot.clusterCount ?? 1) > 1) {
+      ctx.beginPath();
+      ctx.arc(0, 0, 8.5, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(2,6,23,0.88)';
+      ctx.fill();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+      label(ctx, String(plot.clusterCount), 0, 0.5, 'center', color);
+      ctx.restore();
+      continue;
+    }
 
     if (plot.quality === 'stale') {
       ctx.beginPath();
