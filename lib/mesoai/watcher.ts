@@ -34,6 +34,7 @@ const HEADLINES: Record<string, string> = {
   'lower-correlation-coefficient': 'Lower correlation coefficient sampled',
   'lightning-density': 'Concentrated lightning activity',
   'spc-categorical-guidance': 'Elevated categorical guidance',
+  'active-mesoscale-discussion': 'SPC mesoscale discussion available',
   'active-official-warning': 'Active official warning',
   'flash-flood-warning-context': 'Flash flood warning context',
 };

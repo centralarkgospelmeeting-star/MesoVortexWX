@@ -56,6 +56,8 @@ assert.doesNotMatch(qwen, /api[_-]?key\s*[:=]\s*['"][^'"]+['"]/i, 'no key may be
 
 const store = fs.readFileSync('lib/mesoai/feedback-store.ts', 'utf8');
 assert.match(store, /appendFile/, 'learning store must be append-only');
+assert.match(store, /saveOutcome[\s\S]*outcomes\.jsonl/, 'learning store must append outcomes');
+assert.match(types, /OutcomeLabel/, 'outcome labels must be a typed contract');
 assert.doesNotMatch(store, /writeFile|unlink|rm\(/, 'learning store must never rewrite source or stored history');
 for (const line of store.split('\n').filter((text) => /prompt|threshold|weight/i.test(text))) {
   assert.ok(/\bnever\b|\bnot\b|\bno production\b/i.test(line), `learning store may only negate mutation: ${line.trim()}`);
@@ -65,6 +67,23 @@ const watcher = fs.readFileSync('lib/mesoai/watcher.ts', 'utf8');
 assert.match(watcher, /windowMs/, 'watcher must rate-limit summaries');
 assert.match(watcher, /sourceRef/, 'watcher must deduplicate by source');
 assert.doesNotMatch(watcher, /fetch\(/, 'watcher builder must be network-free');
+
+const dataEngine = fs.readFileSync('lib/mesoai/data-engine.ts', 'utf8');
+assert.match(dataEngine, /SATELLITE_CAPABILITY_MATRIX/, 'satellite context must come from the verified capability matrix');
+for (const id of ['obs-mrms-aws-listing', 'obs-satellite-capability', 'obs-surface-metar', 'obs-storm-reports', 'obs-spc-mcd']) {
+  assert.ok(dataEngine.includes(id), `data engine must normalize ${id}`);
+}
+assert.doesNotMatch(dataEngine, /fetch\(/, 'data engine must perform no network requests');
+
+const outcomeRoute = fs.readFileSync('app/api/mesoai/outcome/route.ts', 'utf8');
+assert.match(outcomeRoute, /OUTCOMES/, 'outcome route must validate labels');
+assert.match(outcomeRoute, /saveOutcome/, 'outcome route must append to the learning store');
+assert.doesNotMatch(outcomeRoute, /Math\.random\(/, 'outcome IDs must be deterministic');
+const panel = fs.readFileSync('components/MesoAIPanel.tsx', 'utf8');
+for (const id of ['severe_verified', 'severe_not_verified', 'no_observation', 'unknown']) {
+  assert.ok(panel.includes(`'${id}'`), `panel must expose outcome: ${id}`);
+}
+assert.match(panel, /data-mesoai-outcome=/, 'outcome buttons must be observable');
 
 const page = fs.readFileSync('app/page.tsx', 'utf8');
 assert.match(page, /data-menu-mesoai="true"/, 'menu must expose the MesoAI toggle');
@@ -245,6 +264,44 @@ const normalized = data.buildObservations({
 assert.ok(normalized.some((item) => item.id === 'obs-radar-level2'), 'data engine must normalize Level II');
 assert.ok(normalized.some((item) => item.id === 'obs-nws-alerts'), 'data engine must normalize alerts');
 assert.ok(normalized.every((item) => item.verification !== 'UNAVAILABLE'), 'unavailable sources must not become observations');
+
+const broader = data.buildObservations({
+  site,
+  mrms: {
+    available: true,
+    source: 'NOAA MRMS AWS Open Data (S3)',
+    prefix: 'CONUS/MergedReflectivityQCComposite_00.50/',
+    pipelineStatus: 'SCAFFOLD - real S3 listing only',
+    objects: [{ key: 'CONUS/test.grib2', lastModified: '2026-11-24T12:00:00Z' }],
+  },
+  metar: {
+    observations: [{ station: 'KOUN', text: 'Clear skies', temp: '72°F', dewpoint: '55°F', wind: 'Calm' }],
+    _meta: { ok: true, fetchedAt: '2026-11-24T12:00:00Z' },
+  },
+  lsr: { features: [{ type: 'Feature' }], _meta: { fetchedAt: '2026-11-24T12:00:00Z' } },
+  mcd: {
+    features: [{ properties: { name: 'Mesoscale Discussion 1234', issueTime: '2026-11-24T11:55:00Z' } }],
+  },
+  includeSatelliteContext: true,
+});
+const broaderIds = broader.map((item) => item.id);
+for (const id of ['obs-mrms-aws-listing', 'obs-satellite-capability', 'obs-surface-metar', 'obs-storm-reports', 'obs-spc-mcd']) {
+  assert.ok(broaderIds.includes(id), `broader data engine must emit ${id}`);
+}
+assert.ok(broader.every((item) => item.verification !== 'VERIFIED' || item.domain === 'RADAR'), 'metadata context must stay PARTIAL');
+assert.ok(broader.find((item) => item.id === 'obs-mrms-aws-listing').caveats.some((text) => /decode/i.test(text)), 'MRMS context must disclaim missing decode pipeline');
+assert.ok(broader.find((item) => item.id === 'obs-satellite-capability').caveats.some((text) => /no pixel value/i.test(text)), 'satellite context must disclaim imagery values');
+const broaderDetections = detect.runDetections(broader);
+assert.ok(broaderDetections.some((item) => item.id === 'det-mcd'), 'MCD detector must emit a LOW-confidence guidance signal');
+assert.ok(broaderDetections.every((item) => item.operationalClaim === false), 'broader detections stay non-operational');
+const broaderText = render.renderLocalAnalysis({
+  mode: 'storm',
+  site,
+  generatedAt: '2026-11-24T12:01:00.000Z',
+  observations: broader,
+}, broaderDetections);
+assert.match(broaderText.explanation, /mesoscale discussion/i, 'renderer must explain MCD context');
+assert.doesNotMatch(`${broaderText.headline} ${broaderText.explanation}`, render.GATED_CLAIM_PATTERN, 'broader output avoids gated claims');
 
 delete process.env.MESOAI_ENABLED;
 assert.equal(qwenAdapter.qwenConfig(), null, 'model renderer must fail closed when disabled');

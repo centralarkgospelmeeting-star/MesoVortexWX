@@ -83,7 +83,7 @@ export async function POST(request: Request) {
   const needsRadar = mode === 'storm';
   const needsAlerts = mode === 'storm' || mode === 'warning';
 
-  const [stormResult, lightningResult, outlookResult, alertsResult] = await Promise.allSettled([
+  const [stormResult, lightningResult, outlookResult, alertsResult, mrmsResult, metarResult, lsrResult, mcdResult] = await Promise.allSettled([
     needsRadar
       ? getJson(new URL(`/api/radar/storm-analysis?site=${encodeURIComponent(site.id)}`, request.url), 75_000)
       : Promise.resolve(null),
@@ -95,6 +95,18 @@ export async function POST(request: Request) {
       : Promise.resolve(null),
     needsAlerts
       ? getJson(new URL('/api/alerts', request.url), 15_000)
+      : Promise.resolve(null),
+    needsRadar
+      ? getJson(new URL('/api/mrms/aws', request.url), 12_000)
+      : Promise.resolve(null),
+    needsRadar
+      ? getJson(new URL('/api/metar', request.url), 15_000)
+      : Promise.resolve(null),
+    needsRadar
+      ? getJson(new URL('/api/lsr', request.url), 12_000)
+      : Promise.resolve(null),
+    needsRadar
+      ? getJson(new URL('/api/spc/mcd', request.url), 12_000)
       : Promise.resolve(null),
   ]);
 
@@ -128,6 +140,11 @@ export async function POST(request: Request) {
     outlook: outlookResult.status === 'fulfilled' ? outlookResult.value : null,
     alerts,
     productKey,
+    mrms: mrmsResult.status === 'fulfilled' ? mrmsResult.value : null,
+    metar: metarResult.status === 'fulfilled' ? metarResult.value : null,
+    lsr: lsrResult.status === 'fulfilled' ? lsrResult.value : null,
+    mcd: mcdResult.status === 'fulfilled' ? mcdResult.value : null,
+    includeSatelliteContext: needsRadar,
   });
   const detections = runDetections(observations);
 

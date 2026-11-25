@@ -157,6 +157,24 @@ function outlookDetections(observation: WeatherObservation): Detection[] {
   )];
 }
 
+function mesoscaleDiscussionDetections(observation: WeatherObservation): Detection[] {
+  if (observation.domain !== 'MODEL' || observation.id !== 'obs-spc-mcd') return [];
+  const count = finiteNumber(observation.values.discussionCount);
+  if (count === null || count < 1) return [];
+  return [emit(
+    observation,
+    'active-mesoscale-discussion',
+    'det-mcd',
+    'LOW',
+    [`${Math.round(count)} active SPC mesoscale discussion${count === 1 ? '' : 's'} available`],
+    { count, discussions: observation.values.discussions },
+    [
+      'Guidance for a mesoscale area; not a point observation, warning, or site-specific detection.',
+      'No discussion is associated with the selected site without geometry verification.',
+    ]
+  )];
+}
+
 function alertDetections(observation: WeatherObservation): Detection[] {
   if (observation.domain !== 'ALERT') return [];
   const found: Detection[] = [];
@@ -195,6 +213,7 @@ export function runDetections(observations: WeatherObservation[]): Detection[] {
       ...radarDetections(observation),
       ...lightningDetections(observation),
       ...outlookDetections(observation),
+      ...mesoscaleDiscussionDetections(observation),
       ...alertDetections(observation),
     ])
     .filter((detection) => {

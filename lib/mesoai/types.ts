@@ -132,3 +132,19 @@ export type FeedbackRecord = {
   note: string;
   createdAt: string;
 };
+
+/** Human- or later-verified label describing what actually happened. */
+export type OutcomeLabel =
+  | 'severe_verified'
+  | 'severe_not_verified'
+  | 'no_observation'
+  | 'unknown';
+
+export type OutcomeRecord = {
+  id: string;
+  analysisId: string;
+  mode: AnalysisMode;
+  outcome: OutcomeLabel;
+  note: string;
+  createdAt: string;
+};

@@ -32,6 +32,7 @@ export function MesoAIPanel({ open, onClose, site, productKey, warning }: Props)
   const [summaries, setSummaries] = useState<WatcherSummary[]>([]);
   const [watcherLoading, setWatcherLoading] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -39,6 +40,7 @@ export function MesoAIPanel({ open, onClose, site, productKey, warning }: Props)
     setLoading(true);
     setError(null);
     setFeedback(null);
+    setOutcome(null);
 
     fetch('/api/mesoai/analyze', {
       method: 'POST',
@@ -111,6 +113,25 @@ export function MesoAIPanel({ open, onClose, site, productKey, warning }: Props)
     }
   }
 
+  async function sendOutcome(label: 'severe_verified' | 'severe_not_verified' | 'no_observation' | 'unknown') {
+    if (!response) return;
+    try {
+      await fetch('/api/mesoai/outcome', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          analysisId: response.result.id,
+          mode: response.result.mode,
+          outcome: label,
+          note: '',
+        }),
+      });
+      setOutcome(label);
+    } catch {
+      setOutcome(null);
+    }
+  }
+
   if (!open) return null;
   const result = response?.result;
 
@@ -178,6 +199,25 @@ export function MesoAIPanel({ open, onClose, site, productKey, warning }: Props)
                   type="button"
                   onClick={() => void sendFeedback(id)}
                   className={`rounded border px-1.5 py-0.5 text-[9px] ${feedback === id ? 'border-sky-500 bg-sky-900/40 text-sky-200' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-1 border-t border-slate-800 pt-2">
+              <span className="mr-1 text-[9px] text-slate-500">Outcome</span>
+              {([
+                ['severe_verified', 'Severe verified'],
+                ['severe_not_verified', 'Not verified'],
+                ['no_observation', 'No observation'],
+                ['unknown', 'Unknown'],
+              ] as const).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  data-mesoai-outcome={id}
+                  onClick={() => void sendOutcome(id)}
+                  className={`rounded border px-1.5 py-0.5 text-[9px] ${outcome === id ? 'border-emerald-500 bg-emerald-900/40 text-emerald-200' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`}
                 >
                   {label}
                 </button>

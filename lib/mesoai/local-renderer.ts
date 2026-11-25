@@ -24,6 +24,7 @@ const CLAIM_GATES: Array<{ pattern: RegExp; required: string[]; anyOf?: boolean 
   { pattern: /reflectivity|\bdbz\b|large hail/i, required: ['det-reflectivity', 'det-echo-coverage'], anyOf: true },
   { pattern: /lightning|flash density/i, required: ['det-lightning'] },
   { pattern: /spc categor|outlook categor/i, required: ['det-outlook'] },
+  { pattern: /mesoscale discussion/i, required: ['det-mcd'] },
   { pattern: /flash flood warning/i, required: ['det-flash-flood'] },
 ];
 
@@ -98,6 +99,10 @@ function detectionSentence(detection: Detection): string {
     }
     case 'spc-categorical-guidance':
       return `The Day ${values.day || '1'} SPC category at the site is ${String(values.category || 'unknown')}.`;
+    case 'active-mesoscale-discussion': {
+      const count = num('discussionCount');
+      return `${count === null ? 'An' : `${Math.round(count)}`} active SPC mesoscale discussion${count === 1 ? '' : 's'} ${count === 1 ? 'is' : 'are'} available for mesoscale context.`;
+    }
     case 'active-official-warning':
       return `An active NWS warning is in effect near the site: ${String(values.events || 'unspecified event')}.`;
     case 'flash-flood-warning-context':

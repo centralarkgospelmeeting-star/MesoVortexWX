@@ -8,7 +8,7 @@
 
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import type { AnalysisResult, FeedbackRecord } from './types';
+import type { AnalysisResult, FeedbackRecord, OutcomeRecord } from './types';
 
 const STORE_DIR = path.join(process.cwd(), 'data', 'mesoai');
 
@@ -23,4 +23,8 @@ export async function saveAnalysis(result: AnalysisResult): Promise<void> {
 
 export async function saveFeedback(record: FeedbackRecord): Promise<void> {
   await appendLine('feedback.jsonl', record);
+}
+
+export async function saveOutcome(record: OutcomeRecord): Promise<void> {
+  await appendLine('outcomes.jsonl', record);
 }
