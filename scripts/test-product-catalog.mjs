@@ -66,7 +66,7 @@ assert.match(card, /renderDomainCatalog\('COMPOSITE', COMPOSITE_PRODUCTS/, 'card
 assert.match(panel, /renderDomainList\('COMPOSITE', COMPOSITE_PRODUCTS/, 'panel composite tab must use the composite catalog');
 assert.match(page, /compositeProduct=\{product\}/, 'compact control must reflect the selected composite product');
 assert.match(page, /product=\{bannerProduct\}/, 'banner must reflect the selected composite product');
-assert.match(page, /modeTab === 'Composite'\) setProduct\('comp_ref'\)/, 'entering composite mode must start from the verified national product');
+assert.match(page, /modeTab === 'Composite'\) \{\s*setProduct\('comp_ref'\)/, 'entering composite mode must start from the verified national product');
 assert.match(page, /modeTab === 'Radar'\) setProduct\('ref'\)/, 'returning to radar mode must start from the verified single-site product');
 
 // Phase M1: the banner no longer carries domain provenance text. Source-domain

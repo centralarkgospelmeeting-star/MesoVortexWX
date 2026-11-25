@@ -72,7 +72,7 @@ assert.match(bannerMount, /satelliteProductId=\{activeSatSel\.productId\}/, 'ban
 for (const removed of ['radarSite=', 'tilt=', 'satelliteDescription=', 'modelStatus=', 'alertBanner=']) {
   assert.ok(!bannerMount.includes(removed), `banner mount must stay compact: ${removed}`);
 }
-assert.match(page, /modeTab === 'Composite'\) setProduct\('comp_ref'\)/, 'entering Composite must start from the documented national mosaic');
+assert.match(page, /modeTab === 'Composite'\) \{\s*setProduct\('comp_ref'\)/, 'entering Composite must start from the documented national mosaic');
 assert.match(page, /modeTab === 'Radar'\) setProduct\('ref'\)/, 'entering Radar must start from reflectivity');
 
 const matrix = fs.readFileSync('lib/radar/capability-matrix.ts', 'utf8');

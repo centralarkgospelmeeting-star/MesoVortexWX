@@ -215,6 +215,7 @@ export default function MesoVortexWorkstation() {
   const initialPrefs = useMemo(() => loadUserPrefs(), []);
   const [tab, setTab] = useState<ModeTab>('Radar');
   const [compositeSource, setCompositeSource] = useState<string>('iem_n0q');
+  const [compositeOptionsExpanded, setCompositeOptionsExpanded] = useState<boolean>(false);
   const [spcDay, setSpcDay] = useState<SpcDay>('Day 1');
   const [product, setProduct] = useState<RadarProduct>(initialPrefs.product);
   const [tilt, setTilt] = useState(initialPrefs.tilt);
@@ -1204,7 +1205,10 @@ export default function MesoVortexWorkstation() {
                     setTab(modeTab);
                     // Keep the compact control and banner honest when switching
                     // between single-site and national product domains.
-                    if (modeTab === 'Composite') setProduct('comp_ref');
+                    if (modeTab === 'Composite') {
+                      setProduct('comp_ref');
+                      setCompositeOptionsExpanded(true);
+                    }
                     if (modeTab === 'Radar') setProduct('ref');
                     setExpertMode(false);
                     setQuadMode(false);
@@ -1233,6 +1237,28 @@ export default function MesoVortexWorkstation() {
                   <span className="text-[10px] text-slate-500">
                     {(() => { const s = COMPOSITE_SOURCES.find((x) => x.id === compositeSource); return s ? `${s.provenance} · refresh ${s.refreshMinutes ?? '—'} min · latency ${s.latencyMinutes ?? '—'} min` : ''; })()}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => setCompositeOptionsExpanded((v) => !v)}
+                    className="rounded-full border border-slate-700 bg-[#111827] px-2 py-1.5 text-[10px] text-slate-300 hover:bg-slate-700"
+                    aria-expanded={compositeOptionsExpanded}
+                  >
+                    {compositeOptionsExpanded ? '▾' : '▸'} Composite options
+                  </button>
+                  {compositeOptionsExpanded && (
+                    <div className="w-full rounded-md border border-slate-700 bg-[#0b1220] p-2 text-[10px]">
+                      {COMPOSITE_SOURCES.map((s) => (
+                        <div key={s.id} className="flex items-start gap-2 border-b border-slate-800 py-1 last:border-0">
+                          <span className={s.status === 'VERIFIED' ? 'text-emerald-300' : 'text-amber-300'}>{s.status === 'VERIFIED' ? '●' : '○'}</span>
+                          <div className="flex-1">
+                            <div className="font-bold text-slate-200">{s.label}</div>
+                            <div className="text-slate-500">{s.provenance}</div>
+                            <div className="text-slate-500">Refresh: {s.refreshMinutes ?? '—'} min · Latency: {s.latencyMinutes ?? '—'} min · Scope: {s.scope}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </>
               )}
                 <button
