@@ -1,6 +1,18 @@
 name: XSEC TypeScript, production build, and live data test
 
 on:
+  push:
+    branches: [feature/xsec-real-level2-cross-section]
+    paths:
+      - 'app/**'
+      - 'components/**'
+      - 'lib/**'
+      - 'scripts/test-live-xsec.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'next.config.*'
+      - 'tsconfig.json'
+      - '.github/workflows/xsec-build.yml'
   pull_request:
     branches: [main]
     paths:
