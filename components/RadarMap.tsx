@@ -20,8 +20,9 @@ import { buildBasemapStyle } from '../lib/map/basemap-styles';
 import { getModelById } from '../lib/model-registry';
 import { getRadarRasterRenderConfig } from '../lib/radar/render-config';
 import { distanceMeters, formatArea, formatDistance, polygonAreaMeters2, polylineMeters, type LngLat } from '../lib/map-tools/geo';
-import { drawStationModels, hitTestStationModels, type PositionedStationPlot } from '../lib/surface/draw-station-model';
 import { normalizeStationPlots, stationDetailFields, DATA_UNAVAILABLE } from '../lib/surface/station-model';
+import { drawStationModels, hitTestStationModels, type PositionedStationPlot } from '../lib/surface/draw-station-model';
+import { getCompositeSource, COMPOSITE_SOURCES } from '../lib/radar/composite-sources';
 import type { SurfaceLayerId, StationPlot } from '../lib/surface/types';
 
 // Next/webpack bundles maplibre-gl, so the library's relative worker URL
@@ -87,6 +88,7 @@ export interface RadarMapProps {
   onCameraChange?: (center: { lat: number; lon: number; zoom: number }) => void;
   showWatches?: boolean;
   showWarnings?: boolean;
+  compositeSource?: string;
   showMCD?: boolean;
   showSpotters?: boolean; // people/positions layer
   showSpotterReports?: boolean; // report events layer
@@ -321,6 +323,7 @@ export function RadarMap({
   showRangeRings = true,
   showRadarPills = true,
   showWarnings = true,
+  compositeSource = 'iem_n0q',
   showWatches = true,
   showMCD = true,
   showSpotters = false,
@@ -1425,7 +1428,17 @@ export function RadarMap({
       activeRasterSourceIdRef.current = rasterSourceId;
 
       if (mode === 'Composite') {
-        tileUrl = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png';
+        const src = getCompositeSource(compositeSource);
+        if (src && src.status === 'VERIFIED' && src.url) {
+          tileUrl = src.url;
+        } else {
+          tileUrl = '';
+          if (map.getLayer(rasterLayerId)) map.removeLayer(rasterLayerId);
+          if (map.getSource(rasterSourceId)) map.removeSource(rasterSourceId);
+          setTileError('DATA UNAVAILABLE');
+          setLiveOnly(false);
+          return;
+        }
         archiveAvailable = false;
       } else if (mode === 'Satellite') {
         const satSel = normalizeSatelliteSelection(satelliteSelection);

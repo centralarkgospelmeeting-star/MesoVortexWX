@@ -26,6 +26,7 @@ import {
   type WeatherAlert,
 } from '../lib/alerts/model';
 import { AlertDetailsPanel, buildLocationContext } from '../components/AlertDetailsPanel';
+import { getCompositeSource, COMPOSITE_SOURCES } from '../lib/radar/composite-sources';
 import { ProductInfoBanner } from '../components/ProductInfoBanner';
 import { WeatherIntensityScorePanel } from '../components/WeatherIntensityScorePanel';
 import { METARPanel, type SurfaceSource } from '../components/METARPanel';
@@ -213,6 +214,7 @@ function loadUserPrefs(): UserPrefs {
 export default function MesoVortexWorkstation() {
   const initialPrefs = useMemo(() => loadUserPrefs(), []);
   const [tab, setTab] = useState<ModeTab>('Radar');
+  const [compositeSource, setCompositeSource] = useState<string>('iem_n0q');
   const [spcDay, setSpcDay] = useState<SpcDay>('Day 1');
   const [product, setProduct] = useState<RadarProduct>(initialPrefs.product);
   const [tilt, setTilt] = useState(initialPrefs.tilt);
@@ -841,6 +843,7 @@ export default function MesoVortexWorkstation() {
     showFlashReflectivity,
     flashRange,
     inspectionMode,
+    compositeSource,
     crossSectionMode: crossSectionMode && !expertMode && !quadMode,
     onCrossSectionComplete: handleCrossSectionComplete,
     alertFeatures: mapAlertFeatures,
@@ -1213,7 +1216,26 @@ export default function MesoVortexWorkstation() {
                   {modeTab}
                 </button>
               ))}
-              <button
+              {tab === 'Composite' && (
+                <>
+                  <select
+                    value={compositeSource}
+                    onChange={(e) => setCompositeSource(e.target.value)}
+                    className="rounded-full border border-slate-700 bg-[#111827] px-2 py-1.5 text-xs text-slate-200"
+                    aria-label="Composite radar source"
+                  >
+                    {COMPOSITE_SOURCES.map((s) => (
+                      <option key={s.id} value={s.id} disabled={s.status !== 'VERIFIED'}>
+                        {s.label}{s.status !== 'VERIFIED' ? ' (DATA UNAVAILABLE)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-[10px] text-slate-500">
+                    {(() => { const s = COMPOSITE_SOURCES.find((x) => x.id === compositeSource); return s ? `${s.provenance} · refresh ${s.refreshMinutes ?? '—'} min · latency ${s.latencyMinutes ?? '—'} min` : ''; })()}
+                  </span>
+                </>
+              )}
+                <button
                 onClick={() => { setExpertMode((v) => !v); setQuadMode(false); }}
                 className={`rounded-full px-3.5 py-1.5 transition cursor-pointer flex items-center gap-1 border ${
                   expertMode ? 'bg-cyan-600 border-cyan-500 text-white shadow-sm' : 'border-slate-700 bg-[#111827] text-slate-300 hover:bg-slate-700 hover:text-white'
