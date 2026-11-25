@@ -556,6 +556,15 @@ export default function MesoVortexWorkstation() {
     return buildLocationContext(locationContext.lat, locationContext.lon, styledAlerts, RADAR_SITES as any, spotterReportsForContext, mcdFeaturesForContext);
   }, [locationContext, styledAlerts, spotterReportsForContext, mcdFeaturesForContext]);
 
+  useEffect(() => {
+    if (!crossSectionMode) return;
+    const cancelSelection = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setCrossSectionMode(false);
+    };
+    window.addEventListener('keydown', cancelSelection);
+    return () => window.removeEventListener('keydown', cancelSelection);
+  }, [crossSectionMode]);
+
   const handleCrossSectionComplete = async (pointA: [number, number], pointB: [number, number]) => {
     setCrossSectionMode(false);
     setCrossSectionLoading(true);
