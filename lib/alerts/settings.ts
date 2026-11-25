@@ -40,7 +40,7 @@ export type AlertSettings = {
   warningDisplayBehavior: AlertDisplayBehavior;
 };
 
-export const ALERT_SETTINGS_KEY = 'mesovortex_alert_settings_v1';
+export const ALERT_SETTINGS_KEY = 'mesovortex_alert_settings_v2';
 
 export const DEFAULT_ALERT_SETTINGS: AlertSettings = {
   colors: {

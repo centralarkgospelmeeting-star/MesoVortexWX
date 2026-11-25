@@ -18,8 +18,8 @@ import { isAlertAudioSupported, playAlertAudio, unlockAlertAudio } from './audio
 import type { AlertSettings } from './settings';
 
 const POLL_MS = 30_000;
-const FILTERS_STORAGE_KEY = 'mesovortex_alert_category_filters';
-const AUDIO_CATEGORIES_STORAGE_KEY = 'mesovortex_alert_audio_categories';
+const FILTERS_STORAGE_KEY = 'mesovortex_alert_category_filters_v2';
+const AUDIO_CATEGORIES_STORAGE_KEY = 'mesovortex_alert_audio_categories_v2';
 const AUDIO_ENABLED_STORAGE_KEY = 'mesovortex_alert_audio_enabled_v1';
 
 export type FastAlertsOptions = {
