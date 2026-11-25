@@ -59,3 +59,33 @@ console.log(JSON.stringify({
   correctionRate: result.diagnostics.correctionRate,
 }));
 console.log('Velocity dealiasing synthetic tests PASS (folded radial wind field, raw-data immutability, and missing-Nyquist fail-closed checks)');
+
+
+const partialNyquist = radials.map((radial, index) => index === 180
+  ? { ...radial, radial: { nyquist_velocity: 0 } }
+  : radial);
+const partialResult = dealiasVelocity(partialNyquist);
+if (!partialResult.diagnostics.available || partialResult.diagnostics.quality !== 'partial'
+  || partialResult.diagnostics.nyquistMissingRadials !== 1) {
+  throw new Error('Partial Nyquist coverage must remain explicitly marked partial');
+}
+const sparseAzimuth = [0, 1, 10, 11].map(azimuth => ({
+  azimuth,
+  radial: { nyquist_velocity: nyquist },
+  velocity: { first_gate: 10, gate_size: 0.25, moment_data: Array(20).fill(4) },
+}));
+const sparseResult = dealiasVelocity(sparseAzimuth);
+if (!sparseResult.diagnostics.available || sparseResult.diagnostics.gatesUnresolved === 0) {
+  throw new Error('Large azimuth gaps must be reported as unresolved rather than silently bridged');
+}
+const nullPreservation = radials.map((radial, index) => ({
+  ...radial,
+  velocity: { ...radial.velocity, moment_data: radial.velocity.moment_data.map((value, gate) =>
+    gate === 17 && index % 7 === 0 ? null : value) },
+}));
+const nullResult = dealiasVelocity(nullPreservation);
+if (nullResult.radials.some((radial, index) =>
+  radial.velocity.moment_data.some((value, gate) =>
+    value == null && nullPreservation[index].velocity.moment_data[gate] != null))) {
+  throw new Error('Missing-data gates must not be filled by the dealiasing pass');
+}
