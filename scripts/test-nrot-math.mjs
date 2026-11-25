@@ -19,7 +19,9 @@ for (let azimuth = 0; azimuth < 360; azimuth += 1) {
   const moment_data = Array.from({ length: 280 }, (_, gate) => {
     const rangeKm = firstGate + gate * gateSize;
     const eastKm = rangeKm * Math.sin(radians);
-    return 6 * eastKm;
+    const distanceFromEast = Math.min(azimuth, 360 - azimuth);
+    const localizedVortexWindow = Math.exp(-Math.pow(distanceFromEast / 6, 2));
+    return 6 * eastKm * localizedVortexWindow;
   });
   radials.push({
     azimuth,
