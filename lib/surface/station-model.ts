@@ -54,6 +54,26 @@ export function dedupeStationPlots(plots: StationPlot[]): StationPlot[] {
   return Array.from(byStation.values());
 }
 
+/**
+ * Observation request bbox for a camera position/zoom. At overview zoom the
+ * whole world is requested; at higher zoom the region scales with the view.
+ * No geographic filter is applied; coordinates are rounded to avoid AWC
+ * float-noise 400s.
+ */
+export function observationBbox(lat: number, lon: number, zoom: number): string {
+  const safeZoom = Number.isFinite(zoom) ? zoom : 7;
+  if (safeZoom <= 2) return '-90,-180,90,180';
+  const halfLat = Math.min(90, 60 / Math.pow(2, safeZoom - 3));
+  const halfLon = Math.min(180, halfLat * 1.8);
+  const round = (n: number) => Number(n.toFixed(3));
+  return [
+    round(Math.max(-90, lat - halfLat)),
+    round(Math.max(-180, lon - halfLon)),
+    round(Math.min(90, lat + halfLat)),
+    round(Math.min(180, lon + halfLon)),
+  ].join(',');
+}
+
 export interface DeclusteredStationPlot extends StationPlot {
   /** Number of real stations represented by this plot (1 = individual station). */
   clusterCount: number;

@@ -13,7 +13,14 @@ const js = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
 }).outputText;
 const mod = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
-const { declusterStationPlots, stationCellDegrees, DECLUSTER_OFF_ZOOM } = mod;
+const { declusterStationPlots, stationCellDegrees, DECLUSTER_OFF_ZOOM, observationBbox } = mod;
+
+// Zoomed-out bbox must cover the whole world; no geographic filtering.
+assert.equal(observationBbox(34.8, -92.2, 0), '-90,-180,90,180', 'overview zoom must request the whole world');
+assert.equal(observationBbox(-33.9, 151.2, 2), '-90,-180,90,180', 'low zoom must not filter by region');
+const regional = observationBbox(34.8, -92.2, 7).split(',').map(Number);
+assert.ok(regional[0] < 34.8 && regional[1] < -92.2 && regional[2] > 34.8 && regional[3] > -92.2, 'zoomed-in bbox must surround the camera');
+assert.ok(regional[2] - regional[0] < 20, 'zoomed-in bbox must be smaller than the global view');
 
 function station(id, network, lat, lon, tempC, ageMinutes) {
   return {
