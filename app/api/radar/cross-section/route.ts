@@ -154,7 +154,11 @@ export async function POST(request: Request) {
     return NextResponse.json({
       site: site.id, siteName: site.name, scanTime: frame.time,
       source: 'NOAA NEXRAD Level II live volume (single radar)',
-      liveOnly: true, lengthKm: Number(length.toFixed(2)), columns,
+      liveOnly: true,
+      transectSampling: 'GREAT_CIRCLE_EQUAL_DISTANCE',
+      heightReference: 'ABOVE_RADAR_LEVEL',
+      beamModel: '4/3_EARTH_EFFECTIVE_RADIUS',
+      lengthKm: Number(length.toFixed(2)), columns,
       note: 'Each plotted value is a measured reflectivity gate from the nearest available radial in an actual elevation sweep. Beam heights are 4/3-earth geometric estimates above radar level, not a gridded Cartesian volume; gaps are left blank rather than filled.',
       sweeps: grid,
     }, { headers: { 'Cache-Control': 'no-store', 'X-MesoVortex-Source': 'NOAA-NEXRAD-Level-II' } });
