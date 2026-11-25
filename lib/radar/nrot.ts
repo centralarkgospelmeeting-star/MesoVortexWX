@@ -18,6 +18,7 @@ export type NrotRadial = {
   velocity?: NrotMoment;
   reflect?: NrotMoment;
   radial?: { nyquist_velocity?: number };
+  velocityDealiased?: boolean;
 };
 export type NrotPeak = {
   nrot: number;
@@ -40,9 +41,9 @@ export type NrotResult = {
   gatesExcludedNearRadar: number;
   gatesRejected: number;
   quality: {
-    velocityDealiased: false;
+    velocityDealiased: boolean;
     nyquistVelocityAvailable: boolean;
-    aliasSensitive: true;
+    aliasSensitive: boolean;
     minimumRangeKm: number;
   };
 };
@@ -148,10 +149,10 @@ export function calculateNrot(
     gatesExcludedNearRadar: 0,
     gatesRejected: 0,
     quality: {
-      velocityDealiased: false,
+      velocityDealiased: radials.length > 0 && radials.every(r => r.velocityDealiased === true),
       nyquistVelocityAvailable: radials.some(r => Number.isFinite(r.radial?.nyquist_velocity)
         && (r.radial?.nyquist_velocity || 0) > 0),
-      aliasSensitive: true,
+      aliasSensitive: !(radials.length > 0 && radials.every(r => r.velocityDealiased === true)),
       minimumRangeKm: Number(MIN_RANGE_KM.toFixed(2)),
     },
   };
@@ -242,6 +243,7 @@ export function calculateNrot(
   return {
     ...empty,
     available: candidates.length > 0,
+    method: empty.method + (empty.quality.velocityDealiased ? ' Velocity was continuity-dealiased.' : ' Velocity was not fully dealiased.'),
     peaks,
     maxCyclonic: cyclonic.length ? Number(Math.max(...cyclonic.map(p => p.nrot)).toFixed(3)) : null,
     maxAnticyclonic: anticyclonic.length ? Number(Math.min(...anticyclonic.map(p => p.nrot)).toFixed(3)) : null,
