@@ -46,3 +46,14 @@ The map itself (`/api/alerts` → `normalizeNwsCollection`) already ingested all
 - Alerts without geometry (many advisories and statements) cannot be rendered as polygons; they still appear in the alert list/panel via `/api/alerts`.
 - EmergencyAlertTone intentionally triggers audio only for Tornado and Severe Thunderstorm Warnings (siren policy), regardless of the broader feed.
 - Filter mode in Alert Settings can still hide categories when set to `warnings`/`watches`/`statements`; default is `all`.
+
+
+## Zone geometry resolution
+
+Most NWS alerts (especially advisories and statements) ship without a
+polygon; only `affectedZones` (zone URLs) are provided. `/api/alerts` now
+resolves those zone geometries (NWS `/zones/.../{id}`), caches them in
+memory for 10 minutes, and merges them into a single polygon per alert.
+This is why advisories/statements now render on the map instead of only
+appearing in the list. First cold request takes ~18s while zones are fetched;
+subsequent requests are ~1s.
