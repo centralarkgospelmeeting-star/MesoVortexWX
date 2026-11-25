@@ -190,12 +190,12 @@ export async function buildStormAnalysis(siteId:string) {
     const dealiasInput=s.radials.map(r=>({
       ...r,
       reflect:moment(r,'reflect'),
-      radial:r.radial ? {...r.radial,nyquist_velocity:r.radial.nyquist_velocity/100} : undefined,
+      radial:r.radial ? {...r.radial,nyquist_velocity:(r.radial.nyquist_velocity||0)/100} : undefined,
     }));
     const dealias=dealiasVelocity(dealiasInput);
     const analysisRadials=dealias.radials.map(r=>({
       ...r,
-      velocityDealiased:Boolean(r.radial?.nyquist_velocity&&r.radial.nyquist_velocity>0),
+      velocityDealiased:dealias.diagnostics.available&&Boolean(r.radial?.nyquist_velocity&&r.radial.nyquist_velocity>0),
     }));
     const couplets=velocityCouplets(analysisRadials,s.elevationDegrees,site);
     const nrot=calculateNrot(analysisRadials,site.lat,site.lon);
