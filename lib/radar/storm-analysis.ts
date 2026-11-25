@@ -186,7 +186,7 @@ export async function buildStormAnalysis(siteId:string) {
     const ref=reflectivitySummary(s.radials);
     const dual=dualPolSummary(s.radials);
     const couplets=velocityCouplets(s.radials,s.elevationDegrees,site);
-    const nrot=calculateNrot(s.radials,site.lat,site.lon);
+    const nrot=calculateNrot(s.radials.map(r=>({...r,reflect:moment(r,'reflect')})),site.lat,site.lon);
     return {sweep:s.sweep,elevationDegrees:s.elevationDegrees,radialCount:s.radials.length,reflectivity:ref,velocity:{measuredRadials:s.radials.filter(r=>moment(r,'velocity')?.moment_data?.length).length,couplets},nrot,dualPol:dual};
   });
   const allCouplets=sweeps.flatMap(s=>s.velocity.couplets).sort((a,b)=>b.deltaVelocityKt-a.deltaVelocityKt).slice(0,20);
