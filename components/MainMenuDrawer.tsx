@@ -41,8 +41,8 @@ export function MainMenuDrawer({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex bg-[#050a12] animate-fade-in font-sans select-none">
-      <aside className="w-80 sm:w-88 border-r border-slate-800 bg-[#0b1220] p-5 font-sans text-slate-100 shadow-2xl flex flex-col justify-between overflow-hidden animate-slide-right">
+    <div className="fixed inset-0 z-50 flex bg-[#050a12] font-sans select-none">
+      <aside className="w-80 sm:w-88 border-r border-slate-800 bg-[#0b1220] p-5 font-sans text-slate-100 shadow-2xl flex flex-col justify-between overflow-hidden">
         {/* Top Header */}
         <div className="space-y-4 flex-1 overflow-y-auto pr-1">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">

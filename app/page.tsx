@@ -216,6 +216,24 @@ export default function MesoVortexWorkstation() {
   const [tab, setTab] = useState<ModeTab>('Radar');
   const [compositeSource, setCompositeSource] = useState<string>('iem_n0q');
   const [compositeOptionsExpanded, setCompositeOptionsExpanded] = useState<boolean>(false);
+  useEffect(() => {
+    if (!compositeOptionsExpanded) return;
+    const close = (event: MouseEvent | KeyboardEvent) => {
+      if (event instanceof KeyboardEvent) {
+        if (event.key === 'Escape') setCompositeOptionsExpanded(false);
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (target && !target.closest('[data-composite-options]')) setCompositeOptionsExpanded(false);
+    };
+    window.addEventListener('click', close);
+    window.addEventListener('keydown', close);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('keydown', close);
+    };
+  }, [compositeOptionsExpanded]);
+
   const [spcDay, setSpcDay] = useState<SpcDay>('Day 1');
   const [product, setProduct] = useState<RadarProduct>(initialPrefs.product);
   const [tilt, setTilt] = useState(initialPrefs.tilt);
@@ -1059,14 +1077,14 @@ export default function MesoVortexWorkstation() {
                 key={modeOption}
                 type="button"
                 onClick={() => onModeChange(modeOption)}
-                className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold transition ${active ? 'bg-cyan-500 text-slate-950' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold transition ${active ? 'bg-cyan-500 text-slate-950' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
               >
                 {modeOption}
               </button>
             );
           })}
           {onProductChange && paneMode === 'Radar' && (
-            <select value={paneProduct} onChange={(e) => onProductChange(e.target.value as RadarProduct)} className="ml-0.5 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-[9px] font-bold text-slate-200 outline-none" aria-label={`Pane ${paneId} product`}>
+            <select value={paneProduct} onChange={(e) => onProductChange(e.target.value as RadarProduct)} className="ml-0.5 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-[10px] font-bold text-slate-200 outline-none" aria-label={`Pane ${paneId} product`}>
               <option value="ref">REF</option><option value="vel">VEL</option><option value="srvel">SRV</option><option value="cc">CC</option><option value="zdr">ZDR</option><option value="kdp">KDP</option>
             </select>
           )}
@@ -1247,31 +1265,33 @@ export default function MesoVortexWorkstation() {
                       </option>
                     ))}
                   </select>
-                  <span className="text-[10px] text-slate-500">
+                  <span className="hidden max-w-[22rem] truncate text-[11px] text-slate-400 xl:inline">
                     {(() => { const s = COMPOSITE_SOURCES.find((x) => x.id === compositeSource); return s ? `${s.provenance} · refresh ${s.refreshMinutes ?? '—'} min · latency ${s.latencyMinutes ?? '—'} min` : ''; })()}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => setCompositeOptionsExpanded((v) => !v)}
-                    className="rounded-full border border-slate-700 bg-[#111827] px-2 py-1.5 text-[10px] text-slate-300 hover:bg-slate-700"
-                    aria-expanded={compositeOptionsExpanded}
-                  >
-                    {compositeOptionsExpanded ? '▾' : '▸'} Composite options
-                  </button>
-                  {compositeOptionsExpanded && (
-                    <div className="w-full rounded-md border border-slate-700 bg-[#0b1220] p-2 text-[10px]">
-                      {COMPOSITE_SOURCES.map((s) => (
-                        <div key={s.id} className="flex items-start gap-2 border-b border-slate-800 py-1 last:border-0">
-                          <span className={s.status === 'VERIFIED' ? 'text-emerald-300' : 'text-amber-300'}>{s.status === 'VERIFIED' ? '●' : '○'}</span>
-                          <div className="flex-1">
-                            <div className="font-bold text-slate-200">{s.label}</div>
-                            <div className="text-slate-500">{s.provenance}</div>
-                            <div className="text-slate-500">Refresh: {s.refreshMinutes ?? '—'} min · Latency: {s.latencyMinutes ?? '—'} min · Scope: {s.scope}</div>
+                  <div data-composite-options="true" className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setCompositeOptionsExpanded((v) => !v)}
+                      className="rounded-full border border-slate-700 bg-[#111827] px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-700"
+                      aria-expanded={compositeOptionsExpanded}
+                    >
+                      {compositeOptionsExpanded ? '▾' : '▸'} Composite options
+                    </button>
+                    {compositeOptionsExpanded && (
+                      <div className="fixed right-2 top-16 z-50 max-h-[55vh] w-[min(16rem,calc(100vw-2rem))] overflow-y-auto rounded-lg border border-slate-700 bg-[#0b1220] p-2 text-[11px] shadow-xl">
+                        {COMPOSITE_SOURCES.map((s) => (
+                          <div key={s.id} className="flex items-start gap-2 border-b border-slate-800 py-1.5 last:border-0">
+                            <span className={s.status === 'VERIFIED' ? 'text-emerald-300' : 'text-amber-300'}>{s.status === 'VERIFIED' ? '●' : '○'}</span>
+                            <div className="min-w-0 flex-1">
+                              <div className="font-bold text-slate-200">{s.label}</div>
+                              <div className="text-slate-400">{s.provenance}</div>
+                              <div className="text-slate-500">Refresh: {s.refreshMinutes ?? '—'} min · Latency: {s.latencyMinutes ?? '—'} min · Scope: {s.scope}</div>
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
                 <button
@@ -1692,12 +1712,12 @@ export default function MesoVortexWorkstation() {
 
       {menuOpen && (
         <div className="fixed inset-0 z-50 flex">
-          <div className="w-72 bg-[#0b1220] border-r border-slate-800 p-4 shadow-lg text-slate-100 overflow-y-auto">
+          <div className="w-64 max-w-[min(16rem,85vw)] bg-[#0b1220] border-r border-slate-800 p-3 shadow-lg text-slate-100 overflow-y-auto max-h-screen">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
               <span className="font-black text-sm tracking-wide text-sky-300">MesoVortex</span>
               <button onClick={() => setMenuOpen(false)} className="text-slate-400 hover:text-white">✕</button>
             </div>
-            <div className="space-y-1 text-sm font-semibold">
+            <div className="space-y-1 text-[13px] font-semibold">
               {[
                 ['Weather','Weather'],
                 ['Alerts','Alerts'],
@@ -1967,7 +1987,7 @@ export default function MesoVortexWorkstation() {
                         <div className="font-bold text-slate-100">{d.data}</div>
                         <div className="text-[10px] text-slate-400">{d.source}{d.attribution ? ` · ${d.attribution}` : ''}</div>
                       </div>
-                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black uppercase ${d.status==='IMPLEMENTED' ? 'bg-emerald-500/20 text-emerald-300' : d.status==='PARTIAL' ? 'bg-amber-500/20 text-amber-300' : 'bg-slate-700 text-slate-300'}`}>
+                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-black uppercase ${d.status==='IMPLEMENTED' ? 'bg-emerald-500/20 text-emerald-300' : d.status==='PARTIAL' ? 'bg-amber-500/20 text-amber-300' : 'bg-slate-700 text-slate-300'}`}>
                         {DATA_SOURCE_STATUS_LABEL[d.status]}
                       </span>
                     </div>

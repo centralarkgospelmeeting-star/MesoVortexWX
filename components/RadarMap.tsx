@@ -2519,7 +2519,7 @@ export function RadarMap({
 
       {flashEnabled && !flashDismissed && (
         <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-full border border-purple-500/80 bg-[#0b1220] px-4 py-1.5 text-xs font-mono font-black text-purple-300 shadow-lg">
-          <span className="h-2 w-2 rounded-full bg-purple-400 animate-pulse" />
+          <span className="h-2 w-2 rounded-full bg-purple-400" />
           <span>FLASH REFLECTIVITY (VISUAL)</span>
           <button type="button" onClick={() => setFlashDismissed(true)} className="ml-1 text-slate-400 hover:text-white" aria-label="Dismiss flash indicator">×</button>
         </div>
@@ -2544,7 +2544,7 @@ export function RadarMap({
 
       {fastScanEnabled && scanIngesting && !scanIngestDismissed && !tileError && (
         <div className="absolute top-28 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-xl border border-emerald-500/60 bg-[#0b1220] px-4 py-2 font-mono text-xs font-bold text-emerald-300 shadow-2xl">
-          <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="h-2 w-2 rounded-full bg-emerald-400" />
           <span>SCAN INGEST FRONTIER</span>
           <span className="font-normal text-slate-400">Verified new scan; new data is replacing old tiles behind the beam</span>
           <button type="button" onClick={() => setScanIngestDismissed(true)} className="ml-1 text-slate-400 hover:text-white" aria-label="Dismiss scan ingest">×</button>

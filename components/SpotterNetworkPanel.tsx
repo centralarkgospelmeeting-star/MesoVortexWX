@@ -254,8 +254,8 @@ export function SpotterNetworkPanel({ isOpen, onClose, onSpottersUpdated, radarL
       <div className="flex items-center justify-between border-b border-slate-800 bg-[#0b1220] px-4 py-3">
         <div className="flex items-center gap-2">
           <div className={`h-2 w-2 rounded-full ${
-            status === 'connected' ? 'bg-emerald-400 animate-pulse' :
-            status === 'connecting' ? 'bg-yellow-400 animate-pulse' :
+            status === 'connected' ? 'bg-emerald-400' :
+            status === 'connecting' ? 'bg-yellow-400' :
             status === 'error' ? 'bg-red-500' : 'bg-slate-600'
           }`} />
           <span className="text-sm font-bold tracking-wide text-white">Spotter Network</span>

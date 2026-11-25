@@ -182,7 +182,7 @@ export function MainNavbar({
 
       {/* Sub-bar for SPC Day Selection when in Outlooks Mode */}
       {activeTab === 'Outlooks' && onSelectSpcDay && (
-        <div className="pointer-events-auto mt-2 flex items-center gap-2 rounded-full border border-slate-800 bg-[#0b1220] px-3 py-1 shadow-2xl text-xs font-bold text-slate-300 animate-fade-in">
+        <div className="pointer-events-auto mt-2 flex items-center gap-2 rounded-full border border-slate-800 bg-[#0b1220] px-3 py-1 shadow-2xl text-xs font-bold text-slate-300">
           <span className="text-[10px] uppercase tracking-wider text-slate-400 px-1 font-mono">
             SPC Convective
           </span>

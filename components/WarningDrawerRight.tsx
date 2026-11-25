@@ -63,7 +63,7 @@ export function WarningDrawerRight({
   const floodCount = alerts.filter((a) => a.event.includes('Flood')).length;
 
   return (
-    <aside className="absolute right-0 top-7 bottom-0 z-40 w-80 sm:w-96 border-l border-slate-800 bg-[#0b1220] font-sans text-slate-100 shadow-2xl flex flex-col select-none animate-slide-left">
+    <aside className="absolute right-0 top-7 bottom-0 z-40 w-80 sm:w-96 border-l border-slate-800 bg-[#0b1220] font-sans text-slate-100 shadow-2xl flex flex-col select-none">
       {/* Top Header */}
       <div className="flex items-center justify-between border-b border-slate-800 p-4 bg-[#111827]">
         <div className="flex items-center gap-2">

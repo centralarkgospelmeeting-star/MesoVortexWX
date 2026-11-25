@@ -419,9 +419,9 @@ export function UniversalLegend({
     <div className="relative w-full z-50 select-none">
       {/* 1. Optional Temporary Alert Announcement Banner (Section 11) */}
       {activeAnnouncement && (
-        <div className="flex items-center justify-between bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 px-3 py-1 text-white shadow-xl animate-fade-in text-xs font-bold">
+        <div className="flex items-center justify-between bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 px-3 py-1 text-white shadow-xl text-xs font-bold">
           <div className="flex items-center gap-2 overflow-hidden">
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-[11px] animate-pulse">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-[11px]">
               ⚠️
             </span>
             <span className="font-mono uppercase tracking-wider text-[10px] bg-[#050a12]/80 px-1.5 py-0.5 rounded">
@@ -476,7 +476,7 @@ export function UniversalLegend({
 
       {/* 3. Floating Tooltip on Hover */}
       {hovered && steps.length > 0 && (
-        <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-white/20 bg-[#0b1220] px-3 py-1 text-[10px] font-mono font-bold text-white shadow-2xl animate-fade-in z-50 flex items-center gap-1.5">
+        <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-white/20 bg-[#0b1220] px-3 py-1 text-[10px] font-mono font-bold text-white shadow-2xl z-50 flex items-center gap-1.5">
           <span
             className="inline-block h-2.5 w-2.5 rounded-full border border-white/40"
             style={{ backgroundColor: hovered.color }}

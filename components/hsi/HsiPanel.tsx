@@ -153,8 +153,8 @@ export function HsiPanel({
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="text-[10px] font-black uppercase tracking-[0.12em] text-sky-300">Hazard Severity Index (HSI)</div>
-          <div className="truncate text-[9px] text-slate-500">{areaLabel}</div>
+          <div className="text-[11px] font-black uppercase tracking-[0.12em] text-sky-300">Hazard Severity Index (HSI)</div>
+          <div className="truncate text-[10px] text-slate-500">{areaLabel}</div>
         </div>
         <button
           type="button"
@@ -169,10 +169,10 @@ export function HsiPanel({
       <div className="mt-2 flex items-end gap-2">
         <div className={`text-3xl font-black leading-none ${textColor}`}>{score === null ? '—' : score}</div>
         <div className="min-w-0 flex-1 pb-0.5">
-          <div className={`truncate text-[10px] font-bold ${textColor}`}>
+          <div className={`truncate text-[11px] font-bold ${textColor}`}>
             {loading ? 'Loading verified inputs…' : result.bandLabel}
           </div>
-          <div className="text-[9px] text-slate-500">HSI 0–100 · deterministic · not official</div>
+          <div className="text-[10px] text-slate-500">HSI 0–100 · deterministic · not official</div>
         </div>
       </div>
 
@@ -180,21 +180,21 @@ export function HsiPanel({
         <div className="h-full transition-all" style={{ width: `${width}%`, backgroundColor: color }} />
       </div>
 
-      <div className="mt-2 flex items-center justify-between text-[9px] text-slate-400">
+      <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400">
         <span>Confidence: {Math.round(result.confidence * 100)}% · {result.sourceCount} verified sources</span>
         <span>{result.areaCount} areas</span>
       </div>
 
       {/* Scale views: national / regional / state / local / custom. */}
       <div className="mt-2 border-t border-slate-800 pt-2">
-        <div className="text-[9px] font-black uppercase tracking-wider text-slate-500">HSI scale</div>
+        <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">HSI scale</div>
         <div className="mt-1 flex flex-wrap gap-1">
           {HSI_SCALES.map((item) => (
             <button
               key={item.id}
               type="button"
               onClick={() => setScale(item.id)}
-              className={`rounded-full border px-2 py-0.5 text-[9px] font-bold ${
+              className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${
                 scale === item.id ? 'border-sky-600 bg-sky-900/40 text-sky-200' : 'border-slate-700 text-slate-400 hover:bg-slate-800'
               }`}
             >
@@ -202,7 +202,7 @@ export function HsiPanel({
             </button>
           ))}
         </div>
-        <div className="mt-1 truncate text-[9px] text-slate-500">
+        <div className="mt-1 truncate text-[10px] text-slate-500">
           {HSI_SCALES.find((item) => item.id === scale)?.example}
         </div>
         {scale !== 'national' && (
@@ -211,7 +211,7 @@ export function HsiPanel({
             onChange={(event) => setScopeText(event.target.value)}
             placeholder={scale === 'custom' ? 'Operational area name' : 'Area name or state'}
             aria-label="HSI area scope"
-            className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] text-slate-200 outline-none"
+            className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-200 outline-none"
           />
         )}
         {scale === 'custom' && (
@@ -220,7 +220,7 @@ export function HsiPanel({
               <button
                 type="button"
                 onClick={onStartDraw}
-                className="rounded border border-slate-600 bg-[#111827] px-2 py-0.5 text-[9px] font-bold text-slate-200 hover:bg-slate-700"
+                className="rounded border border-slate-600 bg-[#111827] px-2 py-0.5 text-[10px] font-bold text-slate-200 hover:bg-slate-700"
               >
                 Draw operational area
               </button>
@@ -228,14 +228,14 @@ export function HsiPanel({
                 <button
                   type="button"
                   onClick={onClearDraw}
-                  className="rounded border border-slate-700 px-2 py-0.5 text-[9px] font-bold text-slate-400 hover:bg-slate-800"
+                  className="rounded border border-slate-700 px-2 py-0.5 text-[10px] font-bold text-slate-400 hover:bg-slate-800"
                 >
                   Clear ({customPolygon.length} pts)
                 </button>
               )}
             </div>
             {(!customPolygon || customPolygon.length < 3) && (
-              <div className="mt-1 text-[9px] text-amber-200">DATA INCOMPLETE — draw an area on the map to scope HSI.</div>
+              <div className="mt-1 text-[10px] text-amber-200">DATA INCOMPLETE — draw an area on the map to scope HSI.</div>
             )}
           </div>
         )}
@@ -243,7 +243,7 @@ export function HsiPanel({
 
       <div className="mt-2 space-y-1">
         {result.contributors.filter((item) => item.points > 0).slice(0, 4).map((item) => (
-          <div key={item.id} className="flex items-start justify-between gap-2 text-[9px] leading-tight">
+          <div key={item.id} className="flex items-start justify-between gap-2 text-[10px] leading-tight">
             <div className="min-w-0">
               <div className="truncate font-bold text-slate-200">{item.label}</div>
               <div className="truncate text-slate-500">{item.detail} · {item.source}</div>
@@ -252,19 +252,19 @@ export function HsiPanel({
           </div>
         ))}
         {loading && result.contributors.length === 0 && (
-          <div className="text-[9px] text-slate-500">Reading live radar, lightning, SPC outlook, and alerts…</div>
+          <div className="text-[10px] text-slate-500">Reading live radar, lightning, SPC outlook, and alerts…</div>
         )}
         {!loading && result.contributors.length === 0 && (
-          <div className="text-[9px] text-slate-400">{result.summary}</div>
+          <div className="text-[10px] text-slate-400">{result.summary}</div>
         )}
         {result.dataIncomplete && !loading && (
-          <div className="rounded border border-amber-500/40 bg-amber-950/20 px-1.5 py-1 text-[9px] text-amber-200">
+          <div className="rounded border border-amber-500/40 bg-amber-950/20 px-1.5 py-1 text-[10px] text-amber-200">
             DATA INCOMPLETE — {result.unavailable.slice(0, 3).join(', ')}{result.unavailable.length > 3 ? ` +${result.unavailable.length - 3} more` : ''}
           </div>
         )}
       </div>
 
-      <div className="mt-2 flex items-center justify-between border-t border-slate-800 pt-2 text-[8px] text-slate-500">
+      <div className="mt-2 flex items-center justify-between border-t border-slate-800 pt-2 text-[10px] text-slate-500">
         <span className="truncate">{loading ? 'Checking verified sources…' : result.summary}</span>
         <button
           type="button"
@@ -276,7 +276,7 @@ export function HsiPanel({
         </button>
       </div>
 
-      <div className="mt-1 text-[8px] text-slate-400">Archived radar backdrop · not live data or an HSI input</div>
+      <div className="mt-1 text-[10px] text-slate-400">Archived radar backdrop · not live data or an HSI input</div>
 
       {contextMenu && (
         <div
@@ -285,7 +285,7 @@ export function HsiPanel({
           aria-label="Hazard Severity Index actions"
           onPointerDown={(event) => event.stopPropagation()}
           onContextMenu={(event) => event.preventDefault()}
-          className="fixed z-[60] w-44 overflow-hidden rounded-lg border border-slate-600 bg-[#0b1220] py-1 text-[10px] text-slate-200 shadow-2xl"
+          className="fixed z-[60] w-44 overflow-hidden rounded-lg border border-slate-600 bg-[#0b1220] py-1 text-[11px] text-slate-200 shadow-2xl"
           style={{
             left: Math.min(contextMenu.x, Math.max(0, window.innerWidth - 184)),
             top: Math.min(contextMenu.y, Math.max(0, window.innerHeight - 132)),
@@ -303,7 +303,7 @@ export function HsiPanel({
             onClick={onClose}>
             Hide HSI
           </button>
-          <div className="border-t border-slate-800 px-3 py-1 text-[8px] text-slate-500">Deterministic · not official</div>
+          <div className="border-t border-slate-800 px-3 py-1 text-[10px] text-slate-500">Deterministic · not official</div>
         </div>
       )}
     </div>

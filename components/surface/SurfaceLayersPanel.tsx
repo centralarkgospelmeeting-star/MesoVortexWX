@@ -148,7 +148,7 @@ export function SurfaceLayersPanel({ layers, statuses, counts, stations, errors,
         </div>
       </details>
 
-      <div className="border-t border-slate-800 pt-1.5 font-mono text-[9px] leading-relaxed text-slate-500">
+      <div className="border-t border-slate-800 pt-1.5 font-mono text-[10px] leading-relaxed text-slate-500">
         Station model: temp upper-left · dew point lower-left · pressure upper-right · sky cover center · wind barb · ID lower-center · present weather left.
         Stale observations are amber and dashed. Missing fields are DATA UNAVAILABLE; no value is inferred.
       </div>

@@ -47,7 +47,7 @@ export function WarningDetailsPopup({ warning, onClose, onSpeak }: Props) {
   };
 
   return (
-    <div className="absolute top-20 right-4 sm:right-[400px] z-40 w-84 sm:w-96 rounded-3xl border border-slate-700 bg-[#0b1220] font-sans text-slate-100 shadow-2xl p-5 animate-fade-in select-none">
+    <div className="absolute top-20 right-4 sm:right-[400px] z-40 w-84 sm:w-96 rounded-3xl border border-slate-700 bg-[#0b1220] font-sans text-slate-100 shadow-2xl p-5 select-none">
       {/* Header with Title and Close Button (Section 10 & Wireframe 4) */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-3">
         <div className="flex items-center gap-2">
