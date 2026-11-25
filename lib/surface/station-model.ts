@@ -18,6 +18,42 @@ import {
 export const DATA_UNAVAILABLE = 'DATA UNAVAILABLE';
 export const DEFAULT_STALE_MINUTES = 60;
 
+/**
+ * Source priority for duplicate-station resolution. When several networks
+ * report the same station (e.g. ASOS is a strict subset of genuine METAR), the
+ * highest priority source wins; lower-priority duplicates are not plotted.
+ */
+export const SURFACE_SOURCE_PRIORITY: Record<string, number> = {
+  metar: 90,
+  speci: 89,
+  asos: 85,
+  awos: 80,
+  mesonet: 70,
+  coop: 65,
+  pws: 60,
+  wunderground: 50,
+  tempest: 50,
+  davis: 50,
+  buoy: 30,
+  marine: 30,
+};
+
+export function surfaceSourcePriority(network: SurfaceNetworkId): number {
+  return SURFACE_SOURCE_PRIORITY[network] ?? 0;
+}
+
+/** Deduplicate plotted stations by station id, keeping the highest source priority. */
+export function dedupeStationPlots(plots: StationPlot[]): StationPlot[] {
+  const byStation = new Map<string, StationPlot>();
+  for (const plot of plots) {
+    const existing = byStation.get(plot.stationId);
+    if (!existing || surfaceSourcePriority(plot.network) > surfaceSourcePriority(existing.network)) {
+      byStation.set(plot.stationId, plot);
+    }
+  }
+  return Array.from(byStation.values());
+}
+
 export interface NormalizeOptions {
   layer: SurfaceLayerId;
   network: SurfaceNetworkId;
@@ -261,7 +297,7 @@ export function normalizeStationPlots(features: unknown, options: NormalizeOptio
       raw: { ...p },
     });
   }
-  return plots;
+  return dedupeStationPlots(plots);
 }
 
 export function formatMinutes(ageMinutes: number | null): string {

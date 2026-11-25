@@ -52,6 +52,10 @@ for (const id of ['metar', 'aviation', 'mesonet', 'pws', 'buoy', 'marine']) {
 }
 assert.match(panel, /NO DATA/, 'unavailable layers must be visibly marked');
 assert.match(panel, /DATA UNAVAILABLE/, 'missing station fields must be visibly marked');
+assert.match(types, /OBSERVATION_MASTER_LAYERS/, 'master OBSERVATIONS toggle must resolve to supported observation networks');
+assert.match(panel, /OBSERVATIONS/, 'surface panel must render the single OBSERVATIONS master toggle');
+assert.match(panel, /Network-specific controls/, 'advanced network-specific controls must be reachable from the panel');
+assert.match(stationModel, /SURFACE_SOURCE_PRIORITY/, 'duplicate stations must resolve by source priority');
 
 for (const file of [
   'app/api/metar/geojson/route.ts',

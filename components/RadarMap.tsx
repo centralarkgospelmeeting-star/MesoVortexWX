@@ -1043,13 +1043,15 @@ export function RadarMap({
   }, [mapReady, scheduleStationPaint]);
 
   useEffect(() => {
+    const observationsMaster = surfaceLayers?.observations === true;
     const layers: Record<SurfaceLayerId, boolean> = {
-      metar: showMetars || surfaceLayers?.metar === true,
-      aviation: surfaceLayers?.aviation === true,
-      mesonet: surfaceLayers?.mesonet === true,
-      pws: surfaceLayers?.pws === true,
-      buoy: surfaceLayers?.buoy === true,
-      marine: surfaceLayers?.marine === true,
+      observations: observationsMaster,
+      metar: observationsMaster || showMetars || surfaceLayers?.metar === true,
+      aviation: observationsMaster || surfaceLayers?.aviation === true,
+      mesonet: observationsMaster || surfaceLayers?.mesonet === true,
+      pws: observationsMaster || surfaceLayers?.pws === true,
+      buoy: observationsMaster || surfaceLayers?.buoy === true,
+      marine: observationsMaster || surfaceLayers?.marine === true,
     };
     const active = Object.values(layers).some(Boolean);
     stationVisibleRef.current = active;
@@ -1060,7 +1062,11 @@ export function RadarMap({
       return;
     }
     const features = Array.isArray(surfaceGeoJson?.features) ? surfaceGeoJson.features : [];
-    const visible = features.filter((feature: any) => layers[(feature?.properties?.surfaceLayer || 'metar') as SurfaceLayerId] !== false);
+    const visible = features.filter((feature: any) => {
+      const layer = (feature?.properties?.surfaceLayer || 'metar') as SurfaceLayerId;
+      if (layer === 'observations') return observationsMaster;
+      return layers[layer] !== false;
+    });
     stationPlotsRef.current = normalizeStationPlots(visible, {
       layer: 'metar',
       network: 'metar',

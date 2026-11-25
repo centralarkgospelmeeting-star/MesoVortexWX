@@ -2,7 +2,7 @@
 
 import { useMemo, type ReactNode } from 'react';
 import { DATA_UNAVAILABLE, formatMinutes, formatTemp, formatWind, stationDetailFields } from '../../lib/surface/station-model';
-import { SURFACE_LAYERS, SURFACE_NETWORKS, type SurfaceLayerId, type StationPlot } from '../../lib/surface/types';
+import { OBSERVATION_MASTER_LAYERS, SURFACE_LAYERS, SURFACE_NETWORKS, type SurfaceLayerId, type StationPlot } from '../../lib/surface/types';
 
 export type SurfaceLayerStatus = 'idle' | 'loading' | 'ready' | 'error' | 'unavailable';
 
@@ -30,6 +30,19 @@ export function SurfaceLayersPanel({ layers, statuses, counts, stations, errors,
     [stations]
   );
 
+  const masterEnabled = layers.observations;
+  const enabledGranular = OBSERVATION_MASTER_LAYERS.filter((id) => layers[id]);
+  const masterStatus: SurfaceLayerStatus = !masterEnabled
+    ? 'idle'
+    : enabledGranular.some((id) => statuses[id] === 'loading')
+      ? 'loading'
+      : enabledGranular.some((id) => statuses[id] === 'error')
+        ? 'error'
+        : enabledGranular.some((id) => statuses[id] === 'ready')
+          ? 'ready'
+          : 'unavailable';
+  const masterCount = enabledGranular.reduce((sum, id) => sum + (counts[id] ?? 0), 0);
+
   return (
     <div className="space-y-2 text-[10px] text-slate-300">
       <div className="flex items-center justify-between border-b border-slate-700 pb-1.5">
@@ -37,28 +50,49 @@ export function SurfaceLayersPanel({ layers, statuses, counts, stations, errors,
         <span className="font-mono text-slate-500">{sorted.length} plotted</span>
       </div>
 
-      <div className="space-y-1">
-        {SURFACE_LAYERS.map((layer) => {
-          const enabled = layers[layer.id];
-          const status = statuses[layer.id];
-          return (
-            <div key={layer.id} className="flex items-center gap-2 rounded border border-slate-800 bg-[#0b1220] px-1.5 py-1">
-              <input
-                type="checkbox"
-                checked={enabled}
-                onChange={(e) => onToggle(layer.id, e.target.checked)}
-                aria-label={`Toggle ${layer.name}`}
-                className="h-3 w-3 accent-sky-500"
-              />
-              <span className="w-36 font-bold text-slate-200">{layer.name}</span>
-              <span className={`w-14 font-mono ${STATUS_TONE[status]}`}>
-                {status === 'unavailable' ? 'NO DATA' : status === 'loading' ? 'LOADING' : status === 'error' ? 'ERROR' : `${counts[layer.id] ?? 0}`}
-              </span>
-              <span className="truncate text-slate-500">{layer.note}</span>
-            </div>
-          );
-        })}
+      {/* Single OBSERVATIONS master toggle: enables all supported networks at once. */}
+      <div className="flex items-center gap-2 rounded border border-slate-800 bg-[#0b1220] px-1.5 py-1">
+        <input
+          type="checkbox"
+          checked={masterEnabled}
+          onChange={(e) => onToggle('observations', e.target.checked)}
+          aria-label="Toggle OBSERVATIONS"
+          className="h-3 w-3 accent-sky-500"
+        />
+        <span className="w-36 font-bold text-slate-200">OBSERVATIONS</span>
+        <span className={`w-14 font-mono ${STATUS_TONE[masterStatus]}`}>
+          {masterStatus === 'unavailable' ? 'NO DATA' : masterStatus === 'loading' ? 'LOADING' : masterStatus === 'error' ? 'ERROR' : masterCount}
+        </span>
+        <span className="truncate text-slate-500">{masterEnabled ? 'All supported observation networks' : 'All supported observation networks'}</span>
       </div>
+
+      {/* Advanced users may narrow networks; hidden behind a collapsed control. */}
+      <details className="border-t border-slate-800 pt-1.5">
+        <summary className="cursor-pointer font-black uppercase tracking-wider text-slate-400">Network-specific controls (advanced)</summary>
+        <div className="mt-1 space-y-1">
+          {SURFACE_LAYERS.filter((layer) => layer.id !== 'observations').map((layer) => {
+            const enabled = masterEnabled || layers[layer.id];
+            const status = statuses[layer.id];
+            return (
+              <div key={layer.id} className="flex items-center gap-2 rounded border border-slate-800 bg-[#0b1220] px-1.5 py-1">
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  disabled={masterEnabled}
+                  onChange={(e) => onToggle(layer.id, e.target.checked)}
+                  aria-label={`Toggle ${layer.name}`}
+                  className="h-3 w-3 accent-sky-500 disabled:opacity-50"
+                />
+                <span className="w-36 font-bold text-slate-200">{layer.name}</span>
+                <span className={`w-14 font-mono ${STATUS_TONE[status]}`}>
+                  {status === 'unavailable' ? 'NO DATA' : status === 'loading' ? 'LOADING' : status === 'error' ? 'ERROR' : `${counts[layer.id] ?? 0}`}
+                </span>
+                <span className="truncate text-slate-500">{layer.note}</span>
+              </div>
+            );
+          })}
+        </div>
+      </details>
 
       {Object.entries(errors).map(([layer, message]) => (
         <div key={layer} className="rounded border border-red-500/30 bg-red-950/20 px-1.5 py-1 text-red-300">

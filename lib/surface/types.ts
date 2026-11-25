@@ -24,7 +24,13 @@ export type SurfaceNetworkId =
   | 'marine';
 
 /** Independent workstation layer keys requested for Phase 4C. */
-export type SurfaceLayerId = 'metar' | 'aviation' | 'mesonet' | 'pws' | 'buoy' | 'marine';
+export type SurfaceLayerId = 'observations' | 'metar' | 'aviation' | 'mesonet' | 'pws' | 'buoy' | 'marine';
+
+/** Master OBSERVATIONS toggle: enables every supported observation network at once. */
+export const OBSERVATION_MASTER_LAYER_ID: SurfaceLayerId = 'observations';
+
+/** Every network plotted when the OBSERVATIONS master toggle is enabled. */
+export const OBSERVATION_MASTER_LAYERS: readonly SurfaceLayerId[] = ['metar', 'aviation', 'mesonet', 'pws', 'buoy', 'marine'];
 
 export type ObservationQuality = 'fresh' | 'stale' | 'unavailable';
 
@@ -251,6 +257,7 @@ export const SURFACE_NETWORKS: readonly SurfaceNetworkDefinition[] = [
 ];
 
 export const SURFACE_LAYERS: readonly { id: SurfaceLayerId; name: string; note: string }[] = [
+  { id: 'observations', name: 'OBSERVATIONS', note: 'All supported observation networks' },
   { id: 'metar', name: 'METAR', note: 'All real METAR/SPECI reports' },
   { id: 'aviation', name: 'Aviation', note: 'Automated METAR subset (AUTO/AO1/AO2 remarks)' },
   { id: 'mesonet', name: 'Mesonet', note: 'Public IEM mesonet networks only' },

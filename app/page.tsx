@@ -159,7 +159,7 @@ const DEFAULT_PREFS: UserPrefs = {
   showSpotters: true,
   showSpotterReports: true,
   showMetars: true,
-  surfaceLayers: { metar: true, aviation: false, mesonet: false, pws: false, buoy: false, marine: false },
+  surfaceLayers: { observations: true, metar: true, aviation: false, mesonet: false, pws: false, buoy: false, marine: false },
   showStormTracks: true,
   showCounties: true,
   showTornadoAnalysis: true,
@@ -312,10 +312,10 @@ export default function MesoVortexWorkstation() {
   const [surfaceStatus, setSurfaceStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [surfaceError, setSurfaceError] = useState<string | null>(null);
   const [surfaceLayerStatus, setSurfaceLayerStatus] = useState<Record<SurfaceLayerId, SurfaceLayerStatus>>({
-    metar: 'idle', aviation: 'idle', mesonet: 'unavailable', pws: 'unavailable', buoy: 'unavailable', marine: 'unavailable',
+    observations: 'idle', metar: 'idle', aviation: 'idle', mesonet: 'unavailable', pws: 'unavailable', buoy: 'unavailable', marine: 'unavailable',
   });
   const [surfaceLayerCounts, setSurfaceLayerCounts] = useState<Record<SurfaceLayerId, number>>({
-    metar: 0, aviation: 0, mesonet: 0, pws: 0, buoy: 0, marine: 0,
+    observations: 0, metar: 0, aviation: 0, mesonet: 0, pws: 0, buoy: 0, marine: 0,
   });
   const [surfaceLayerErrors, setSurfaceLayerErrors] = useState<Partial<Record<SurfaceLayerId, string>>>({});
   const [mapCenter, setMapCenter] = useState<{ lat: number; lon: number; zoom: number }>({
@@ -707,13 +707,15 @@ export default function MesoVortexWorkstation() {
   // a strict subset of genuine METAR reports; unavailable networks never render
   // placeholder stations.
   useEffect(() => {
+    const observationsMaster = surfaceLayers.observations;
     const requested: Record<SurfaceLayerId, boolean> = {
-      metar: surfaceLayers.metar || openPanel === 'METAR' && surfaceSource === 'metar',
-      aviation: surfaceLayers.aviation || (openPanel === 'ASOS' || (openPanel === 'METAR' && surfaceSource === 'asos')),
-      mesonet: surfaceLayers.mesonet,
-      pws: surfaceLayers.pws,
-      buoy: surfaceLayers.buoy,
-      marine: surfaceLayers.marine,
+      observations: observationsMaster,
+      metar: observationsMaster || surfaceLayers.metar || (openPanel === 'METAR' && surfaceSource === 'metar'),
+      aviation: observationsMaster || surfaceLayers.aviation || (openPanel === 'ASOS' || (openPanel === 'METAR' && surfaceSource === 'asos')),
+      mesonet: observationsMaster || surfaceLayers.mesonet,
+      pws: observationsMaster || surfaceLayers.pws,
+      buoy: observationsMaster || surfaceLayers.buoy,
+      marine: observationsMaster || surfaceLayers.marine,
     };
     const active = Object.values(requested).some(Boolean) || openPanel === 'Surface';
     if (!active) return;
@@ -743,8 +745,9 @@ export default function MesoVortexWorkstation() {
       if (cancelled) return;
 
       const features: any[] = [];
-      const counts: Record<SurfaceLayerId, number> = { metar: 0, aviation: 0, mesonet: 0, pws: 0, buoy: 0, marine: 0 };
+      const counts: Record<SurfaceLayerId, number> = { observations: 0, metar: 0, aviation: 0, mesonet: 0, pws: 0, buoy: 0, marine: 0 };
       const statuses: Record<SurfaceLayerId, SurfaceLayerStatus> = {
+        observations: 'idle',
         metar: requested.metar ? 'loading' : 'idle',
         aviation: requested.aviation ? 'loading' : 'idle',
         mesonet: requested.mesonet ? 'loading' : 'unavailable',
@@ -807,6 +810,21 @@ export default function MesoVortexWorkstation() {
     setFocusTarget({ lat: station.lat, lon: station.lon, zoom: Math.max(8, mapCenter.zoom), ts: Date.now() });
   }, [mapCenter.zoom]);
   const toggleSurfaceLayer = useCallback((layer: SurfaceLayerId, enabled: boolean) => {
+    if (layer === 'observations') {
+      setSurfaceLayers((prev) => {
+        const next: Record<SurfaceLayerId, boolean> = { ...prev, observations: enabled };
+        if (enabled) {
+          next.metar = true;
+          next.aviation = true;
+          next.mesonet = true;
+          next.pws = true;
+          next.buoy = true;
+          next.marine = true;
+        }
+        return next;
+      });
+      return;
+    }
     setSurfaceLayers((prev) => ({ ...prev, [layer]: enabled }));
     if (layer === 'metar') setShowMetars(enabled);
   }, []);
