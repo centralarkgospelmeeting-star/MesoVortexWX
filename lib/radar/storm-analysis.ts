@@ -1,4 +1,5 @@
 import { RADAR_SITES, type RadarSite } from '../radar-config';
+import { calculateNrot } from './nrot';
 
 type Moment = { moment_data?: Array<number | null>; gate_count?: number; gate_size?: number; first_gate?: number };
 type Radial = {
@@ -10,6 +11,7 @@ type Radial = {
   zdr?: Moment;
   phi?: Moment;
   spectrum?: Moment;
+  radial?: { nyquist_velocity?: number };
 };
 type Volume = { data: Array<Array<{ record?: Radial }> | undefined>; listElevations(): number[] };
 type Frame = { volume: Volume; time: string; site: RadarSite };
@@ -184,14 +186,16 @@ export async function buildStormAnalysis(siteId:string) {
     const ref=reflectivitySummary(s.radials);
     const dual=dualPolSummary(s.radials);
     const couplets=velocityCouplets(s.radials,s.elevationDegrees,site);
-    return {sweep:s.sweep,elevationDegrees:s.elevationDegrees,radialCount:s.radials.length,reflectivity:ref,velocity:{measuredRadials:s.radials.filter(r=>moment(r,'velocity')?.moment_data?.length).length,couplets},dualPol:dual};
+    const nrot=calculateNrot(s.radials,site.lat,site.lon);
+    return {sweep:s.sweep,elevationDegrees:s.elevationDegrees,radialCount:s.radials.length,reflectivity:ref,velocity:{measuredRadials:s.radials.filter(r=>moment(r,'velocity')?.moment_data?.length).length,couplets},nrot,dualPol:dual};
   });
   const allCouplets=sweeps.flatMap(s=>s.velocity.couplets).sort((a,b)=>b.deltaVelocityKt-a.deltaVelocityKt).slice(0,20);
+  const allNrotPeaks=sweeps.flatMap(s=>s.nrot.peaks.map(p=>({...p,sweep:s.sweep,elevationDegrees:s.elevationDegrees}))).sort((a,b)=>Math.abs(b.nrot)-Math.abs(a.nrot)).slice(0,30);
   return {
     site:site.id,siteName:site.name,scanTime:frame.time,source:'NOAA NEXRAD Level II on AWS',liveOnly:true,
-    method:{rotation:'Adjacent-radial inbound/outbound velocity couplet screening; delta-V divided by beam-center separation (s^-1). This is an app-derived azimuthal-shear proxy, not official NROT, a mesocyclone algorithm, or a tornado detector.',velocity:'Raw radial velocity; no storm-motion subtraction is applied.',reflectivity:'Measured REF gate distribution by sweep.',dualPol:'Measured RHOHV, ZDR, PHI and PHI-derived KDP; unavailable moments remain null.'},
+    method:{rotation:'Adjacent-radial inbound/outbound velocity couplet screening; delta-V divided by beam-center separation (s^-1). This is a separate shear-screening diagnostic, not a tornado detector.',nrot:'NROT-style normalized azimuthal shear: local quadratic least-squares fit over a 5x5 polar neighborhood (3x3 fallback), then range normalization using a Stumpf-style minimal-mesocyclone threshold. Not GR2 Analyst NROT. Input Level-II velocity is not dealiased, so aliasing can create or suppress apparent shear.',velocity:'Raw radial velocity; no storm-motion subtraction is applied.',reflectivity:'Measured REF gate distribution by sweep.',dualPol:'Measured RHOHV, ZDR, PHI and PHI-derived KDP; unavailable moments remain null.'},
     thresholds:{coupletMinimumDeltaKt:20,inboundThresholdKt:-10,outboundThresholdKt:10,minimumShearS1:0.002,maximumAdjacentAzimuthDegrees:3},
-    sweepCount:sweeps.length,sweeps,rotationCouplets:allCouplets,
+    sweepCount:sweeps.length,sweeps,rotationCouplets:allCouplets,nrotPeaks:allNrotPeaks,
     quality:{scanAgeMinutes:Number(((Date.now()-scanDate.getTime())/60000).toFixed(1)),singleRadar:true,archive:false,stormMotionCorrected:false,terrainCorrectedHeights:false},
   };
 }
