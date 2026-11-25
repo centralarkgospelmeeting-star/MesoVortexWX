@@ -30,6 +30,19 @@ if (!response.ok) {
 if (payload.liveOnly !== true || payload.site !== 'KLZK' || !payload.scanTime || !Array.isArray(payload.sweeps) || payload.sweeps.length === 0) {
   throw new Error('Live XSEC response is missing its live-source, scan-time, site, or sweep metadata.');
 }
+if (payload.transectSampling !== 'GREAT_CIRCLE_EQUAL_DISTANCE'
+  || payload.heightReference !== 'ABOVE_RADAR_LEVEL'
+  || payload.beamModel !== '4/3_EARTH_EFFECTIVE_RADIUS') {
+  throw new Error('Live XSEC response is missing its explicit transect geometry or beam-height reference metadata.');
+}
+let heightSamples = 0;
+for (const sweep of payload.sweeps) {
+  if (!Array.isArray(sweep.beamHeightFtAboveRadar) || sweep.beamHeightFtAboveRadar.length !== payload.columns) {
+    throw new Error('A live XSEC sweep has an invalid above-radar beam-height array.');
+  }
+  heightSamples += sweep.beamHeightFtAboveRadar.filter((value) => typeof value === 'number' && Number.isFinite(value)).length;
+}
+if (heightSamples === 0) throw new Error('The live XSEC volume returned no finite beam-height samples.');
 const measuredGates = payload.sweeps.reduce((total, sweep) =>
   total + (Array.isArray(sweep.reflectivityDbz)
     ? sweep.reflectivityDbz.filter((value) => typeof value === 'number' && Number.isFinite(value)).length
@@ -44,5 +57,9 @@ console.log(JSON.stringify({
   sweeps: payload.sweeps.length,
   columns: payload.columns,
   measuredGates,
+  heightSamples,
+  transectSampling: payload.transectSampling,
+  heightReference: payload.heightReference,
+  beamModel: payload.beamModel,
   source: payload.source,
 }, null, 2));
