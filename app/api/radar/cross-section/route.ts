@@ -30,7 +30,8 @@ function inverse(origin: Point, target: Point) {
   const p1 = origin.lat * rad;
   const p2 = target.lat * rad;
   const dLat = (target.lat - origin.lat) * rad;
-  const dLon = (target.lon - origin.lon) * rad;
+  const rawDLon = (target.lon - origin.lon) * rad;
+  const dLon = ((rawDLon + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dLon / 2) ** 2;
   const distanceKm = EARTH_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const y = Math.sin(dLon) * Math.cos(p2);
@@ -47,7 +48,22 @@ function beamHeightKm(slantRangeKm: number, elevationDegrees: number) {
 }
 
 function interpolatePoint(a: Point, b: Point, fraction: number): Point {
-  return { lon: a.lon + (b.lon - a.lon) * fraction, lat: a.lat + (b.lat - a.lat) * fraction };
+  // Sample at equal great-circle distance intervals rather than linearly in
+  // latitude/longitude, which does not preserve distance or bearing.
+  const { distanceKm, bearing } = inverse(a, b);
+  const angularDistance = (distanceKm / EARTH_KM) * fraction;
+  const bearingRad = bearing * Math.PI / 180;
+  const lat1 = a.lat * Math.PI / 180;
+  const lon1 = a.lon * Math.PI / 180;
+  const sinLat2 = Math.sin(lat1) * Math.cos(angularDistance)
+    + Math.cos(lat1) * Math.sin(angularDistance) * Math.cos(bearingRad);
+  const lat2 = Math.asin(Math.max(-1, Math.min(1, sinLat2)));
+  const lon2 = lon1 + Math.atan2(
+    Math.sin(bearingRad) * Math.sin(angularDistance) * Math.cos(lat1),
+    Math.cos(angularDistance) - Math.sin(lat1) * Math.sin(lat2),
+  );
+  const lonDegrees = ((lon2 * 180 / Math.PI + 540) % 360) - 180;
+  return { lon: lonDegrees, lat: lat2 * 180 / Math.PI };
 }
 
 function nearestRadial(radials: Radial[], bearing: number): Radial | undefined {
@@ -130,7 +146,7 @@ export async function POST(request: Request) {
         values.push(reflectivity(radial, slantRangeKm));
         heightsFt.push(Number.isFinite(heightFt) ? heightFt : null);
       }
-      return { elevationDegrees: Number((sweep.elevation as number).toFixed(2)), reflectivityDbz: values, beamHeightFtAglApprox: heightsFt };
+      return { elevationDegrees: Number((sweep.elevation as number).toFixed(2)), reflectivityDbz: values, beamHeightFtAboveRadar: heightsFt };
     });
 
     const valid = grid.reduce((sum: number, sweep: { reflectivityDbz: Array<number | null> }) => sum + sweep.reflectivityDbz.filter((v) => v !== null).length, 0);
