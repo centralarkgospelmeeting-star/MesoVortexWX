@@ -6,6 +6,8 @@ on:
       - 'app/api/radar/storm-analysis/**'
       - 'components/radar/StormAnalysisPanel.tsx'
       - 'lib/radar/storm-analysis.ts'
+      - 'lib/radar/nrot.ts'
+      - 'scripts/test-nrot-math.mjs'
       - 'lib/radar/capability-matrix.ts'
       - 'scripts/test-live-anlz.mjs'
       - '.github/workflows/anlz-build.yml'
@@ -28,6 +30,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - name: NROT synthetic mathematics tests
+        run: node scripts/test-nrot-math.mjs
       - run: npm run build
       - name: Start production server
         run: npm run start -- --hostname 127.0.0.1 > /tmp/mesovortex-next.log 2>&1 &
