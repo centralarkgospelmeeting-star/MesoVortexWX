@@ -1,5 +1,5 @@
+/* eslint-disable @next/next/no-img-element */
 import type { Metadata } from 'next';
-import Image from 'next/image';
 
 export const metadata: Metadata = {
   title: 'Credits & About | MesoVortexWX',
@@ -30,7 +30,7 @@ export default function AboutPage() {
       <header className="border-b border-slate-800 bg-[#0b1220]">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
-            <Image src="/logo.png" alt="MesoVortexWX" width={24} height={24} className="rounded-full" />
+            <img src="/logo.png" alt="MesoVortexWX" width={24} height={24} className="rounded-full" />
             <span className="text-sm font-black uppercase tracking-wider text-white">
               MESO<span className="text-sky-400">VORTEX</span> <span className="text-amber-400">WX</span>
             </span>
@@ -67,11 +67,12 @@ export default function AboutPage() {
         </section>
 
         <figure className="overflow-hidden rounded-xl border border-slate-700 bg-[#0b1220]">
-          <Image
+          <img
             src="/hsi-radar-backdrop.webp"
             alt="Base reflectivity radar imagery from the March 31, 2023 Little Rock tornado"
             width={1020}
             height={807}
+            loading="lazy"
             className="block h-auto w-full"
           />
           <figcaption className="space-y-1 border-t border-slate-700 px-3 py-2 text-[11px] leading-relaxed text-slate-400">
