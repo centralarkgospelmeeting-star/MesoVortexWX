@@ -45,6 +45,10 @@ assert.doesNotMatch(page, /\/api\/spotters\/reports/, 'removed report endpoint m
 assert.match(page, /buildLocationContext\(locationContext\.lat, locationContext\.lon, visibleMapAlerts/, 'context must use the same filtered alerts as the map');
 assert.match(page, /onSelectNearestRadar=\{\(site\) => \{[\s\S]*?setFocusTarget\(\{ lat: site\.lat, lon: site\.lon/, 'nearest radar selection must center the map');
 assert.match(panel, /w-\[292px\]/, 'context card must stay compact');
+assert.match(panel, /text-\[13px\] font-black leading-tight text-white/, 'warning titles must stay readable at a glance');
+assert.match(panel, /text-\[12px\] font-semibold text-slate-300[^\n]*alertExpiryLabel/, 'expiration must be emphasized');
+assert.match(panel, /px-2\.5 py-2 text-left/, 'compact cards must use increased padding and spacing');
+assert.match(panel, /py-1\.5 text-\[11px\] leading-snug/, 'detail rows must use larger text and spacing');
 assert.match(panel, /import \{[^}]*sortAlerts[^}]*\} from '\.\.\/lib\/alerts\/model'/, 'context card must use canonical alert priority');
 assert.doesNotMatch(panel, /function warningPriority/, 'duplicate context priority algorithm must be removed');
 const alertsAt = panel.indexOf('data-section="alerts"');
