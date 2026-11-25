@@ -14,9 +14,9 @@ if (typeof calculateNrot !== 'function') throw new Error('calculateNrot export n
 const radials = [];
 for (let azimuth = 0; azimuth < 360; azimuth += 1) {
   const radians = azimuth * Math.PI / 180;
-  const firstGate = 20;
+  const firstGate = 1;
   const gateSize = 0.25;
-  const moment_data = Array.from({ length: 240 }, (_, gate) => {
+  const moment_data = Array.from({ length: 280 }, (_, gate) => {
     const rangeKm = firstGate + gate * gateSize;
     const eastKm = rangeKm * Math.sin(radians);
     return 6 * eastKm;
