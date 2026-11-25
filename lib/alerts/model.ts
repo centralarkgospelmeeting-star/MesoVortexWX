@@ -25,6 +25,8 @@ export type WeatherAlert = {
   color: string;
   lineColor: string;
   geometry: any | null;
+  /** Real NWS forecast-zone names intersecting this alert (never inferred cities). */
+  places: string[];
 };
 
 export const ALL_ALERT_CATEGORIES: AlertCategory[] = [
@@ -230,6 +232,9 @@ export function normalizeNwsAlert(feature: any): WeatherAlert | null {
     color: colors.color,
     lineColor: colors.lineColor,
     geometry: feature?.geometry || null,
+    places: Array.isArray(properties.places)
+      ? properties.places.filter((p: unknown): p is string => typeof p === 'string' && p.trim().length > 0).slice(0, 40)
+      : [],
   };
 }
 
@@ -283,6 +288,7 @@ export function alertsToFeatureCollection(alerts: WeatherAlert[]) {
           expires: alert.expires,
           color: alert.color,
           lineColor: alert.lineColor,
+          places: alert.places,
         },
       })),
   };

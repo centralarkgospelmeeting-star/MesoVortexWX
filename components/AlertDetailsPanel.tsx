@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ALERT_CATEGORY_META, alertExpiryLabel, formatAlertTime, sortAlerts, type WeatherAlert } from '../lib/alerts/model';
 import { distanceMeters, pointInGeometry } from '../lib/map-tools/geo';
 
@@ -25,6 +25,8 @@ type Props = {
   onClose: () => void;
   onSelectAlert: (alert: WeatherAlert) => void;
   onSelectNearestRadar: (site: { id: string; name: string; lat: number; lon: number }) => void;
+  pinned: boolean;
+  onTogglePin: () => void;
 };
 
 function extractStormMotion(text: string): string {
@@ -129,21 +131,99 @@ function WarningCard({ alert, onSelect }: { alert: WeatherAlert; onSelect: (a: W
   );
 }
 
-export function AlertDetailsPanel({ alert, context, onClose, onSelectAlert, onSelectNearestRadar }: Props) {
+export function AlertDetailsPanel({ alert, context, onClose, onSelectAlert, onSelectNearestRadar, pinned, onTogglePin }: Props) {
   const [reportsOpen, setReportsOpen] = useState(false);
   const [fullAlertOpen, setFullAlertOpen] = useState(false);
+  const SESSION_KEY = 'mesovortex_alert_panel_session_v1';
+  const [frame, setFrame] = useState<{ x: number; y: number; w: number; h: number }>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = window.sessionStorage.getItem(SESSION_KEY);
+        if (raw) {
+          const saved = JSON.parse(raw);
+          if ([saved.x, saved.y, saved.w, saved.h].every((v: unknown) => Number.isFinite(v))) return saved;
+        }
+      } catch {}
+    }
+    return { x: 12, y: 56, w: 292, h: 420 };
+  });
+  const [collapsed, setCollapsed] = useState(false);
+  const dragRef = useRef<{ dx: number; dy: number } | null>(null);
+  const resizeRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+
+  useEffect(() => {
+    try { window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(frame)); } catch {}
+  }, [frame]);
+
+  const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+  const onHeaderPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest('button')) return;
+    dragRef.current = { dx: event.clientX - frame.x, dy: event.clientY - frame.y };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const onHeaderPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return;
+    const { dx, dy } = dragRef.current;
+    setFrame((current) => ({
+      ...current,
+      x: clamp(event.clientX - dx, 0, Math.max(0, window.innerWidth - current.w)),
+      y: clamp(event.clientY - dy, 0, Math.max(0, window.innerHeight - 56)),
+    }));
+  };
+  const onResizePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    resizeRef.current = { x: event.clientX, y: event.clientY, w: frame.w, h: frame.h };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const onResizePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!resizeRef.current) return;
+    const start = resizeRef.current;
+    setFrame((current) => ({
+      ...current,
+      w: clamp(start.w + event.clientX - start.x, 250, Math.max(250, window.innerWidth - current.x - 8)),
+      h: clamp(start.h + event.clientY - start.y, 220, Math.max(220, window.innerHeight - current.y - 8)),
+    }));
+  };
   const contextAlerts = useMemo(() => sortAlertsForContext(context?.alerts || []), [context?.alerts]);
   const warningCount = contextAlerts.filter((a) => a.category === 'warning').length;
   if (!alert && !context) return null;
   const nearest = context?.nearestRadarSites?.[0];
 
   return (
-    <div className="absolute left-3 top-14 z-40 w-[292px] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-xl border border-slate-700 bg-[#111827] shadow-lg text-slate-100">
-      <div className="flex items-center justify-between border-b border-slate-700 px-3 py-2">
-        <div className="text-[11px] font-black uppercase tracking-wider text-sky-300">{context ? 'What matters here' : 'Alert details'}</div>
-        <button type="button" onClick={onClose} className="rounded-full px-2 py-0.5 text-slate-400 hover:bg-slate-800 hover:text-white text-sm">✕</button>
+    <div
+      data-alert-panel="true"
+      data-pinned={pinned ? 'true' : 'false'}
+      className="fixed z-40 flex flex-col overflow-hidden rounded-xl border border-slate-700 bg-[#111827] shadow-lg text-slate-100"
+      style={{ left: frame.x, top: frame.y, width: frame.w, height: collapsed ? undefined : frame.h, maxHeight: '80vh' }}
+    >
+      <div
+        className="flex cursor-move items-center justify-between gap-1 border-b border-slate-700 px-2 py-1.5 select-none"
+        onPointerDown={onHeaderPointerDown}
+        onPointerMove={onHeaderPointerMove}
+        onPointerUp={() => { dragRef.current = null; }}
+        title="Drag to move the warning panel"
+      >
+        <button
+          type="button"
+          onClick={() => setCollapsed((v) => !v)}
+          className="rounded px-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+          aria-label={collapsed ? 'Expand warning panel' : 'Collapse warning panel'}
+        >
+          {collapsed ? '▸' : '▾'}
+        </button>
+        <div className="min-w-0 flex-1 truncate text-[11px] font-black uppercase tracking-wider text-sky-300">{context ? 'What matters here' : 'Alert details'}</div>
+        <button
+          type="button"
+          onClick={onTogglePin}
+          className={`rounded px-1 ${pinned ? 'text-sky-300' : 'text-slate-400'} hover:bg-slate-800`}
+          aria-label={pinned ? 'Unpin warning panel' : 'Pin warning panel'}
+          title={pinned ? 'Pinned: panel stays open' : 'Pin to keep panel open'}
+        >
+          ◆
+        </button>
+        <button type="button" onClick={onClose} className="rounded px-1 text-slate-400 hover:bg-slate-800 hover:text-white text-sm" aria-label="Close warning panel">✕</button>
       </div>
-      <div className="max-h-[min(50vh,calc(100vh-8rem))] overflow-auto p-3 space-y-2.5">
+      {!collapsed && (
+      <div className="min-h-0 flex-1 overflow-auto p-3 space-y-2.5">
         {context && (
           <>
             <section data-section="alerts" aria-label="Warnings and alerts">
@@ -201,7 +281,7 @@ export function AlertDetailsPanel({ alert, context, onClose, onSelectAlert, onSe
             {fullAlertOpen && (
               <div className="mt-2.5 space-y-0.5">
                 <Row label="Event type" value={alert.event} />
-                <Row label="Issuing office" value={alert.senderName || alert.wfo || 'Unavailable'} />
+                <Row label="WFO" value={alert.wfo || 'Unavailable'} />
                 <Row label="VTEC" value={(alert.parameters?.VTEC || []).join(', ') || 'Unavailable'} />
                 <Row label="Severity" value={alert.severity || 'Unavailable'} />
                 <Row label="Urgency" value={alert.urgency || 'Unavailable'} />
@@ -210,7 +290,7 @@ export function AlertDetailsPanel({ alert, context, onClose, onSelectAlert, onSe
                 <Row label="Expiration time" value={formatAlertTime(alert.expires)} />
                 <Row label="Remaining time" value={alertExpiryLabel(alert)} />
                 <Row label="Affected area" value={alert.areaDesc || 'Unavailable'} />
-                <Row label="Places potentially affected" value={alert.areaDesc ? alert.areaDesc.split(';').map((s) => s.trim()).filter(Boolean).join(', ') : 'Unavailable'} />
+                <Row label="Places affected" value={alert.places?.length ? alert.places.join(', ') : 'DATA UNAVAILABLE'} />
                 <Row label="Population in polygon" value="DATA UNAVAILABLE" />
                 <Row label="Population density" value="DATA UNAVAILABLE" />
                 <Row label="Schools" value="DATA UNAVAILABLE" />
@@ -218,12 +298,22 @@ export function AlertDetailsPanel({ alert, context, onClose, onSelectAlert, onSe
                 <Row label="Storm motion" value={extractStormMotion(alert.description || alert.headline)} />
                 <Row label="Storm track" value="DATA UNAVAILABLE" />
                 <div className="border-t border-slate-800 pt-1.5 mt-1.5">
-                  <div className="text-[11px] font-black uppercase tracking-wider text-slate-400">Hazards / Impacts</div>
-                  <div className="text-[11px] leading-snug text-slate-100 whitespace-pre-wrap">{alert.headline || alert.description || 'Unavailable'}</div>
+                  <div className="text-[11px] font-black uppercase tracking-wider text-slate-400">Hazard</div>
+                  <div className="text-[11px] leading-snug text-slate-100 whitespace-pre-wrap">{alert.headline || 'DATA UNAVAILABLE'}</div>
+                </div>
+                <div className="border-t border-slate-800 pt-1.5 mt-1.5">
+                  <div className="text-[11px] font-black uppercase tracking-wider text-slate-400">Impacts</div>
+                  <div className="text-[11px] leading-snug text-slate-200 whitespace-pre-wrap">
+                    {alert.description ? (alert.description.split(/\n\s*\n/)[0] || alert.description).trim() : 'DATA UNAVAILABLE'}
+                  </div>
                 </div>
                 <div className="border-t border-slate-800 pt-1.5 mt-1.5">
                   <div className="text-[11px] font-black uppercase tracking-wider text-slate-400">Instructions</div>
-                  <div className="text-[11px] leading-snug text-slate-200 whitespace-pre-wrap">{alert.instruction || 'Instructions unavailable from source.'}</div>
+                  <div className="text-[11px] leading-snug text-slate-200 whitespace-pre-wrap">{alert.instruction || 'DATA UNAVAILABLE'}</div>
+                </div>
+                <div className="border-t border-slate-800 pt-1.5 mt-1.5">
+                  <div className="text-[11px] font-black uppercase tracking-wider text-slate-400">Full NWS warning text</div>
+                  <div className="text-[11px] leading-snug text-slate-200 whitespace-pre-wrap">{alert.description || 'DATA UNAVAILABLE'}</div>
                 </div>
                 {context && (
                   <div className="border-t border-slate-800 pt-1.5 mt-1.5">
@@ -236,6 +326,17 @@ export function AlertDetailsPanel({ alert, context, onClose, onSelectAlert, onSe
           </section>
         )}
       </div>
+      )}
+      {!collapsed && (
+        <div
+          data-resize-handle="true"
+          className="h-3 shrink-0 cursor-nwse-resize border-t border-slate-700 bg-slate-800/60"
+          onPointerDown={onResizePointerDown}
+          onPointerMove={onResizePointerMove}
+          onPointerUp={() => { resizeRef.current = null; }}
+          title="Drag to resize the warning panel"
+        />
+      )}
     </div>
   );
 }

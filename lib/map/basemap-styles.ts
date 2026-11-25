@@ -325,8 +325,27 @@ export function buildSatelliteHybridStyle(projection: BasemapProjection): StyleS
   return style as unknown as StyleSpecification;
 }
 
+/** Light reference map for non-radar workflows; no weather data is implied. */
+export function buildLightMapStyle(projection: BasemapProjection): StyleSpecification {
+  const style = {
+    ...shell(projection),
+    version: 8,
+    sources: {
+      'mv-light-raster': {
+        type: 'raster',
+        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+        tileSize: 256,
+        attribution: OFM_ATTRIBUTION,
+      },
+    },
+    layers: [{ id: 'mv-light-base', type: 'raster', source: 'mv-light-raster' }],
+  };
+  return style as unknown as StyleSpecification;
+}
+
 export function buildBasemapStyle(basemap: string | undefined, projection: BasemapProjection): StyleSpecification {
   const value = (basemap || '').toLowerCase();
+  if (value === 'light') return buildLightMapStyle(projection);
   if (value === 'satellite-streets' || value === 'satellite' || value === 'mapbox') {
     return buildSatelliteHybridStyle(projection);
   }

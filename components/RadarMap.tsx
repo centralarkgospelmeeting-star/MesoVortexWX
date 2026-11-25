@@ -32,7 +32,7 @@ import type { SurfaceLayerId, StationPlot } from '../lib/surface/types';
 maplibregl.setWorkerUrl('/maplibre/maplibre-gl-worker.mjs');
 
 export type ModeTab = 'Radar' | '3D Radar' | 'Composite' | 'Satellite' | 'Models' | 'Outlooks';
-export type BasemapType = 'satellite-streets' | 'custom-weather' | 'mapbox' | 'satellite';
+export type BasemapType = 'satellite-streets' | 'custom-weather' | 'mapbox' | 'satellite' | 'light';
 export type BasemapId = BasemapType;
 
 export type MapToolMode = 'none' | 'measure-distance' | 'measure-area' | 'draw-point' | 'draw-line' | 'draw-polygon' | 'annotate';

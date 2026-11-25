@@ -44,7 +44,13 @@ assert.match(page, /\/api\/spotter\?mode=reports/, 'context reports must come fr
 assert.doesNotMatch(page, /\/api\/spotters\/reports/, 'removed report endpoint must not return');
 assert.match(page, /buildLocationContext\(locationContext\.lat, locationContext\.lon, visibleMapAlerts/, 'context must use the same filtered alerts as the map');
 assert.match(page, /onSelectNearestRadar=\{\(site\) => \{[\s\S]*?setFocusTarget\(\{ lat: site\.lat, lon: site\.lon/, 'nearest radar selection must center the map');
-assert.match(panel, /w-\[292px\]/, 'context card must stay compact');
+assert.match(panel, /data-alert-panel="true"/, 'warning panel must expose an observable workstation surface');
+assert.match(panel, /mesovortex_alert_panel_session_v1/, 'warning panel position must persist during the session');
+assert.match(panel, /onHeaderPointerDown|onHeaderPointerMove/, 'warning panel must be draggable');
+assert.match(panel, /data-resize-handle="true"/, 'warning panel must be resizable');
+assert.match(panel, /Expand warning panel/, 'warning panel must support collapse/expand');
+assert.match(panel, /Pin warning panel/, 'warning panel must support pin/unpin');
+assert.match(page, /if \(alertPanelPinned\) return;/, 'pinned warning panel must not be dismissed by map clicks');
 assert.match(panel, /text-\[13px\] font-black leading-tight text-white/, 'warning titles must stay readable at a glance');
 assert.match(panel, /text-\[12px\] font-semibold text-slate-300[^\n]*alertExpiryLabel/, 'expiration must be emphasized');
 assert.match(panel, /px-2\.5 py-2 text-left/, 'compact cards must use increased padding and spacing');
@@ -56,6 +62,13 @@ const radarAt = panel.indexOf('data-section="radar"');
 const reportsAt = panel.indexOf('data-section="reports"');
 assert.ok(alertsAt > -1 && radarAt > alertsAt && reportsAt > radarAt, 'context card order must be warnings, nearest radar, then reports');
 assert.match(panel, /Reports \(\{context\.reportsNearby\.length\}\)/, 'spotter and LSR reports must share one compact section');
+for (const field of ['Event type', 'WFO', 'VTEC', 'Severity', 'Issue time', 'Expiration time', 'Remaining time', 'Places affected', 'Hazard', 'Impacts', 'Instructions', 'Full NWS warning text']) {
+  assert.ok(panel.includes(field), `warning details must show: ${field}`);
+}
+const alertApi = fs.readFileSync('app/api/alerts/route.ts', 'utf8');
+assert.match(alertApi, /resolveZonePlaces/, 'Places Affected must resolve real NWS zones');
+assert.match(alertApi, /feature\.properties = \{ \.\.\.\(feature\.properties \|\| \{\}\), places \}/, 'zone names must be attached to alert features');
+assert.match(fs.readFileSync('lib/alerts/model.ts', 'utf8'), /places: string\[\]/, 'canonical alert must carry Places Affected');
 const warningClick = map.match(/map\.on\('click', WARNINGS_FILL_ID,[\s\S]*?\n      \}\);/)?.[0] || '';
 assert.ok(warningClick.includes('onSelectWarningRef.current'), 'warning clicks must open the single alert workflow');
 assert.doesNotMatch(warningClick, /new maplibregl\.Popup/, 'warning clicks must not open a duplicate raw popup');

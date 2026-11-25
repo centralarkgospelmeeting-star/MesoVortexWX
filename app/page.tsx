@@ -29,6 +29,14 @@ import { AlertDetailsPanel, buildLocationContext } from '../components/AlertDeta
 import { getCompositeSource, COMPOSITE_SOURCES } from '../lib/radar/composite-sources';
 import { ProductInfoBanner } from '../components/ProductInfoBanner';
 import { HsiPanel } from '../components/hsi/HsiPanel';
+import {
+  DEFAULT_OVERLAY_PROFILES,
+  normalizeOverlayProfiles,
+  OVERLAY_FIELDS,
+  OVERLAY_MODE_FIELDS,
+  OVERLAY_MODES,
+  type OverlayMode,
+} from '../lib/overlay-profiles';
 import { METARPanel, type SurfaceSource } from '../components/METARPanel';
 import { SurfaceLayersPanel, type SurfaceLayerStatus } from '../components/surface/SurfaceLayersPanel';
 import { declusterStationPlots, normalizeStationPlots, observationBbox } from '../lib/surface/station-model';
@@ -100,6 +108,7 @@ const BASEMAP_STORAGE_KEY = 'mesovortex_basemap_preference';
 const PROJECTION_STORAGE_KEY = 'mesovortex_projection_mode';
 const PREFS_STORAGE_KEY = 'mesovortex_preferences_v1';
 const HSI_STORAGE_KEY = 'mesovortex_hsi_visible';
+const OVERLAY_STORAGE_KEY = 'mesovortex_overlay_profiles_v1';
 const DEFAULT_MESONET_NETWORK = 'ISUSM';
 const DEFAULT_AWOS_NETWORK = 'IA_ASOS';
 const PANE_MODES: PaneMode[] = ['Radar', 'Satellite', 'Composite', 'Models'];
@@ -324,6 +333,7 @@ export default function MesoVortexWorkstation() {
   const [showSpotterReports, setShowSpotterReports] = useState(initialPrefs.showSpotterReports);
   const [showMetars, setShowMetars] = useState(initialPrefs.showMetars);
   const [surfaceLayers, setSurfaceLayers] = useState<Record<SurfaceLayerId, boolean>>(initialPrefs.surfaceLayers);
+
   const [surfaceSource, setSurfaceSource] = useState<SurfaceSource>('metar');
   const [surfaceGeoJson, setSurfaceGeoJson] = useState<any>({ type: 'FeatureCollection', features: [] });
   const [surfaceStatus, setSurfaceStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
@@ -371,6 +381,7 @@ export default function MesoVortexWorkstation() {
   const [favoriteProducts, setFavoriteProducts] = useState<string[]>(initialPrefs.favorites);
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
   const [locationContext, setLocationContext] = useState<{ lat: number; lon: number; ts: number } | null>(null);
+  const [alertPanelPinned, setAlertPanelPinned] = useState(false);
 
   const [spotterReportsForContext, setSpotterReportsForContext] = useState<any[]>([]);
   const [mcdFeaturesForContext, setMcdFeaturesForContext] = useState<any[]>([]);
@@ -415,6 +426,15 @@ export default function MesoVortexWorkstation() {
   const [alertSettings, setAlertSettings] = useState<AlertSettings>(DEFAULT_ALERT_SETTINGS);
   const [menuOpen, setMenuOpen] = useState(false);
   const [hsiOpen, setHsiOpen] = useState(true);
+  const [overlayProfiles, setOverlayProfiles] = useState(() => {
+    if (typeof window === 'undefined') return DEFAULT_OVERLAY_PROFILES;
+    try {
+      const raw = window.localStorage.getItem(OVERLAY_STORAGE_KEY);
+      return raw ? normalizeOverlayProfiles(JSON.parse(raw)) : DEFAULT_OVERLAY_PROFILES;
+    } catch {
+      return DEFAULT_OVERLAY_PROFILES;
+    }
+  });
   const [mesoaiOpen, setMesoaiOpen] = useState(false);
   const [dataSourceFilter, setDataSourceFilter] = useState<'ALL' | DataSourceStatus>('ALL');
 
@@ -430,6 +450,29 @@ export default function MesoVortexWorkstation() {
       window.localStorage.setItem(HSI_STORAGE_KEY, hsiOpen ? '1' : '0');
     } catch {}
   }, [hsiOpen]);
+
+  useEffect(() => {
+    try { window.localStorage.setItem(OVERLAY_STORAGE_KEY, JSON.stringify(overlayProfiles)); } catch {}
+  }, [overlayProfiles]);
+
+  // Mode-specific overlay profile gates. Global switches remain the outer gate
+  // so a mode can only remove layers, never enable an unverified source.
+  const overlayMode: OverlayMode = tab === 'Satellite' ? 'satellite' : tab === 'Models' || tab === 'Outlooks' ? 'model' : 'radar';
+  const overlay = overlayProfiles[overlayMode];
+  const mapWarnings = showWarnings && overlay.warnings;
+  const mapWatches = showWatches && overlay.warnings;
+  const mapSpotters = showSpotters && overlay.spotters;
+  const mapReports = showSpotterReports && overlay.reports;
+  const mapCounties = showCounties && overlay.boundaries;
+  const mapObservations: Record<SurfaceLayerId, boolean> = {
+    observations: surfaceLayers.observations && overlay.observations,
+    metar: surfaceLayers.metar && overlay.observations,
+    aviation: surfaceLayers.aviation && overlay.observations,
+    mesonet: surfaceLayers.mesonet && overlay.observations,
+    pws: surfaceLayers.pws && overlay.observations,
+    buoy: surfaceLayers.buoy && overlay.observations,
+    marine: surfaceLayers.marine && overlay.observations,
+  };
 
   useEffect(() => {
     const loaded = loadAlertSettings();
@@ -492,9 +535,9 @@ export default function MesoVortexWorkstation() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem(BASEMAP_STORAGE_KEY) as BasemapType | null;
-      if (saved === 'satellite-streets' || saved === 'custom-weather') {
+      if (saved === 'satellite-streets' || saved === 'custom-weather' || saved === 'light') {
         setBasemap(saved);
-        setBasemapStatus(saved === 'satellite-streets' ? 'Satellite Streets (Default)' : 'Custom Weather');
+        setBasemapStatus(saved === 'satellite-streets' ? 'Satellite Streets (Default)' : saved === 'light' ? 'Light Map' : 'Dark Map');
       }
       const savedProjection = localStorage.getItem(PROJECTION_STORAGE_KEY);
       if (savedProjection === 'mercator' || savedProjection === 'globe') {
@@ -596,9 +639,11 @@ export default function MesoVortexWorkstation() {
     return () => { if (timer) clearTimeout(timer); };
   }, [isPlaying, timelineLoopAvailable, playbackSpeed, playbackDirection, loopPauseMs]);
 
+  const basemapLabel = (id: BasemapType) =>
+    id === 'satellite-streets' ? 'Satellite Streets (Default)' : id === 'light' ? 'Light Map' : 'Dark Map';
   const handleSelectBasemap = (selected: BasemapType) => {
     setBasemap(selected);
-    setBasemapStatus(selected === 'satellite-streets' ? 'Satellite Streets (Default)' : 'Custom Weather');
+    setBasemapStatus(basemapLabel(selected));
     try {
       localStorage.setItem(BASEMAP_STORAGE_KEY, selected);
     } catch {
@@ -647,10 +692,10 @@ export default function MesoVortexWorkstation() {
   // Alerts rendered on the map honor the category filters and visibility toggles.
   // The location card uses the same set so a hidden layer cannot reappear as a popup.
   const visibleMapAlerts = useMemo(() => styledFilteredAlerts.filter((alert) => {
-    if (alert.category === 'warning') return showWarnings;
-    if (alert.category === 'watch') return showWatches;
+    if (alert.category === 'warning') return mapWarnings;
+    if (alert.category === 'watch') return mapWatches;
     return true;
-  }), [styledFilteredAlerts, showWarnings, showWatches]);
+  }), [styledFilteredAlerts, mapWarnings, mapWatches]);
   const mapAlertFeatures = useMemo(() => alertsToFeatureCollection(visibleMapAlerts), [visibleMapAlerts]);
 
   const selectedAlert = useMemo(() => styledAlerts.find((a) => a.id === selectedAlertId) || null, [styledAlerts, selectedAlertId]);
@@ -853,15 +898,15 @@ export default function MesoVortexWorkstation() {
     showRadarPills,
     showLightning,
     showLSR,
-    showMetars,
-    surfaceLayers,
+    showMetars: mapObservations.metar,
+    surfaceLayers: mapObservations,
     surfaceGeoJson,
     onCameraChange: setMapCenter,
-    showWatches,
-    showWarnings,
+    showWatches: mapWatches,
+    showWarnings: mapWarnings,
     showMCD,
-    showSpotters,
-    showSpotterReports,
+    showSpotters: mapSpotters,
+    showSpotterReports: mapReports,
     showStormTracks,
     showHurricanes,
     projectionMode,
@@ -893,7 +938,9 @@ export default function MesoVortexWorkstation() {
     },
     onMapContextClick: (lat: number, lon: number) => {
       // Only the warning summary panel is shown, and only inside polygons.
-      // Outside warning polygons: clear context so no summary panel appears.
+      // Outside warning polygons: clear context so no summary panel appears,
+      // unless the detail panel is pinned for active warning work.
+      if (alertPanelPinned) return;
       setSelectedAlertId(null);
       setLocationContext(null);
       if (alertSettings.sidebarAutoHide && !alertSettings.sidebarPinned) setAlertsOpen(false);
@@ -1693,8 +1740,10 @@ export default function MesoVortexWorkstation() {
         <AlertDetailsPanel
           alert={selectedAlert}
           context={alertLocationContext}
-          onClose={() => { setSelectedAlertId(null); setLocationContext(null); }}
+          onClose={() => { setSelectedAlertId(null); setLocationContext(null); setAlertPanelPinned(false); }}
           onSelectAlert={(a) => { setSelectedAlertId(a.id); setAlertsOpen(true); }}
+          pinned={alertPanelPinned}
+          onTogglePin={() => setAlertPanelPinned((v) => !v)}
           onSelectNearestRadar={(site) => {
             setRadarSite(site.id);
             setFocusTarget({ lat: site.lat, lon: site.lon, zoom: 8, ts: Date.now() });
@@ -1744,6 +1793,23 @@ export default function MesoVortexWorkstation() {
                   {label}
                 </button>
               ))}
+            </div>
+            <div className="mt-3 border-t border-slate-800 pt-3">
+              <div className="mb-1 text-[10px] font-black uppercase tracking-wider text-slate-500">Map</div>
+              <div className="flex flex-wrap gap-1">
+                {([['custom-weather', 'Dark'], ['satellite-streets', 'Satellite'], ['light', 'Light']] as const).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => { handleSelectBasemap(id); setMenuOpen(false); }}
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${
+                      basemap === id ? 'border-sky-600 bg-sky-900/30 text-sky-200' : 'border-slate-700 text-slate-400 hover:bg-slate-800'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="mt-4 border-t border-slate-800 pt-3">
               <button
@@ -2039,6 +2105,31 @@ export default function MesoVortexWorkstation() {
                   </div>
                 </details>
                 <div className="text-[10px] text-slate-500">When OBSERVATIONS is on, every supported network plots together; duplicate stations resolve by source priority. Vendor networks without a verified feed stay DATA UNAVAILABLE.</div>
+              </div>
+
+              <div className="rounded-lg border border-slate-800 bg-[#111827] p-2 space-y-2">
+                <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">Overlay profiles by mode</div>
+                {OVERLAY_MODES.map((mode) => (
+                  <div key={mode.id} className="rounded border border-slate-800 p-2">
+                    <div className="mb-1 text-[10px] font-bold text-sky-300">{mode.label} mode</div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1">
+                      {OVERLAY_MODE_FIELDS[mode.id].map((key) => {
+                        const field = OVERLAY_FIELDS.find((item) => item.key === key);
+                        return (
+                          <label key={key} className="flex items-center gap-1 text-[10px]">
+                            <input
+                              type="checkbox"
+                              checked={overlayProfiles[mode.id][key]}
+                              onChange={(e) => setOverlayProfiles((prev) => ({ ...prev, [mode.id]: { ...prev[mode.id], [key]: e.target.checked } }))}
+                            />
+                            {field?.label ?? key}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+                <div className="text-[10px] text-slate-500">Profiles only hide layers; global switches remain the outer gate.</div>
               </div>
 
               <div className="rounded-lg border border-slate-800 bg-[#111827] p-2 space-y-2">
