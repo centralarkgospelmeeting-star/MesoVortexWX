@@ -102,11 +102,13 @@ export function HsiPanel({
   const effectiveScopeText = scopeText || (scale === 'state' || scale === 'local' ? siteState : '');
   const areaLabel = hsiAreaLabel({ scale, text: effectiveScopeText || (scale === 'custom' && customPolygon?.length ? 'Drawn operational area' : null) });
   const scopedAlerts = useMemo(
-    () => alertsForHsiScope(alerts as unknown as IntensityAlert[], {
-      scale,
-      text: effectiveScopeText,
-      polygon: customPolygon,
-    }),
+    () => scale === 'custom' && (!customPolygon || customPolygon.length < 3)
+      ? []
+      : alertsForHsiScope(alerts as unknown as IntensityAlert[], {
+        scale,
+        text: effectiveScopeText,
+        polygon: customPolygon,
+      }),
     [alerts, scale, effectiveScopeText, customPolygon]
   );
 
@@ -213,22 +215,27 @@ export function HsiPanel({
           />
         )}
         {scale === 'custom' && (
-          <div className="mt-1 flex items-center gap-1">
-            <button
-              type="button"
-              onClick={onStartDraw}
-              className="rounded border border-slate-600 bg-[#111827] px-2 py-0.5 text-[9px] font-bold text-slate-200 hover:bg-slate-700"
-            >
-              Draw operational area
-            </button>
-            {customPolygon && customPolygon.length >= 3 && (
+          <div className="mt-1">
+            <div className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={onClearDraw}
-                className="rounded border border-slate-700 px-2 py-0.5 text-[9px] font-bold text-slate-400 hover:bg-slate-800"
+                onClick={onStartDraw}
+                className="rounded border border-slate-600 bg-[#111827] px-2 py-0.5 text-[9px] font-bold text-slate-200 hover:bg-slate-700"
               >
-                Clear ({customPolygon.length} pts)
+                Draw operational area
               </button>
+              {customPolygon && customPolygon.length >= 3 && (
+                <button
+                  type="button"
+                  onClick={onClearDraw}
+                  className="rounded border border-slate-700 px-2 py-0.5 text-[9px] font-bold text-slate-400 hover:bg-slate-800"
+                >
+                  Clear ({customPolygon.length} pts)
+                </button>
+              )}
+            </div>
+            {(!customPolygon || customPolygon.length < 3) && (
+              <div className="mt-1 text-[9px] text-amber-200">DATA INCOMPLETE — draw an area on the map to scope HSI.</div>
             )}
           </div>
         )}
