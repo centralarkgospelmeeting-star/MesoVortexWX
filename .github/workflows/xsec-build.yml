@@ -1,4 +1,4 @@
-name: XSEC TypeScript and production build
+name: XSEC TypeScript, production build, and live data test
 
 on:
   pull_request:
@@ -7,6 +7,7 @@ on:
       - 'app/**'
       - 'components/**'
       - 'lib/**'
+      - 'scripts/test-live-xsec.mjs'
       - 'package.json'
       - 'package-lock.json'
       - 'next.config.*'
@@ -18,9 +19,9 @@ permissions:
   contents: read
 
 jobs:
-  typecheck-and-build:
+  typecheck-build-live-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,3 +36,13 @@ jobs:
         run: npm run typecheck
       - name: Production build
         run: npm run build
+      - name: Start production server and test live NOAA Level II XSEC
+        shell: bash
+        run: |
+          npm run start > /tmp/mesovortex-next.log 2>&1 &
+          SERVER_PID=$!
+          cleanup() {
+            kill "$SERVER_PID" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          node scripts/test-live-xsec.mjs
