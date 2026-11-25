@@ -149,7 +149,7 @@ export function HsiPanel({
     <div
       data-hsi-panel="true"
       onContextMenu={(event) => { event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY }); }}
-      className="pointer-events-auto absolute left-3 top-3 z-40 w-[min(18rem,calc(100vw-1.5rem))] rounded-xl border border-slate-700 bg-[#0b1220]/95 p-2.5 text-slate-100 shadow-2xl backdrop-blur"
+      className="pointer-events-auto absolute left-3 top-3 z-40 w-[min(18rem,calc(100vw-1.5rem))] rounded-xl border border-slate-700 hsi-radar-backdrop p-2.5 text-slate-100 shadow-2xl"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -275,6 +275,8 @@ export function HsiPanel({
           Refresh
         </button>
       </div>
+
+      <div className="mt-1 text-[8px] text-slate-400">Archived radar backdrop · not live data or an HSI input</div>
 
       {contextMenu && (
         <div

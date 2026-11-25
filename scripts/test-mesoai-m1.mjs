@@ -35,6 +35,10 @@ assert.match(panel, /Refresh/, 'panel must support refresh');
 assert.match(panel, /alertsForHsiScope/, 'panel must scope alerts to the active area');
 assert.match(panel, /DATA INCOMPLETE/, 'panel must disclose incomplete input coverage');
 assert.match(panel, /Draw operational area/, 'custom HSI must let emergency managers draw an area');
+assert.match(panel, /hsi-radar-backdrop/, 'HSI panel must use the radar backdrop');
+assert.match(panel, /not live data/, 'backdrop must be disclosed as not live input');
+assert.ok(fs.existsSync('public/hsi-radar-backdrop.webp'), 'HSI backdrop asset must exist');
+assert.match(fs.readFileSync('app/globals.css', 'utf8'), /\.hsi-radar-backdrop[\s\S]*?hsi-radar-backdrop\.webp/, 'backdrop CSS must reference the local asset');
 assert.match(panel, /not official/, 'panel must disclose that HSI is not official');
 assert.doesNotMatch(panel, /debris|TVS/i, 'panel must not show unverified severe signatures');
 

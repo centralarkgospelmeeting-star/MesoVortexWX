@@ -231,3 +231,16 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   .warning-banner-enter { animation: none; }
 }
+
+/* ── Hazard Severity Index (HSI) panel backdrop ───────────────────────
+   Archived KLZK N0B sample used as a subdued texture only. The dark overlay
+   keeps HSI values readable; this is not live radar and not an HSI input. */
+.hsi-radar-backdrop {
+  background-color: #0b1220;
+  background-image:
+    linear-gradient(rgba(2, 6, 23, 0.93), rgba(2, 6, 23, 0.93)),
+    url('/hsi-radar-backdrop.webp');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
