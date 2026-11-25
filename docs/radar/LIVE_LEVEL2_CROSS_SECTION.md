@@ -1,6 +1,6 @@
 # Live NEXRAD Level II reflectivity cross sections
 
-The application exposes an **XSEC** control in the map toolbar. Select it, click Point A and then Point B on the radar map, and the app calls `POST /api/radar/cross-section` to extract reflectivity gates along that geographic transect from the latest available NOAA NEXRAD Level II volume for one radar. Press Escape or toggle XSEC again to cancel selection.
+The **XSEC** control selects a geographic transect on the radar map. Click Point A and Point B; the application requests a live reflectivity cross section from the latest available NOAA NEXRAD Level II volume for the selected radar. Press Escape or toggle XSEC again to cancel selection.
 
 ## Request
 
@@ -14,18 +14,28 @@ The application exposes an **XSEC** control in the map toolbar. Select it, click
 ```
 
 - `site`: NEXRAD radar ID or ICAO-style ID.
-- `start`, `end`: longitude/latitude endpoints (WGS84).
+- `start`, `end`: WGS84 longitude/latitude endpoints.
 - `columns`: optional sample count, clamped to 24–180.
 
-## Response and scientific limits
+## Data and geometry
 
-The response includes the live volume timestamp and one row per available elevation sweep. Each row contains the measured elevation angle, reflectivity in dBZ for each transect sample, and the approximate beam height above radar level. The beam geometry uses a standard 4/3-earth effective-radius approximation. Samples with no matching radial/gate remain `null`; the route does not fill gaps or synthesize echoes.
+The API decodes the current NOAA Level II volume and samples measured reflectivity gates along the transect for each available elevation sweep. Transect columns are now spaced at equal great-circle distance intervals, rather than equal increments in latitude and longitude. For each column, the nearest available radial is accepted only when its azimuth is within 1.1° of the point bearing from the radar.
 
-This is a live single-radar cross section, not a Cartesian gridded volume, not a composite, and not an archive product. It is limited to the current volume scan and approximately 460 km radar range. Beam heights are geometric estimates, not terrain-corrected AGL heights. The nearest radial is accepted only within 1.1 degrees of the transect bearing. The API currently provides the data extraction layer; the old modal/UI remains explicitly labeled synthetic until it is replaced and end-to-end verified.
+Beam height is calculated with the standard 4/3-earth effective-radius model and is reported as **feet above radar level**. It is not AGL: no terrain elevation model or radar antenna elevation correction is applied. The returned field is named `beamHeightFtAboveRadar` to make that reference explicit. Missing radial/gate samples remain `null`; the API does not fill gaps or synthesize echoes.
+
+## Verified scope and limitations
+
+- Live single-radar reflectivity transect from NOAA NEXRAD Level II.
+- Current volume only; archive playback is not implemented.
+- One measured gate sample per sweep and transect column; no Cartesian 3-D interpolation or multi-radar composite.
+- No terrain-corrected AGL heights, storm-severity diagnosis, hail-size estimate, or updraft diagnosis.
+- The live CI smoke test has successfully retrieved KLZK data and verified nonempty measured reflectivity gates. This validates the API/data path, not every radar site, every transect geometry, or a full meteorological interpretation.
+
+The viewer displays the measured samples at their estimated beam heights and reports the scan timestamp, sweep count, measured-gate count, and peak sampled reflectivity.
 
 ## Failure behavior
 
-Invalid coordinates/site or transects outside the supported length/range are rejected. If a volume or intersecting reflectivity gates are unavailable, the API returns an explicit error rather than placeholder values.
+Invalid coordinates/site and transects outside the supported length/range are rejected. If a current volume or intersecting reflectivity gates are unavailable, the API returns an explicit error rather than placeholder values.
 
 ## Example
 
