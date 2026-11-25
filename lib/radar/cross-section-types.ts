@@ -1,7 +1,7 @@
 export type LiveCrossSectionSweep = {
   elevationDegrees: number;
   reflectivityDbz: Array<number | null>;
-  beamHeightFtAglApprox: Array<number | null>;
+  beamHeightFtAboveRadar: Array<number | null>;
 };
 
 export type LiveCrossSectionResult = {
