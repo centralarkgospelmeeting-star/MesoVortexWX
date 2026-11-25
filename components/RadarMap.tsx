@@ -20,6 +20,9 @@ import { buildBasemapStyle } from '../lib/map/basemap-styles';
 import { getModelById } from '../lib/model-registry';
 import { getRadarRasterRenderConfig } from '../lib/radar/render-config';
 import { distanceMeters, formatArea, formatDistance, polygonAreaMeters2, polylineMeters, type LngLat } from '../lib/map-tools/geo';
+import { drawStationModels, hitTestStationModels, type PositionedStationPlot } from '../lib/surface/draw-station-model';
+import { normalizeStationPlots, stationDetailFields } from '../lib/surface/station-model';
+import type { SurfaceLayerId, StationPlot } from '../lib/surface/types';
 
 // Next/webpack bundles maplibre-gl, so the library's relative worker URL
 // (./maplibre-gl-worker.mjs) resolves to a chunk that does not exist. Serve the
@@ -75,8 +78,10 @@ export interface RadarMapProps {
   showRadarPills?: boolean;
   showLightning?: boolean;
   showLSR?: boolean;
-  /** Real AviationWeather METAR / ASOS station points. */
+  /** Legacy alias for the METAR station-model layer. */
   showMetars?: boolean;
+  /** Independent workstation surface layers. */
+  surfaceLayers?: Partial<Record<SurfaceLayerId, boolean>>;
   surfaceGeoJson?: any;
   /** Fires on camera settle so panels can query stations near the current view. */
   onCameraChange?: (center: { lat: number; lon: number; zoom: number }) => void;
@@ -336,6 +341,7 @@ export function RadarMap({
   flashRange = [60, 80],
   showLightning = false,
   showMetars = false,
+  surfaceLayers,
   surfaceGeoJson = { type: 'FeatureCollection', features: [] },
   onCameraChange,
   spotterData = [],
@@ -496,13 +502,11 @@ export function RadarMap({
   const warningHandlersBoundRef = useRef(false);
   const mcdHandlersBoundRef = useRef(false);
   const showMCDRef = useRef(showMCD);
-  const showMetarsRef = useRef(showMetars);
-  const surfaceGeoJsonRef = useRef(surfaceGeoJson);
-  const surfaceHandlersRef = useRef<{
-    click: (e: any) => void;
-    enter: () => void;
-    leave: () => void;
-  } | null>(null);
+  const stationCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const stationPlotsRef = useRef<StationPlot[]>([]);
+  const stationPositionedRef = useRef<PositionedStationPlot[]>([]);
+  const stationVisibleRef = useRef(false);
+  const stationFrameRef = useRef<number | null>(null);
   const onCameraChangeRef = useRef(onCameraChange);
   const showHurricanesRef = useRef(showHurricanes);
   const showWarningsRef = useRef(showWarnings);
@@ -969,122 +973,140 @@ export function RadarMap({
     }
   }, [removeMCDLayers]);
 
-  const removeSurfaceLayers = useCallback((map: MapLibreMap) => {
-    [SURFACE_LABEL_ID, SURFACE_POINT_ID].forEach((id) => {
-      if (map.getLayer(id)) map.removeLayer(id);
-    });
-    if (map.getSource(SURFACE_SOURCE_ID)) map.removeSource(SURFACE_SOURCE_ID);
-    if (surfaceHandlersRef.current) {
-      map.off('click', SURFACE_POINT_ID, surfaceHandlersRef.current.click);
-      map.off('mouseenter', SURFACE_POINT_ID, surfaceHandlersRef.current.enter);
-      map.off('mouseleave', SURFACE_POINT_ID, surfaceHandlersRef.current.leave);
-      surfaceHandlersRef.current = null;
+  const paintStationPlots = useCallback(() => {
+    const map = mapRef.current;
+    const canvas = stationCanvasRef.current;
+    if (!map || !canvas || !stationVisibleRef.current) {
+      if (canvas) canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
+      return;
     }
+    const width = map.getCanvas().clientWidth || containerRef.current?.clientWidth || 0;
+    const height = map.getCanvas().clientHeight || containerRef.current?.clientHeight || 0;
+    if (!width || !height) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const pixelWidth = Math.round(width * dpr);
+    const pixelHeight = Math.round(height * dpr);
+    if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+      canvas.width = pixelWidth;
+      canvas.height = pixelHeight;
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+    }
+    const positioned: PositionedStationPlot[] = [];
+    for (const plot of stationPlotsRef.current) {
+      try {
+        const point = map.project([plot.lon, plot.lat]);
+        if (Number.isFinite(point.x) && Number.isFinite(point.y)) positioned.push({ ...plot, x: point.x, y: point.y });
+      } catch {
+        // Obsolescent projections can reject a point; skip only that station.
+      }
+    }
+    stationPositionedRef.current = positioned;
+    const ctx = canvas.getContext('2d');
+    if (ctx) drawStationModels(ctx, positioned, { width, height, devicePixelRatio: dpr });
   }, []);
 
-  const updateSurfaceLayer = useCallback((map: MapLibreMap, geojson?: any) => {
-    const data = geojson ?? surfaceGeoJsonRef.current ?? { type: 'FeatureCollection', features: [] };
-    const features = Array.isArray(data?.features) ? data.features : [];
-    if (features.length === 0) {
-      removeSurfaceLayers(map);
-      return;
-    }
-
-    const source = map.getSource(SURFACE_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
-    if (source) {
-      source.setData({ type: 'FeatureCollection', features } as any);
-      return;
-    }
-
-    map.addSource(SURFACE_SOURCE_ID, {
-      type: 'geojson',
-      data: { type: 'FeatureCollection', features } as any,
+  const scheduleStationPaint = useCallback(() => {
+    if (stationFrameRef.current !== null) return;
+    stationFrameRef.current = requestAnimationFrame(() => {
+      stationFrameRef.current = null;
+      paintStationPlots();
     });
-
-    const beforeId =
-      map.getLayer(SPOTTER_HALO_LAYER_ID) ? SPOTTER_HALO_LAYER_ID :
-      map.getLayer(SPOTTER_POSITION_LAYER_ID) ? SPOTTER_POSITION_LAYER_ID :
-      undefined;
-
-    map.addLayer({
-      id: SURFACE_POINT_ID,
-      type: 'circle',
-      source: SURFACE_SOURCE_ID,
-      paint: {
-        'circle-radius': 5,
-        'circle-color': [
-          'match', ['coalesce', ['get', 'flightCategory'], ['get', 'fltcat'], ''],
-          'VFR', '#34d399',
-          'MVFR', '#38bdf8',
-          'IFR', '#fbbf24',
-          'LIFR', '#f87171',
-          '#94a3b8',
-        ],
-        'circle-stroke-color': '#0f172a',
-        'circle-stroke-width': 1.5,
-        'circle-opacity': 0.95,
-      },
-    }, beforeId);
-
-    map.addLayer({
-      id: SURFACE_LABEL_ID,
-      type: 'symbol',
-      source: SURFACE_SOURCE_ID,
-      layout: {
-        'text-field': ['coalesce', ['get', 'stationId'], ['get', 'id'], ''],
-        'text-size': 10,
-        'text-font': ['Noto Sans Bold'],
-        'text-offset': [0, 1.1],
-        'text-anchor': 'top',
-        'text-allow-overlap': false,
-      },
-      paint: {
-        'text-color': '#e2e8f0',
-        'text-halo-color': '#020617',
-        'text-halo-width': 1.4,
-      },
-    }, beforeId);
-
-    const onClick = (e: any) => {
-      const p = e.features?.[0]?.properties;
-      if (!p) return;
-      const station = String(p.stationId || p.id || '');
-      const flight = String(p.flightCategory || p.fltcat || 'N/A');
-      const temp = p.tempC ?? p.temp;
-      const dew = p.dewpointC ?? p.dewp;
-      const wind = p.windSpeedKt ?? p.wspd;
-      const dir = p.windDirDeg ?? p.wdir ?? 'VRB';
-      const lines = [
-        `${station}${p.siteName || p.site ? ` — ${p.siteName || p.site}` : ''}`,
-        `${flight} · ${temp != null ? `${temp}°C` : '—'} / ${dew != null ? `${dew}°C` : '—'} · ${dir} ${wind != null ? `${wind} kt` : '—'}`,
-        `${p.asos ? 'ASOS automated report · ' : ''}Source: AviationWeather.gov METAR`,
-      ];
-      const html = lines.map((line) => escapeHtml(line)).join('<br/>');
-      new maplibregl.Popup({ closeButton: true, offset: 10, maxWidth: '260px', className: 'mv-spotter-popup' })
-        .setLngLat(e.lngLat)
-        .setHTML(`<div style="font-family:system-ui;font-size:11px;padding:8px;background:#0b1220;color:#e2e8f0;border-radius:8px;border:1px solid #334155;">${html}</div>`)
-        .addTo(map);
-    };
-    const onEnter = () => { map.getCanvas().style.cursor = 'pointer'; };
-    const onLeave = () => { map.getCanvas().style.cursor = ''; };
-    surfaceHandlersRef.current = { click: onClick, enter: onEnter, leave: onLeave };
-    map.on('click', SURFACE_POINT_ID, onClick);
-    map.on('mouseenter', SURFACE_POINT_ID, onEnter);
-    map.on('mouseleave', SURFACE_POINT_ID, onLeave);
-  }, [removeSurfaceLayers]);
+  }, [paintStationPlots]);
 
   useEffect(() => {
     onCameraChangeRef.current = onCameraChange;
-    showMetarsRef.current = showMetars;
-    surfaceGeoJsonRef.current = surfaceGeoJson;
+  }, [onCameraChange]);
+
+  // Canvas station models follow the map camera without adding generic point layers.
+  useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
-    if (!showMetars) {
-      removeSurfaceLayers(map);
+    map.on('render', scheduleStationPaint);
+    map.on('resize', scheduleStationPaint);
+    map.on('move', scheduleStationPaint);
+    map.on('zoom', scheduleStationPaint);
+    window.addEventListener('resize', scheduleStationPaint);
+    scheduleStationPaint();
+    return () => {
+      map.off('render', scheduleStationPaint);
+      map.off('resize', scheduleStationPaint);
+      map.off('move', scheduleStationPaint);
+      map.off('zoom', scheduleStationPaint);
+      window.removeEventListener('resize', scheduleStationPaint);
+      if (stationFrameRef.current !== null) cancelAnimationFrame(stationFrameRef.current);
+      stationFrameRef.current = null;
+    };
+  }, [mapReady, scheduleStationPaint]);
+
+  useEffect(() => {
+    const layers: Record<SurfaceLayerId, boolean> = {
+      metar: showMetars || surfaceLayers?.metar === true,
+      aviation: surfaceLayers?.aviation === true,
+      mesonet: surfaceLayers?.mesonet === true,
+      pws: surfaceLayers?.pws === true,
+      buoy: surfaceLayers?.buoy === true,
+      marine: surfaceLayers?.marine === true,
+    };
+    const active = Object.values(layers).some(Boolean);
+    stationVisibleRef.current = active;
+    if (!active) {
+      stationPlotsRef.current = [];
+      stationPositionedRef.current = [];
+      scheduleStationPaint();
       return;
     }
-    updateSurfaceLayer(map, surfaceGeoJson);
-  }, [mapReady, showMetars, surfaceGeoJson, onCameraChange, updateSurfaceLayer, removeSurfaceLayers]);
+    const features = Array.isArray(surfaceGeoJson?.features) ? surfaceGeoJson.features : [];
+    const visible = features.filter((feature: any) => layers[(feature?.properties?.surfaceLayer || 'metar') as SurfaceLayerId] !== false);
+    stationPlotsRef.current = normalizeStationPlots(visible, {
+      layer: 'metar',
+      network: 'metar',
+      sourceLabel: 'Real surface observation',
+    });
+    scheduleStationPaint();
+  }, [showMetars, surfaceLayers, surfaceGeoJson, scheduleStationPaint]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || crossSectionMode || inspectionMode || toolMode !== 'none') return;
+    const locate = (point: { x: number; y: number }) => hitTestStationModels(stationPositionedRef.current, point.x, point.y);
+    const onClick = (event: any) => {
+      if (!stationVisibleRef.current) return;
+      const station = locate(event.point);
+      if (!station) return;
+      const fields = stationDetailFields(station);
+      const rows = fields.map((field) => {
+        const tone = field.source === 'unavailable' ? '#64748b' : field.source === 'derived' ? '#38bdf8' : '#e2e8f0';
+        return `<div style="display:flex;gap:8px;justify-content:space-between;"><span style="color:#94a3b8">${escapeHtml(field.label)}</span><span style="color:${tone};font-weight:600">${escapeHtml(field.value)}</span></div>`;
+      }).join('');
+      const stale = station.quality === 'stale' ? '<span style="color:#fbbf24"> · STALE</span>' : '';
+      const raw = station.rawOb
+        ? `<div style="margin-top:5px;border-top:1px solid #334155;padding-top:5px;color:#94a3b8;word-break:break-all">${escapeHtml(station.rawOb)}</div>`
+        : `<div style="margin-top:5px;border-top:1px solid #334155;padding-top:5px;color:#64748b">${escapeHtml('DATA UNAVAILABLE')}</div>`;
+      new maplibregl.Popup({ closeButton: true, offset: 14, maxWidth: '320px', className: 'mv-station-popup' })
+        .setLngLat([station.lon, station.lat])
+        .setHTML(
+          `<div style="font-family:ui-monospace,monospace;font-size:10px;padding:8px;background:#0b1220;color:#e2e8f0;border-radius:6px;border:1px solid #334155;line-height:1.4;">` +
+          `<div style="font-size:12px;font-weight:800;color:#38bdf8">${escapeHtml(station.stationId)}${stale}</div>` +
+          (station.name ? `<div style="color:#94a3b8">${escapeHtml(station.name)}</div>` : '') +
+          `<div style="margin-top:5px">${rows}</div>${raw}</div>`
+        )
+        .addTo(map);
+    };
+    const onMove = (event: any) => {
+      if (!stationVisibleRef.current || !hitTestStationModels(stationPositionedRef.current, event.point.x, event.point.y)) {
+        map.getCanvas().style.cursor = '';
+      } else {
+        map.getCanvas().style.cursor = 'pointer';
+      }
+    };
+    map.on('click', onClick);
+    map.on('mousemove', onMove);
+    return () => {
+      map.off('click', onClick);
+      map.off('mousemove', onMove);
+    };
+  }, [mapReady, crossSectionMode, inspectionMode, toolMode]);
 
   const removeHurricaneLayers = useCallback((map: MapLibreMap) => {
     [
@@ -2444,6 +2466,7 @@ export function RadarMap({
   return (
     <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'hidden', cursor: (crossSectionMode || inspectionMode) ? 'crosshair' : 'default' }}>
       <div ref={containerRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+      <canvas ref={stationCanvasRef} data-station-model-canvas="true" style={{ position: 'absolute', inset: 0, zIndex: 6, pointerEvents: 'none' }} />
       <canvas ref={sweepCanvasRef} className="radar-sweep-canvas" />
 
       {flashEnabled && !flashDismissed && (

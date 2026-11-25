@@ -81,7 +81,7 @@ export function METARPanel({ center, features, source, status, error }: METARPan
   }, [features, center]);
 
   const sourceLabel = source === 'asos'
-    ? 'ASOS automated reports · classified from real METAR remarks'
+    ? 'Automated METAR reports (AUTO/AO1/AO2 remarks) · ASOS subset view'
     : 'AviationWeather.gov METAR';
 
   return (

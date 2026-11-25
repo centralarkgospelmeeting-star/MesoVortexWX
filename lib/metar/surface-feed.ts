@@ -84,8 +84,14 @@ export function normalizeSurfaceFeature(feature: any, source: SurfaceSource): an
   if (source === 'asos' && !asos) return null;
 
   const windDirRaw = p.wdir ?? p.wind_dir_degrees;
-  // AviationWeather reports ceil in hundreds of feet (ceil 95 == OVC095 == 9500 ft).
+  // AviationWeather GeoJSON reports ceil in hundreds of feet (ceil 95 == OVC095).
   const ceilingRaw = finite(p.ceil ?? p.ceiling);
+  // AviationWeather GeoJSON reports altim and slp in hPa, not inHg.
+  const altimHpa = finite(p.altim ?? p.altimeter);
+  const slpHpa = finite(p.slp);
+  const reportType = /^SPECI\b/i.test(rawOb)
+    ? 'SPECI'
+    : /^METAR\b/i.test(rawOb) ? 'METAR' : null;
   return {
     type: 'Feature',
     id: stationId,
@@ -104,12 +110,14 @@ export function normalizeSurfaceFeature(feature: any, source: SurfaceSource): an
       flightCategory: String(p.fltcat || p.flightCategory || '').trim() || null,
       visibilitySm: String(p.visib || p.visibility || '').trim() || null,
       ceilingFt: ceilingRaw === null ? null : ceilingRaw * 100,
-      altimeterInHg: finite(p.altim ?? p.altimeter),
+      altimeterInHg: altimHpa === null ? null : Math.round((altimHpa / 33.8638866667) * 10000) / 10000,
+      seaLevelPressureHpa: slpHpa,
+      reportType,
       obsTime: p.obsTime || p.receiptTime || p.reportTime || null,
       rawOb,
       asos,
       sourceLabel: source === 'asos'
-        ? 'ASOS (automated station reports classified from real METAR remarks)'
+        ? 'Automated METAR reports (AUTO/AO1/AO2 remarks; ASOS subset view)'
         : 'AviationWeather.gov METAR',
     },
   };

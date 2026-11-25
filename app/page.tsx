@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { RadarMap, BasemapType, ModeTab } from '../components/RadarMap';
 import { CrossSectionModal } from '../components/CrossSectionModal';
@@ -29,6 +29,9 @@ import { AlertDetailsPanel, buildLocationContext } from '../components/AlertDeta
 import { ProductInfoBanner } from '../components/ProductInfoBanner';
 import { WeatherIntensityScorePanel } from '../components/WeatherIntensityScorePanel';
 import { METARPanel, type SurfaceSource } from '../components/METARPanel';
+import { SurfaceLayersPanel, type SurfaceLayerStatus } from '../components/surface/SurfaceLayersPanel';
+import { normalizeStationPlots } from '../lib/surface/station-model';
+import type { SurfaceLayerId, StationPlot } from '../lib/surface/types';
 import {
   DEFAULT_SATELLITE_SELECTION,
   SATELLITE_BIRDS,
@@ -96,6 +99,7 @@ const BASEMAP_STORAGE_KEY = 'mesovortex_basemap_preference';
 const PROJECTION_STORAGE_KEY = 'mesovortex_projection_mode';
 const PREFS_STORAGE_KEY = 'mesovortex_preferences_v1';
 const WIS_STORAGE_KEY = 'mesovortex_weather_intensity_visible';
+const DEFAULT_MESONET_NETWORK = 'ISUSM';
 const PANE_MODES: PaneMode[] = ['Radar', 'Satellite', 'Composite', 'Models'];
 
 type UserPrefs = {
@@ -121,6 +125,7 @@ type UserPrefs = {
   showSpotters: boolean;
   showSpotterReports: boolean;
   showMetars: boolean;
+  surfaceLayers: Record<SurfaceLayerId, boolean>;
   showStormTracks: boolean;
   showCounties: boolean;
   showTornadoAnalysis: boolean;
@@ -151,7 +156,8 @@ const DEFAULT_PREFS: UserPrefs = {
   showMCD: true,
   showSpotters: true,
   showSpotterReports: true,
-  showMetars: false,
+  showMetars: true,
+  surfaceLayers: { metar: true, aviation: false, mesonet: false, pws: false, buoy: false, marine: false },
   showStormTracks: true,
   showCounties: true,
   showTornadoAnalysis: true,
@@ -192,6 +198,11 @@ function loadUserPrefs(): UserPrefs {
       alertsOpen: typeof p.alertsOpen === 'boolean' ? p.alertsOpen : DEFAULT_PREFS.alertsOpen,
       alertSidebarState: p.alertSidebarState === 'open' ? 'open' : 'closed',
       showMetars: typeof p.showMetars === 'boolean' ? p.showMetars : DEFAULT_PREFS.showMetars,
+      surfaceLayers: {
+        ...DEFAULT_PREFS.surfaceLayers,
+        ...(p.surfaceLayers && typeof p.surfaceLayers === 'object' ? p.surfaceLayers : {}),
+        ...(p.surfaceLayers ? {} : { metar: typeof p.showMetars === 'boolean' ? p.showMetars : DEFAULT_PREFS.showMetars }),
+      },
     } as UserPrefs;
   } catch {
     return DEFAULT_PREFS;
@@ -291,10 +302,18 @@ export default function MesoVortexWorkstation() {
   const [mapPitch, setMapPitch] = useState(initialPrefs.mapPitch);
   const [showSpotterReports, setShowSpotterReports] = useState(initialPrefs.showSpotterReports);
   const [showMetars, setShowMetars] = useState(initialPrefs.showMetars);
+  const [surfaceLayers, setSurfaceLayers] = useState<Record<SurfaceLayerId, boolean>>(initialPrefs.surfaceLayers);
   const [surfaceSource, setSurfaceSource] = useState<SurfaceSource>('metar');
   const [surfaceGeoJson, setSurfaceGeoJson] = useState<any>({ type: 'FeatureCollection', features: [] });
   const [surfaceStatus, setSurfaceStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [surfaceError, setSurfaceError] = useState<string | null>(null);
+  const [surfaceLayerStatus, setSurfaceLayerStatus] = useState<Record<SurfaceLayerId, SurfaceLayerStatus>>({
+    metar: 'idle', aviation: 'idle', mesonet: 'unavailable', pws: 'unavailable', buoy: 'unavailable', marine: 'unavailable',
+  });
+  const [surfaceLayerCounts, setSurfaceLayerCounts] = useState<Record<SurfaceLayerId, number>>({
+    metar: 0, aviation: 0, mesonet: 0, pws: 0, buoy: 0, marine: 0,
+  });
+  const [surfaceLayerErrors, setSurfaceLayerErrors] = useState<Partial<Record<SurfaceLayerId, string>>>({});
   const [mapCenter, setMapCenter] = useState<{ lat: number; lon: number; zoom: number }>({
     lat: RADAR_SITES[0]?.lat ?? 34.836,
     lon: RADAR_SITES[0]?.lon ?? -92.262,
@@ -361,6 +380,7 @@ export default function MesoVortexWorkstation() {
         showSpotters,
         showSpotterReports,
         showMetars,
+        surfaceLayers,
         showStormTracks,
         showCounties,
         showTornadoAnalysis,
@@ -370,7 +390,7 @@ export default function MesoVortexWorkstation() {
       };
       localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(prefs));
     } catch {}
-  }, [projectionMode, mapPitch, showRangeRings, radarOpacity, smoothing, playbackSpeed, playbackDirection, loopPauseMs, favoriteProducts, product, tilt, radarSite, colorTable, showRadarPills, showLightning, showLSR, showWatches, showWarnings, showMCD, showSpotters, showSpotterReports, showMetars, showStormTracks, showCounties, showTornadoAnalysis, showHurricanes, alertsOpen]);
+  }, [projectionMode, mapPitch, showRangeRings, radarOpacity, smoothing, playbackSpeed, playbackDirection, loopPauseMs, favoriteProducts, product, tilt, radarSite, colorTable, showRadarPills, showLightning, showLSR, showWatches, showWarnings, showMCD, showSpotters, showSpotterReports, showMetars, surfaceLayers, showStormTracks, showCounties, showTornadoAnalysis, showHurricanes, alertsOpen]);
   const [alertSettings, setAlertSettings] = useState<AlertSettings>(DEFAULT_ALERT_SETTINGS);
   const [menuOpen, setMenuOpen] = useState(false);
   const [wisOpen, setWisOpen] = useState(true);
@@ -679,36 +699,91 @@ export default function MesoVortexWorkstation() {
     }
   };
 
-  // One real surface feed serves both the map overlay and the METAR/ASOS panel.
-  // ASOS is a strict subset of genuine reports carrying AUTO/AO1/AO2 remarks.
+  // Independent surface layers share one canonical station feed. ASOS remains
+  // a strict subset of genuine METAR reports; unavailable networks never render
+  // placeholder stations.
   useEffect(() => {
-    const active = showMetars || openPanel === 'METAR' || openPanel === 'ASOS';
+    const requested: Record<SurfaceLayerId, boolean> = {
+      metar: surfaceLayers.metar || openPanel === 'METAR' && surfaceSource === 'metar',
+      aviation: surfaceLayers.aviation || (openPanel === 'ASOS' || (openPanel === 'METAR' && surfaceSource === 'asos')),
+      mesonet: surfaceLayers.mesonet,
+      pws: surfaceLayers.pws,
+      buoy: surfaceLayers.buoy,
+      marine: surfaceLayers.marine,
+    };
+    const active = Object.values(requested).some(Boolean) || openPanel === 'Surface';
     if (!active) return;
     let cancelled = false;
     const load = async () => {
       setSurfaceStatus('loading');
       setSurfaceError(null);
-      try {
-        const lat0 = Math.max(-90, mapCenter.lat - 3);
-        const lat1 = Math.min(90, mapCenter.lat + 3);
-        const lon0 = Math.max(-180, mapCenter.lon - 3.5);
-        const lon1 = Math.min(180, mapCenter.lon + 3.5);
-        const qs = new URLSearchParams({
-          bbox: `${lat0},${lon0},${lat1},${lon1}`,
-          hours: '3',
-          source: surfaceSource,
-        });
-        const res = await fetch(`/api/metar/geojson?${qs.toString()}`, { cache: 'no-store' });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-        if (cancelled) return;
-        setSurfaceGeoJson({ type: 'FeatureCollection', features: data.features || [] });
-        setSurfaceStatus('ready');
-      } catch (error) {
-        if (cancelled) return;
-        setSurfaceError(error instanceof Error ? error.message : 'Unable to load surface observations');
-        setSurfaceStatus('error');
-      }
+      const lat0 = Math.max(-90, mapCenter.lat - 3);
+      const lat1 = Math.min(90, mapCenter.lat + 3);
+      const lon0 = Math.max(-180, mapCenter.lon - 3.5);
+      const lon1 = Math.min(180, mapCenter.lon + 3.5);
+      const bbox = `${lat0},${lon0},${lat1},${lon1}`;
+      const queries: Array<{ layer: SurfaceLayerId; network: string; url: string }> = [];
+      if (requested.metar) queries.push({ layer: 'metar', network: 'metar', url: `/api/metar/geojson?${new URLSearchParams({ bbox, hours: '3', source: 'metar' })}` });
+      if (requested.aviation) queries.push({ layer: 'aviation', network: 'asos', url: `/api/asos/geojson?${new URLSearchParams({ bbox, hours: '3' })}` });
+      if (requested.mesonet) queries.push({ layer: 'mesonet', network: 'mesonet', url: `/api/surface/mesonet?${new URLSearchParams({ bbox, network: DEFAULT_MESONET_NETWORK })}` });
+      if (requested.pws) queries.push({ layer: 'pws', network: 'pws', url: `/api/surface/pws?${new URLSearchParams({ bbox })}` });
+      if (requested.buoy) queries.push({ layer: 'buoy', network: 'buoy', url: `/api/surface/buoy?${new URLSearchParams({ bbox })}` });
+      if (requested.marine) queries.push({ layer: 'marine', network: 'marine', url: `/api/surface/marine?${new URLSearchParams({ bbox })}` });
+
+      const settled = await Promise.allSettled(queries.map(async (query) => {
+        const res = await fetch(query.url, { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        return { query, res, data };
+      }));
+      if (cancelled) return;
+
+      const features: any[] = [];
+      const counts: Record<SurfaceLayerId, number> = { metar: 0, aviation: 0, mesonet: 0, pws: 0, buoy: 0, marine: 0 };
+      const statuses: Record<SurfaceLayerId, SurfaceLayerStatus> = {
+        metar: requested.metar ? 'loading' : 'idle',
+        aviation: requested.aviation ? 'loading' : 'idle',
+        mesonet: requested.mesonet ? 'loading' : 'unavailable',
+        pws: requested.pws ? 'loading' : 'unavailable',
+        buoy: requested.buoy ? 'loading' : 'unavailable',
+        marine: requested.marine ? 'loading' : 'unavailable',
+      };
+      const errors: Partial<Record<SurfaceLayerId, string>> = {};
+      settled.forEach((item, index) => {
+        if (item.status === 'rejected') {
+          statuses[queries[index].layer] = 'error';
+          errors[queries[index].layer] = 'Surface observation request failed';
+          return;
+        }
+        const { query, res, data } = item.value;
+        if (!res.ok) {
+          const message = String(data?.error || `HTTP ${res.status}`);
+          statuses[query.layer] = res.status === 404 ? 'unavailable' : 'error';
+          if (res.status !== 404) errors[query.layer] = message;
+          return;
+        }
+        const layerFeatures = Array.isArray(data?.features) ? data.features : [];
+        for (const feature of layerFeatures) {
+          features.push({
+            ...feature,
+            properties: {
+              ...(feature?.properties || {}),
+              surfaceLayer: query.layer,
+              surfaceNetwork: query.network,
+              sourceLabel: data?._meta?.sourceLabel || data?.source || query.layer.toUpperCase(),
+              sourceUrl: data?._meta?.source || null,
+            },
+          });
+        }
+        counts[query.layer] = layerFeatures.length;
+        statuses[query.layer] = 'ready';
+      });
+      setSurfaceLayerStatus(statuses);
+      setSurfaceLayerCounts(counts);
+      setSurfaceLayerErrors(errors);
+      setSurfaceGeoJson({ type: 'FeatureCollection', features });
+      const errorList = Object.values(errors);
+      setSurfaceStatus(errorList.length ? 'error' : 'ready');
+      setSurfaceError(errorList.length ? errorList[0] || 'Surface observations unavailable' : null);
     };
     const start = window.setTimeout(load, 300);
     const poll = window.setInterval(load, 180_000);
@@ -717,7 +792,19 @@ export default function MesoVortexWorkstation() {
       window.clearTimeout(start);
       window.clearInterval(poll);
     };
-  }, [showMetars, openPanel, surfaceSource, mapCenter.lat, mapCenter.lon]);
+  }, [surfaceLayers, openPanel, surfaceSource, mapCenter.lat, mapCenter.lon]);
+
+  const surfaceStationPlots = useMemo<StationPlot[]>(
+    () => normalizeStationPlots(surfaceGeoJson, { layer: 'metar', network: 'metar', sourceLabel: 'Real surface observation' }),
+    [surfaceGeoJson]
+  );
+  const focusSurfaceStation = useCallback((station: StationPlot) => {
+    setFocusTarget({ lat: station.lat, lon: station.lon, zoom: Math.max(8, mapCenter.zoom), ts: Date.now() });
+  }, [mapCenter.zoom]);
+  const toggleSurfaceLayer = useCallback((layer: SurfaceLayerId, enabled: boolean) => {
+    setSurfaceLayers((prev) => ({ ...prev, [layer]: enabled }));
+    if (layer === 'metar') setShowMetars(enabled);
+  }, []);
 
   const paneProps = {
     radarSite,
@@ -731,6 +818,7 @@ export default function MesoVortexWorkstation() {
     showLightning,
     showLSR,
     showMetars,
+    surfaceLayers,
     surfaceGeoJson,
     onCameraChange: setMapCenter,
     showWatches,
@@ -1541,6 +1629,7 @@ export default function MesoVortexWorkstation() {
                 ['Satellite','Satellite'],
                 ['Tropics','Tropics'],
                 ['Discussions','Discussions'],
+                ['Surface','Surface Observations'],
                 ['METAR','METAR Observations'],
                 ['ASOS','ASOS Stations'],
                 ['Lightning','Lightning'],
@@ -1603,13 +1692,25 @@ export default function MesoVortexWorkstation() {
             </div>
           )}
 
+          {openPanel === 'Surface' && (
+            <SurfaceLayersPanel
+              layers={surfaceLayers}
+              statuses={surfaceLayerStatus}
+              counts={surfaceLayerCounts}
+              stations={surfaceStationPlots}
+              errors={surfaceLayerErrors}
+              onToggle={toggleSurfaceLayer}
+              onFocusStation={focusSurfaceStation}
+            />
+          )}
+
           {(openPanel === 'METAR' || openPanel === 'ASOS') && (
             <div className="space-y-3">
               <label className="flex items-center gap-2 text-[11px] font-bold cursor-pointer">
                 <input
                   type="checkbox"
                   checked={showMetars}
-                  onChange={(e) => setShowMetars(e.target.checked)}
+                  onChange={(e) => { setShowMetars(e.target.checked); setSurfaceLayers((prev) => ({ ...prev, metar: e.target.checked })); }}
                 />
                 Show stations on map
               </label>
@@ -1631,7 +1732,9 @@ export default function MesoVortexWorkstation() {
               </div>
               <METARPanel
                 center={mapCenter}
-                features={Array.isArray(surfaceGeoJson?.features) ? surfaceGeoJson.features : []}
+                features={Array.isArray(surfaceGeoJson?.features)
+                  ? surfaceGeoJson.features.filter((feature: any) => feature?.properties?.surfaceLayer === (surfaceSource === 'asos' ? 'aviation' : 'metar'))
+                  : []}
                 source={surfaceSource}
                 status={surfaceStatus}
                 error={surfaceError}

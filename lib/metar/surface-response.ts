@@ -17,7 +17,7 @@ const cachedHeaders = {
 
 const SOURCE_LABEL: Record<SurfaceSource, string> = {
   metar: 'AviationWeather.gov METAR',
-  asos: 'AviationWeather.gov METAR (ASOS automated-station subset)',
+  asos: 'AviationWeather.gov METAR (automated AUTO/AO1/AO2 subset)',
 };
 
 function empty(error: string, status: number) {
