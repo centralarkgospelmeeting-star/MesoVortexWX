@@ -98,12 +98,13 @@ function kdpStats(radials:Radial[]) {
 function reflectivitySummary(radials:Radial[]) {
   const values=radials.flatMap(r=>finiteValues(moment(r,'reflect')?.moment_data));
   const valid=values.filter(v=>v>=-32&&v<=95);
-  return {
-    ...summarize(valid,'dBZ'),
+  const summary=summarize(valid,'dBZ');
+  return summary ? {
+    ...summary,
     gatesAtLeast35dBZ:valid.filter(v=>v>=35).length,
     gatesAtLeast50dBZ:valid.filter(v=>v>=50).length,
     gatesAtLeast60dBZ:valid.filter(v=>v>=60).length,
-  };
+  } : null;
 }
 function dualPolSummary(radials:Radial[]) {
   const rho=momentStats(radials,'rho'), zdr=momentStats(radials,'zdr'), phi=momentStats(radials,'phi'), kdp=kdpStats(radials);
