@@ -31,7 +31,7 @@ Beam height is calculated with the standard 4/3-earth effective-radius model and
 - No terrain-corrected AGL heights, storm-severity diagnosis, hail-size estimate, or updraft diagnosis.
 - The live CI smoke test has successfully retrieved KLZK data and verified nonempty measured reflectivity gates. This validates the API/data path, not every radar site, every transect geometry, or a full meteorological interpretation.
 
-The viewer displays the measured samples at their estimated beam heights and reports the scan timestamp, sweep count, measured-gate count, and peak sampled reflectivity.
+The viewer plots measured gates in a scaled distance-versus-height coordinate system, with labeled distance and above-radar-height axes, hover details, and a dBZ color legend. It does not connect or interpolate missing samples. The automated live test checks the same response contract at KLZK (Little Rock) and KTLX (Oklahoma City), including per-sweep height and reflectivity array dimensions.
 
 ## Failure behavior
 
