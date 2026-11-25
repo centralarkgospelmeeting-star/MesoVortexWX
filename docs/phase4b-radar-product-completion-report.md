@@ -16,7 +16,7 @@ Added `lib/radar/product-catalog.ts` as the single catalog consumed by both `com
 
 Every entry now declares a domain before any meteorological family:
 
-- **Radar Products** — generated directly from an individual radar site. Categories: Reflectivity, Velocity, Polarimetric Products, Classification Products, Severe Analysis, Tilt Products, and Unverified / Not Claimed.
+- **Radar Products** — generated directly from an individual radar site. Categories: Reflectivity, Velocity, Polarimetric Products, Classification Products, Severe Analysis, Tilt Products, Analysis Products, and Unverified / Not Claimed.
 - **Composite Products** — national mosaic or multi-radar/MRMS processing. Categories: National Mosaic, Rotation Products, Hail Products, Echo Tops, VIL Products, and QPE Products.
 
 Availability, partial status, reason text, and warning text are derived from `getRadarCapability()`, so reorganizing the catalog cannot silently enable a product. National/multi-radar products (`comp_ref`, `azshear`, `rotation_tracks`, `mesh`, `hail_detection`, `tops`, `vil`, `vil_density`, `qpe`, `precip_rate`, `rain_mix_snow`) are not listed under Radar Products. Single-site products (`ref`, `vel`, `srvel`, `cc`, `min_cc`, `zdr`, `kdp`, `sw`, `hhc`, tilt entries, etc.) are not listed under Composite Products.
@@ -60,3 +60,9 @@ Captured in the connected Chromium browser at 581×579 with DOM readbacks taken 
 - `scripts/test-product-catalog.mjs` (new)
 - `scripts/test-legend-integrity.mjs`
 - `package.json`
+
+## Post-merge integration note
+
+After the Phase 4B commit, `origin/main` added live single-radar Level II NROT-style storm analysis and two-point reflectivity cross-section extraction. The merge preserves those capabilities as explicitly `PARTIAL` entries backed by their own endpoints and live smoke tests. The unverified official `nrot` entry remains `UNAVAILABLE`, and super-resolution entries remain unavailable.
+
+The shared catalog now groups NROT-style storm analysis under Severe Analysis and live cross sections under Analysis Products. The Phase 4B Radar/Composite source-domain separation is unchanged. The merged tree was revalidated with `npm run typecheck`, `npm run test:verify`, and `npm run build`; the screenshots and readbacks above remain the evidence for the original Phase 4B commit.

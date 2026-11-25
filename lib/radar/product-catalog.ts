@@ -18,6 +18,7 @@ export type RadarCategory =
   | 'Classification Products'
   | 'Severe Analysis'
   | 'Tilt Products'
+  | 'Analysis Products'
   | 'Unverified / Not Claimed';
 
 export type CompositeCategory =
@@ -63,6 +64,7 @@ export const RADAR_CATEGORIES: readonly RadarCategory[] = [
   'Classification Products',
   'Severe Analysis',
   'Tilt Products',
+  'Analysis Products',
   'Unverified / Not Claimed',
 ];
 
@@ -88,11 +90,11 @@ export const PRODUCT_CATALOG: readonly CatalogProduct[] = [
   { key: 'sw', capId: 'sw', short: 'SW', label: 'Spectrum Width', domain: 'RADAR', category: 'Polarimetric Products' },
   { key: 'hhc', capId: 'hhc', short: 'HHC', label: 'Hydrometeor Classification', domain: 'RADAR', category: 'Classification Products' },
   { key: 'gate_to_gate_shear', capId: 'gate_to_gate_shear', short: 'GATE', label: 'Gate-to-Gate Velocity Shear', domain: 'RADAR', category: 'Severe Analysis' },
-  { key: 'norm_vel', capId: 'nrot', short: 'NROT', label: 'Normalized Rotation', domain: 'RADAR', category: 'Severe Analysis' },
+  { key: 'norm_vel', capId: 'nrot', short: 'NROT', label: 'Normalized Rotation (unverified NROT)', domain: 'RADAR', category: 'Severe Analysis' },
+  { key: 'storm_analysis', capId: 'storm_analysis', short: 'NROT', label: 'NROT-Style Normalized Rotation (Live Level II)', domain: 'RADAR', category: 'Severe Analysis' },
   { key: 'volume_scan', capId: 'volume_scan', short: 'VOL', label: 'Volume Scan / Elevation Selection', domain: 'RADAR', category: 'Tilt Products' },
   { key: 'tilt_selection', capId: 'tilt_selection', short: 'TILT', label: 'Individual Tilt Selection', domain: 'RADAR', category: 'Tilt Products' },
-  { key: 'cross_section', capId: 'cross_section', short: 'XSEC', label: 'Reflectivity Cross Sections', domain: 'RADAR', category: 'Unverified / Not Claimed' },
-  { key: 'storm_analysis', capId: 'storm_analysis', short: 'ANLZ', label: 'Radar-Derived Storm Analysis', domain: 'RADAR', category: 'Unverified / Not Claimed' },
+  { key: 'cross_section', capId: 'cross_section', short: 'XSEC', label: 'Live Level II Reflectivity Cross Section', domain: 'RADAR', category: 'Analysis Products' },
   { key: 'super_res_ref', capId: 'super_res_ref', short: 'SR-R', label: 'Super-Resolution Reflectivity', domain: 'RADAR', category: 'Unverified / Not Claimed' },
   { key: 'super_res_vel', capId: 'super_res_vel', short: 'SR-V', label: 'Super-Resolution Velocity', domain: 'RADAR', category: 'Unverified / Not Claimed' },
 

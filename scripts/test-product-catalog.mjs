@@ -28,12 +28,23 @@ for (const id of ['ref', 'vel', 'srvel', 'cc', 'zdr', 'kdp', 'hhc', 'min_cc', 'v
 }
 
 // Professional family groupings are present without inventing products.
-for (const category of ['Reflectivity', 'Velocity', 'Polarimetric Products', 'Classification Products', 'Tilt Products', 'Unverified / Not Claimed']) {
+for (const category of ['Reflectivity', 'Velocity', 'Polarimetric Products', 'Classification Products', 'Severe Analysis', 'Tilt Products', 'Analysis Products', 'Unverified / Not Claimed']) {
   assert.ok(radarBlock.includes(`category: '${category}'`), `radar catalog must include ${category}`);
 }
 for (const category of ['National Mosaic', 'Rotation Products', 'Hail Products', 'Echo Tops', 'VIL Products', 'QPE Products']) {
   assert.ok(compositeBlock.includes(`category: '${category}'`), `composite catalog must include ${category}`);
 }
+
+// The authoritative NROT entry stays unavailable; the live NROT-style analysis
+// product and measured Level II cross section are separate, explicitly PARTIAL entries.
+assert.match(matrix, /id: 'nrot'[\s\S]*?availability: 'UNAVAILABLE'/, 'official NROT must not be claimed');
+assert.match(radarBlock, /key: 'norm_vel'[\s\S]*?label: 'Normalized Rotation \(unverified NROT\)'/, 'unverified NROT must be labeled as such');
+for (const id of ['storm_analysis', 'cross_section']) {
+  assert.match(matrix, new RegExp(`id: '${id}'[\\s\\S]*?availability: 'PARTIAL'`), `${id} must reflect its live Level II verification`);
+  assert.doesNotMatch(radarBlock, new RegExp(`key: '${id}'[^\\n]*category: 'Unverified / Not Claimed'`), `${id} must not be filed as unverified`);
+}
+assert.match(radarBlock, /key: 'storm_analysis'[^\n]*category: 'Severe Analysis'/, 'live NROT-style analysis must be grouped with severe analysis');
+assert.match(radarBlock, /key: 'cross_section'[^\n]*category: 'Analysis Products'/, 'live cross section must be grouped as an analysis product');
 
 // Requested super-resolution products are discoverable but explicitly unavailable.
 for (const id of ['super_res_ref', 'super_res_vel']) {

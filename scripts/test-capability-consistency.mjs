@@ -28,6 +28,11 @@ const SCOPE_PATTERNS = {
 // Sounding capabilities use ...U(...) / ...P(...) helpers instead of status:.
 const HELPER_STATUS = { U: 'UNAVAILABLE', P: 'PARTIAL', W: 'WORKING' };
 
+// Only these entries describe the radar cross-section product. Forecast,
+// atmospheric and sounding cross sections are different capabilities and must
+// remain independently UNAVAILABLE when they are not implemented.
+const RADAR_CROSS_SECTION_IDS = new Set(['cross_sections', 'an_cross_sections']);
+
 let failures = 0;
 function fail(file, id, message) {
   console.error(`FAIL ${file} (${id}): ${message}`);
@@ -73,6 +78,7 @@ for (const file of files) {
     const label = `${id} ${name}`;
     for (const productId of TRACKED_IDS) {
       if (!SCOPE_PATTERNS[productId].test(label)) continue;
+      if (productId === 'cross_section' && !RADAR_CROSS_SECTION_IDS.has(id)) continue;
       const expected = authoritative.get(productId);
       if (!expected) continue;
       if (expected === 'UNAVAILABLE' && (status === 'WORKING' || status === 'PARTIAL')) {
