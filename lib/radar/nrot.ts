@@ -16,6 +16,7 @@ export type NrotRadial = {
   azimuth?: number;
   elevation_angle?: number;
   velocity?: NrotMoment;
+  reflect?: NrotMoment;
   radial?: { nyquist_velocity?: number };
 };
 export type NrotPeak = {
@@ -137,7 +138,7 @@ export function calculateNrot(
     .sort((a, b) => (a.azimuth || 0) - (b.azimuth || 0));
   const empty: NrotResult = {
     available: false,
-    method: "Local quadratic least-squares azimuthal shear (5x5; 3x3 fallback), normalized by a Stumpf-style range threshold. Not GR2 Analyst NROT.",
+    method: "Local quadratic least-squares azimuthal shear (5x5; 3x3 fallback) on reflectivity >=20 dBZ gates, normalized by a Stumpf-style range threshold. Not GR2 Analyst NROT.",
     peaks: [],
     maxCyclonic: null,
     maxAnticyclonic: null,
@@ -165,6 +166,9 @@ export function calculateNrot(
     const count = centerMoment.moment_data!.length;
     // Process every second gate to bound CPU cost while preserving useful spatial detail.
     for (let gi = 2; gi < count - 2; gi += 2) {
+      const reflectivity = center.reflect?.moment_data?.[gi];
+      // Focus on meteorological echoes instead of fitting clear-air/noise gates.
+      if (reflectivity == null || !Number.isFinite(reflectivity) || reflectivity < 20) continue;
       const rangeKm = centerMoment.first_gate! + gi * gateSize;
       if (rangeKm < MIN_RANGE_KM) { near++; continue; }
       const bearing = center.azimuth!;
