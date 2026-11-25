@@ -1709,7 +1709,6 @@ export default function MesoVortexWorkstation() {
                 ['METAR','METAR Observations'],
                 ['ASOS','ASOS Stations'],
                 ['Lightning','Lightning'],
-                ['DataSources','Data Sources'],
                 ['Settings','Settings'],
               ].map(([id,label]) => (
                 <button key={id} type="button"

@@ -1,5 +1,12 @@
 /* eslint-disable @next/next/no-img-element */
 import type { Metadata } from 'next';
+import { DATA_SOURCES, type DataSourceEntry, type DataSourceStatus } from '../../lib/data-sources';
+
+function statusClass(status: DataSourceStatus): string {
+  if (status === 'IMPLEMENTED') return 'rounded bg-emerald-950 px-1.5 py-0.5 text-[9px] font-black text-emerald-300';
+  if (status === 'PARTIAL') return 'rounded bg-sky-950 px-1.5 py-0.5 text-[9px] font-black text-sky-300';
+  return 'rounded bg-amber-950 px-1.5 py-0.5 text-[9px] font-black text-amber-300';
+}
 
 export const metadata: Metadata = {
   title: 'Credits & About | MesoVortexWX',
@@ -26,8 +33,8 @@ const EMPHASES = [
 
 export default function AboutPage() {
   return (
-    <main className="min-h-screen bg-[#050a12] font-sans text-slate-200">
-      <header className="border-b border-slate-800 bg-[#0b1220]">
+    <main className="h-screen overflow-y-auto bg-[#050a12] font-sans text-slate-200">
+      <header className="sticky top-0 z-10 border-b border-slate-800 bg-[#0b1220]">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <img src="/logo.png" alt="MesoVortexWX" width={24} height={24} className="rounded-full" />
@@ -94,6 +101,32 @@ export default function AboutPage() {
           <ul className="mt-2 grid gap-1 text-[12px] text-slate-200 sm:grid-cols-2">
             {EMPHASES.map((item) => <li key={item}>• {item}</li>)}
           </ul>
+        </section>
+
+        <section className="rounded-xl border border-slate-700 bg-[#0b1220] p-4">
+          <h2 className="text-sm font-black uppercase tracking-wider text-sky-300">Data sources</h2>
+          <p className="mt-2 text-[12px] leading-relaxed text-slate-400">
+            Verified source registry. Status describes MesoVortexWX implementation, not whether an upstream provider exists.
+          </p>
+          <div className="mt-3 space-y-4">
+            {Array.from(new Set(DATA_SOURCES.map((source) => source.category))).map((category) => (
+              <div key={category}>
+                <h3 className="text-[11px] font-black uppercase tracking-wider text-slate-300">{category}</h3>
+                <div className="mt-1 divide-y divide-slate-800">
+                  {DATA_SOURCES.filter((source: DataSourceEntry) => source.category === category).map((source: DataSourceEntry) => (
+                    <div key={source.id} className="py-1.5 text-[11px] leading-snug">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-bold text-slate-100">{source.data}</span>
+                        <span className={statusClass(source.status)}>{source.status.replaceAll('_', ' ')}</span>
+                      </div>
+                      <div className="text-slate-400">{source.source}</div>
+                      {source.notes && <div className="text-slate-500">{source.notes}</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </section>
 
         <footer className="border-t border-slate-800 pt-4 text-center text-[11px] leading-relaxed text-slate-400">

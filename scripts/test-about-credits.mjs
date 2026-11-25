@@ -24,6 +24,11 @@ for (const value of ['Data honesty', 'Transparency', 'Verification', 'Accessibil
   assert.ok(aboutText.includes(value), 'about page must state project values');
 }
 assert.ok(aboutText.includes('honest, trustworthy, and accessible weather information'), 'story must state the project goal');
+assert.ok(aboutText.includes('Data sources'), 'Data Sources must move to Credits & About');
+assert.ok(aboutText.includes('Verified source registry'), 'about page must explain source statuses honestly');
+assert.ok(about.includes("from '../../lib/data-sources'"), 'about page must use the canonical source registry');
+assert.match(about, /h-screen overflow-y-auto/, 'Credits & About must be internally scrollable');
+assert.doesNotMatch(page, /\['DataSources','Data Sources'\]/, 'Data Sources must be removed from the operational menu');
 
 // Asset and navigation.
 assert.ok(fs.existsSync('public/hsi-radar-backdrop.webp'), 'credits image asset must exist');
