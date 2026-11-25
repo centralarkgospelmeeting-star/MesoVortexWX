@@ -37,6 +37,7 @@ export function WeatherIntensityScorePanel({
   const [outlook, setOutlook] = useState<OutlookIntensityInput | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshToken, setRefreshToken] = useState(0);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -78,6 +79,35 @@ export function WeatherIntensityScorePanel({
     alerts: alertsNearSite(alerts, siteName),
   }), [radar, lightning, outlook, alerts, siteName]);
 
+  useEffect(() => {
+    if (!contextMenu) return;
+    const dismiss = () => setContextMenu(null);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') dismiss();
+    };
+    window.addEventListener('pointerdown', dismiss);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', dismiss);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [contextMenu]);
+
+  const copySummary = useCallback(async () => {
+    const lines = [
+      `Weather Intensity Score — ${siteName}`,
+      `Score: ${result.score === null ? 'unavailable' : `${result.score}/100 (${result.band?.label || 'unclassified'})`}`,
+      result.summary,
+      'Deterministic summary from verified app data. Not official and not a warning.',
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+    } catch {
+      // Clipboard can be blocked; the menu still closes without a false success note.
+    }
+    setContextMenu(null);
+  }, [result.band?.label, result.score, result.summary, siteName]);
+
   if (!open) return null;
 
   const score = result.score;
@@ -87,6 +117,10 @@ export function WeatherIntensityScorePanel({
   return (
     <div
       data-weather-intensity-panel="true"
+      onContextMenu={(event) => {
+        event.preventDefault();
+        setContextMenu({ x: event.clientX, y: event.clientY });
+      }}
       className="pointer-events-auto absolute left-3 top-3 z-40 w-[min(17rem,calc(100vw-1.5rem))] rounded-xl border border-slate-700 bg-[#0b1220]/95 p-2.5 text-slate-100 shadow-2xl backdrop-blur"
     >
       <div className="flex items-start justify-between gap-2">
@@ -160,6 +194,35 @@ export function WeatherIntensityScorePanel({
           Refresh
         </button>
       </div>
+
+      {contextMenu && (
+        <div
+          data-wis-context-menu="true"
+          role="menu"
+          aria-label="Weather Intensity Score actions"
+          onPointerDown={(event) => event.stopPropagation()}
+          onContextMenu={(event) => event.preventDefault()}
+          className="fixed z-[60] w-44 overflow-hidden rounded-lg border border-slate-600 bg-[#0b1220] py-1 text-[10px] text-slate-200 shadow-2xl"
+          style={{
+            left: Math.min(contextMenu.x, Math.max(0, window.innerWidth - 184)),
+            top: Math.min(contextMenu.y, Math.max(0, window.innerHeight - 132)),
+          }}
+        >
+          <button type="button" role="menuitem" className="block w-full px-3 py-1.5 text-left hover:bg-slate-800"
+            onClick={() => { setRefreshToken((v) => v + 1); setContextMenu(null); }}>
+            Refresh score
+          </button>
+          <button type="button" role="menuitem" className="block w-full px-3 py-1.5 text-left hover:bg-slate-800"
+            onClick={() => { void copySummary(); }}>
+            Copy summary
+          </button>
+          <button type="button" role="menuitem" className="block w-full px-3 py-1.5 text-left hover:bg-slate-800"
+            onClick={onClose}>
+            Hide score
+          </button>
+          <div className="border-t border-slate-800 px-3 py-1 text-[8px] text-slate-500">Deterministic · not official</div>
+        </div>
+      )}
     </div>
   );
 }

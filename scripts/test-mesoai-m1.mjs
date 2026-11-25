@@ -33,6 +33,17 @@ assert.match(panel, /alertsNearSite/, 'panel must scope alerts to the active sit
 assert.match(panel, /not official/, 'panel must disclose that the score is not official');
 assert.doesNotMatch(panel, /debris|TVS/i, 'panel must not show unverified severe signatures');
 
+// The score panel has a right-click action menu; no browser default menu and
+// no claim that the menu can change the underlying data.
+assert.match(panel, /onContextMenu=\{\(event\) => \{/, 'panel must intercept right-click');
+assert.match(panel, /event\.preventDefault\(\);/, 'panel must suppress the browser default context menu');
+assert.match(panel, /data-wis-context-menu="true"/, 'panel must expose an observable context menu');
+for (const action of ['Refresh score', 'Copy summary', 'Hide score']) {
+  assert.ok(panel.includes(action), `context menu must expose: ${action}`);
+}
+assert.match(panel, /role="menu"/, 'context menu must expose menu semantics');
+assert.doesNotMatch(panel, /navigator\.clipboard\.writeText\([^)]*detected/i, 'copy action must not claim detections');
+
 const page = fs.readFileSync('app/page.tsx', 'utf8');
 assert.match(page, /WeatherIntensityScorePanel/, 'page must mount the score panel');
 assert.match(page, /data-menu-wis-toggle="true"/, 'hamburger menu must expose a show/hide control');
