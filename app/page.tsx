@@ -1632,6 +1632,8 @@ export default function MesoVortexWorkstation() {
       {styledBanner && warningPopup && alertSettings.warningDisplayBehavior !== 'sidebar-only' && (
         <div
           role="status"
+          aria-live="polite"
+          aria-atomic="true"
           className="warning-banner-enter absolute left-1/2 top-24 z-50 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border bg-[#0b1220] p-4 text-left shadow-lg"
           style={{ borderColor: styledBanner.color }}
         >

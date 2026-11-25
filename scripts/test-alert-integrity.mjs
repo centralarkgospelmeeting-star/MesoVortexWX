@@ -62,14 +62,27 @@ assert.doesNotMatch(warningClick, /new maplibregl\.Popup/, 'warning clicks must 
 
 // Professional warning banners: one-time slide-in, persistent, manually dismissed.
 const css = fs.readFileSync('app/globals.css', 'utf8');
-const tone = fs.readFileSync('components/EmergencyAlertTone.tsx', 'utf8');
 assert.match(page, /warning-banner-enter/, 'main warning banner must use the one-time slide-in');
-assert.doesNotMatch(page, /warningFlash|animate-pulse/, 'main warning banner must not flash or pulse');
+assert.doesNotMatch(page, /warningFlash|animate-pulse|animate-bounce/, 'main warning banner must not flash or bounce');
+assert.match(page, /role="status"/, 'banner must expose accessible status semantics');
+assert.match(page, /aria-live="polite"/, 'new alerts must be announced without interrupting the user');
 assert.match(page, /onClick=\{dismissBanner\}/, 'warning banner must support manual dismissal');
 assert.doesNotMatch(hook, /setTimeout\(\(\) => setBanner\(null\)/, 'warning banner must remain visible until dismissed');
 assert.match(css, /@keyframes warning-slide-in/, 'one-time slide-in keyframes must exist');
 assert.doesNotMatch(css, /warning-slide-in[\s\S]*?infinite/, 'slide-in must not repeat');
-assert.match(tone, /warning-banner-enter/, 'emergency banner must slide in once');
-assert.doesNotMatch(tone, /animate-bounce|animate-pulse/, 'emergency banner must not bounce or pulse');
+
+// One alert system: no duplicate siren/notification/banner surface.
+assert.ok(!fs.existsSync('components/EmergencyAlertTone.tsx'), 'duplicate emergency alert system must be removed');
+assert.doesNotMatch(fs.readFileSync('components/WarningDrawerRight.tsx', 'utf8'), /animate-pulse|animate-bounce/, 'warning drawer must not blink');
+for (const file of fs.readdirSync('components').filter((name) => name.endsWith('.tsx'))) {
+  const source = fs.readFileSync(`components/${file}`, 'utf8');
+  assert.doesNotMatch(source, /new Notification\(|play1050HzSiren|1050 Hz|EMERGENCY WEATHER ALERT/i, `${file} must not run a separate alert/audio system`);
+}
+assert.doesNotMatch(hook, /createOscillator|new Audio\(/, 'alert hook must use only the single audio dispatcher');
+
+// Silent profile must be truly silent, including custom sounds and test tones.
+assert.match(audio, /if \(!profileAllowsTone\(settings\.soundProfile\)\) return/, 'dispatcher must short-circuit in silent mode before any sound');
+assert.match(audio, /silent:\s*\{[\s\S]*?other:\s*\[\]/, 'silent profile must define no tones');
+assert.match(fs.readFileSync('lib/alerts/settings.ts', 'utf8'), /return profile !== 'silent'/, 'silent profile must be recognized as muted');
 
 console.log('PASS: alert correctness and single-audio-dispatcher contract');

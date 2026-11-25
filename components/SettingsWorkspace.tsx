@@ -10,12 +10,6 @@ type Props = {
   onSelectBasemap: (b: string) => void;
   units: 'imperial' | 'metric';
   onSelectUnits: (u: 'imperial' | 'metric') => void;
-  audioSirenEnabled: boolean;
-  onToggleAudioSiren: () => void;
-  ttsEnabled: boolean;
-  onToggleTts: () => void;
-  ttsVolume: number;
-  onChangeTtsVolume: (vol: number) => void;
 };
 
 const CATEGORIES = [
@@ -40,12 +34,6 @@ export function SettingsWorkspace({
   onSelectBasemap,
   units,
   onSelectUnits,
-  audioSirenEnabled,
-  onToggleAudioSiren,
-  ttsEnabled,
-  onToggleTts,
-  ttsVolume,
-  onChangeTtsVolume,
 }: Props) {
   const [selectedCat, setSelectedCat] = useState('Map');
   const [defaultProduct, setDefaultProduct] = useState('Radar');
@@ -307,62 +295,11 @@ export function SettingsWorkspace({
             </div>
           )}
 
-          {/* 4. WARNINGS & NOTIFICATIONS (Section 11) */}
+          {/* Warnings & notifications are owned by the canonical alert settings
+              panel and the single audio dispatcher. No separate siren/TTS here. */}
           {(selectedCat === 'Warnings' || selectedCat === 'Notifications') && (
-            <div className="space-y-4 max-w-lg">
-              <div className="p-3.5 rounded-2xl border border-red-500/30 bg-red-950/20 space-y-3">
-                <div className="font-bold text-white text-sm flex items-center gap-2">
-                  <span>🚨</span> Emergency Audio Siren (1050 Hz NOAA Alert Tone)
-                </div>
-                <p className="text-slate-300 leading-relaxed text-[11px]">
-                  Generates the official 1050 Hz weather radio tone when your GPS location falls inside an active Tornado or Severe Thunderstorm Warning polygon.
-                </p>
-                <label className="flex items-center justify-between text-slate-200 cursor-pointer pt-1">
-                  <span>Enable 1050 Hz Alert Tone</span>
-                  <input
-                    type="checkbox"
-                    checked={audioSirenEnabled}
-                    onChange={onToggleAudioSiren}
-                    className="accent-red-500 h-4 w-4 rounded cursor-pointer"
-                  />
-                </label>
-              </div>
-
-              <div className="p-3.5 rounded-2xl border border-sky-700 bg-cyan-950/20 space-y-3">
-                <div className="font-bold text-white text-sm flex items-center gap-2">
-                  <span>🗣️</span> Spoken Warning Announcements (Text-to-Speech)
-                </div>
-                <p className="text-slate-300 leading-relaxed text-[11px]">
-                  Reads official National Weather Service bulletins aloud: &quot;The National Weather Service has issued a Tornado Warning for southeastern White County in central Arkansas.&quot;
-                </p>
-                <label className="flex items-center justify-between text-slate-200 cursor-pointer pt-1">
-                  <span>Enable Spoken TTS Announcements</span>
-                  <input
-                    type="checkbox"
-                    checked={ttsEnabled}
-                    onChange={onToggleTts}
-                    className="accent-cyan-400 h-4 w-4 rounded cursor-pointer"
-                  />
-                </label>
-
-                {ttsEnabled && (
-                  <div className="space-y-1.5 pt-2 border-t border-slate-800">
-                    <div className="flex justify-between font-bold text-slate-300 text-[11px]">
-                      <span>Speech Volume</span>
-                      <span className="font-mono text-sky-400">{Math.round(ttsVolume * 100)}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={0.1}
-                      max={1.0}
-                      step={0.05}
-                      value={ttsVolume}
-                      onChange={(e) => onChangeTtsVolume(parseFloat(e.target.value))}
-                      className="w-full accent-cyan-400 cursor-pointer"
-                    />
-                  </div>
-                )}
-              </div>
+            <div className="max-w-lg rounded-2xl border border-slate-700 bg-[#111827] p-4 text-[11px] leading-relaxed text-slate-300">
+              Alert sounds, silent mode, and notification profiles are managed by the canonical alert settings panel in the workstation. This workspace has no separate siren or speech system.
             </div>
           )}
 
