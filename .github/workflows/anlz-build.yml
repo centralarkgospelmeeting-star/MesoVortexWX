@@ -7,6 +7,8 @@ on:
       - 'components/radar/StormAnalysisPanel.tsx'
       - 'lib/radar/storm-analysis.ts'
       - 'lib/radar/nrot.ts'
+      - 'lib/radar/velocity-dealias.ts'
+      - 'scripts/test-velocity-dealias.mjs'
       - 'scripts/test-nrot-math.mjs'
       - 'lib/radar/capability-matrix.ts'
       - 'scripts/test-live-anlz.mjs'
@@ -32,6 +34,8 @@ jobs:
       - run: npm run typecheck
       - name: NROT synthetic mathematics tests
         run: node scripts/test-nrot-math.mjs
+      - name: Velocity dealiasing synthetic tests
+        run: node scripts/test-velocity-dealias.mjs
       - run: npm run build
       - name: Start production server
         run: npm run start -- --hostname 127.0.0.1 > /tmp/mesovortex-next.log 2>&1 &
