@@ -25,7 +25,7 @@ function dbzColor(value: number): string {
 
 export function CrossSectionModal({ data, onClose }: Props) {
   const [hover, setHover] = useState<{ distanceKm: number; heightFt: number; dbz: number; elevation: number } | null>(null);
-  const maxHeightFt = useMemo(() => Math.max(1000, ...data.sweeps.flatMap((s) => s.beamHeightFtAglApprox.filter((v): v is number => v !== null && Number.isFinite(v)))), [data]);
+  const maxHeightFt = useMemo(() => Math.max(1000, ...data.sweeps.flatMap((s) => s.beamHeightFtAboveRadar.filter((v): v is number => v !== null && Number.isFinite(v)))), [data]);
   const maxDbz = Math.max(0, ...data.sweeps.flatMap((s) => s.reflectivityDbz.filter((v): v is number => v !== null && Number.isFinite(v))));
   const validGates = data.sweeps.reduce((n, s) => n + s.reflectivityDbz.filter((v) => v !== null).length, 0);
   const distanceMi = data.lengthKm * 0.621371;
@@ -59,7 +59,7 @@ export function CrossSectionModal({ data, onClose }: Props) {
             <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-slate-700 bg-[#030712]" onMouseLeave={() => setHover(null)}>
               {[25,50,75].map((v) => <div key={v} className="pointer-events-none absolute inset-x-0 border-t border-dashed border-slate-700/70" style={{top:`${100-v}%`}} />)}
               {data.sweeps.map((sweep, sweepIndex) => sweep.reflectivityDbz.map((dbz, column) => {
-                const height = sweep.beamHeightFtAglApprox[column];
+                const height = sweep.beamHeightFtAboveRadar[column];
                 if (dbz === null || height === null || !Number.isFinite(height)) return null;
                 const left = data.columns <= 1 ? 0 : column / (data.columns - 1) * 100;
                 const top = 100 - Math.max(0, Math.min(100, height / maxHeightFt * 100));
