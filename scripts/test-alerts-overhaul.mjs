@@ -69,4 +69,12 @@ assert.match(settings, /reminderIntervalMs: 300000/, 'five-minute reminder defau
 assert.match(panel, /Active Emergency Mode reminders/, 'reminder control in settings');
 assert.match(panel, /Alert voice \(default: deep, calm, authoritative\)/, 'voice customization control');
 
+// Bundled default recordings are local assets, not generated tones.
+assert.match(settings, /DEFAULT_ALERT_SOUNDS/, 'default sound registry');
+for (const file of ['tornado-warning.mp3', 'pds-tornado-warning.mp3', 'tornado-emergency.mp3']) {
+  assert.ok(fs.existsSync(`public/alerts/${file}`), `default sound asset missing: ${file}`);
+}
+assert.match(audio, /function playAudioFile/, 'bundled/custom audio playback path');
+assert.match(audio, /sound\.startsWith\('\/alerts\/'\)/, 'bundled recordings avoid duplicate speech');
+
 console.log('PASS: Phase 4 Alerts professional workflow contracts');

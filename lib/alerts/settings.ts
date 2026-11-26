@@ -14,12 +14,19 @@ export const DEFAULT_ALERT_TYPE_PREFERENCE: AlertTypePreference = {
   enabled: true, notify: true, voice: false, color: '#64748b', sound: null,
 };
 
+export const DEFAULT_ALERT_SOUNDS: Record<string, string> = {
+  'tornado-warning': '/alerts/tornado-warning.mp3',
+  'pds-tornado-warning': '/alerts/pds-tornado-warning.mp3',
+  'tornado-emergency': '/alerts/tornado-emergency.mp3',
+};
+
 export function defaultAlertTypePreferences(): Record<string, AlertTypePreference> {
   return ALERT_TYPES.reduce((out, type) => {
     out[type.id] = {
       ...DEFAULT_ALERT_TYPE_PREFERENCE,
       color: type.color,
       voice: ['siren', 'enhanced', 'warning', 'flood', 'emergency-flood'].includes(type.tone),
+      sound: DEFAULT_ALERT_SOUNDS[type.id] || null,
     };
     return out;
   }, {} as Record<string, AlertTypePreference>);

@@ -141,6 +141,20 @@ export function playAlertTone(category: AlertCategory, profile: AlertSoundProfil
   }
 }
 
+function playAudioFile(src: string): boolean {
+  if (typeof window === 'undefined' || typeof Audio === 'undefined') return false;
+  try {
+    const audio = new Audio(src);
+    audio.volume = 0.9;
+    void audio.play().catch(() => {
+      // Browser may require another gesture; never fabricate a fallback tone.
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Single audio dispatcher for new alerts and test buttons. It honors the
  * selected sound profile before any sound is produced, including custom files.
@@ -150,22 +164,17 @@ export function playAlertAudio(event: string, category: AlertCategory, settings:
   const type = alertTypeForEvent(event);
   const pref = type ? settings.categoryPrefs?.[type.id] : null;
   if (pref && !pref.enabled) return;
-  const custom = pref?.sound || alertSoundForEvent(event, settings);
-  const speak = pref ? pref.voice && settings.speech.enabled : settings.speech.enabled;
+  const uploaded = alertSoundForEvent(event, settings);
+  const sound = uploaded || pref?.sound;
+  // Bundled default recordings contain their own announcement; do not layer
+  // synthesized speech on top of them. Uploaded sounds honor voice settings.
+  const bundled = !uploaded && typeof sound === 'string' && sound.startsWith('/alerts/');
+  const speak = !bundled && (pref ? pref.voice && settings.speech.enabled : settings.speech.enabled);
   const after = type?.id === 'tornado-emergency' ? () => { if (profileAllowsTone(settings.soundProfile)) playSiren(10, true); } : undefined;
 
-  if (custom && typeof window !== 'undefined' && typeof Audio !== 'undefined') {
-    try {
-      const audio = new Audio(custom);
-      audio.volume = 0.9;
-      void audio.play().catch(() => {
-        // Browser may require another gesture; never fabricate a fallback tone.
-      });
-      if (speak) speakAlertText(type?.phrase || formatAlertSpeech(event), settings, after);
-      return;
-    } catch {
-      return;
-    }
+  if (sound && typeof sound === 'string' && playAudioFile(sound)) {
+    if (speak) speakAlertText(type?.phrase || formatAlertSpeech(event), settings, after);
+    return;
   }
 
   if (type) playEventTone(type.tone, type.label, settings);
@@ -256,6 +265,13 @@ export function speakAlertText(text: string, settings: AlertSettings, onEnd?: ()
 
 /** Test the exact configured tone + voice for a without waiting for a real alert. */
 export function playTestAlert(test: { event: string; tone: string; phrase: string }, settings: AlertSettings): void {
+  const type = alertTypeForEvent(test.event);
+  const uploaded = alertSoundForEvent(test.event, settings);
+  const sound = uploaded || settings.categoryPrefs?.[type?.id || '']?.sound;
+  if (sound && typeof sound === 'string' && playAudioFile(sound)) {
+    if (uploaded) speakAlertText(test.phrase, settings);
+    return;
+  }
   if (settings.soundProfile !== 'silent') playEventTone(test.tone, test.event, settings);
   const after = test.event === 'Tornado Emergency'
     ? () => { if (settings.soundProfile !== 'silent') playSiren(10, true); }
