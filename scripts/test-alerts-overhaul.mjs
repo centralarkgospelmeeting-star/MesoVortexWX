@@ -54,4 +54,19 @@ for (const field of ['Event type', 'WFO', 'VTEC', 'Issue time', 'Expiration time
 }
 assert.match(fs.readFileSync('app/api/alerts/route.ts', 'utf8'), /resolveZonePlaces/, 'places from real zones');
 
+// Refinement: independent product colors, authoritative voice, siren hierarchy.
+for (const id of ['tornado-emergency', 'pds-tornado-warning', 'confirmed-tornado-warning', 'tornado-warning', 'tornado-watch', 'destructive-severe-thunderstorm-warning', 'flash-flood-emergency', 'hurricane-warning', 'hurricane-watch']) {
+  assert.ok(categories.includes(id), `independent product color required: ${id}`);
+}
+assert.match(settings, /settings\.categoryPrefs\?\.\[type\.id\]/, 'per-product colors used in map override');
+assert.match(audio, /function playSiren/, 'siren-based tornado audio');
+assert.match(audio, /event === 'Tornado Emergency' \? 7 : 3/, '3s/7s tornado siren durations');
+assert.match(audio, /playSiren\(10, true\)/, '10s post-message emergency siren');
+assert.match(audio, /male\|david\|daniel\|alex/, 'default authoritative male-style voice');
+assert.match(audio, /playEmergencyReminder/, 'active emergency reminder tone');
+assert.match(settings, /emergencyReminders: true/, 'active emergency mode default on');
+assert.match(settings, /reminderIntervalMs: 300000/, 'five-minute reminder default');
+assert.match(panel, /Active Emergency Mode reminders/, 'reminder control in settings');
+assert.match(panel, /Alert voice \(default: deep, calm, authoritative\)/, 'voice customization control');
+
 console.log('PASS: Phase 4 Alerts professional workflow contracts');

@@ -10,12 +10,17 @@ export type AlertTypeConfig = {
 
 export const ALERT_SECTIONS: readonly { id: string; label: string; types: AlertTypeConfig[] }[] = [
   { id: 'severe', label: 'SEVERE', types: [
+    { id: 'tornado-emergency', label: 'Tornado Emergency', match: /tornado emergency/i, color: '#7f1d1d', tone: 'siren', phrase: 'National Weather Service has issued a Tornado Emergency for your monitored area.' },
+    { id: 'pds-tornado-warning', label: 'PDS Tornado Warning', match: /particularly dangerous situation|\bPDS\b/i, color: '#991b1b', tone: 'enhanced', phrase: 'National Weather Service has issued a Particularly Dangerous Situation Tornado Warning for your monitored area.' },
+    { id: 'confirmed-tornado-warning', label: 'Confirmed Tornado Warning', match: /confirmed tornado/i, color: '#b91c1c', tone: 'siren', phrase: 'National Weather Service has issued a Confirmed Tornado Warning for your monitored area.' },
     { id: 'tornado-warning', label: 'Tornado Warning', match: /tornado warning/i, color: '#dc2626', tone: 'siren', phrase: 'National Weather Service has issued a Tornado Warning for your monitored area.' },
     { id: 'tornado-watch', label: 'Tornado Watch', match: /tornado watch/i, color: '#eab308', tone: 'attention', phrase: 'National Weather Service has issued a Tornado Watch for your monitored area.' },
+    { id: 'destructive-severe-thunderstorm-warning', label: 'Destructive Severe Thunderstorm Warning', match: /destructive.*severe thunderstorm|severe thunderstorm.*destructive|extreme severe thunderstorm/i, color: '#ea580c', tone: 'enhanced', phrase: 'National Weather Service has issued a Destructive Severe Thunderstorm Warning for your monitored area.' },
     { id: 'severe-thunderstorm-warning', label: 'Severe Thunderstorm Warning', match: /severe thunderstorm warning/i, color: '#f59e0b', tone: 'warning', phrase: 'National Weather Service has issued a Severe Thunderstorm Warning for your monitored area.' },
     { id: 'severe-thunderstorm-watch', label: 'Severe Thunderstorm Watch', match: /severe thunderstorm watch/i, color: '#f59e0b', tone: 'attention', phrase: 'National Weather Service has issued a Severe Thunderstorm Watch for your monitored area.' },
   ] },
   { id: 'flooding', label: 'FLOODING / HYDRO', types: [
+    { id: 'flash-flood-emergency', label: 'Flash Flood Emergency', match: /flash flood emergency/i, color: '#065f46', tone: 'emergency-flood', phrase: 'National Weather Service has issued a Flash Flood Emergency for your monitored area.' },
     { id: 'flash-flood-warning', label: 'Flash Flood Warning', match: /flash flood warning/i, color: '#059669', tone: 'flood', phrase: 'National Weather Service has issued a Flash Flood Warning for your monitored area.' },
     { id: 'flood-warning', label: 'Flood Warning', match: /^flood warning/i, color: '#10b981', tone: 'flood', phrase: 'National Weather Service has issued a Flood Warning for your monitored area.' },
     { id: 'flood-advisory', label: 'Flood Advisory', match: /flood advisory/i, color: '#34d399', tone: 'attention', phrase: 'National Weather Service has issued a Flood Advisory.' },

@@ -25,7 +25,8 @@ import {
   type AlertCategory,
   type WeatherAlert,
 } from '../lib/alerts/model';
-import { alertTypeForEvent } from '../lib/alerts/categories';
+import { alertTypeForEvent, isEmergencyEvent } from '../lib/alerts/categories';
+import { playEmergencyReminder } from '../lib/alerts/audio';
 import { AlertDetailsPanel, buildLocationContext } from '../components/AlertDetailsPanel';
 import { getCompositeSource, COMPOSITE_SOURCES } from '../lib/radar/composite-sources';
 import { ProductInfoBanner } from '../components/ProductInfoBanner';
@@ -709,6 +710,19 @@ export default function MesoVortexWorkstation() {
   };
 
   const styledAlerts = useMemo(() => alerts.map((a) => applyAlertSettingsToAlert(a, alertSettings)), [alerts, alertSettings]);
+
+  // Active Emergency Mode: while a real Tornado Emergency is in the feed, a
+  // short reminder siren plays at a user-configurable interval. It is never
+  // continuous and only starts after a full interval has elapsed.
+  const activeTornadoEmergency = useMemo(
+    () => styledAlerts.some((a) => isEmergencyEvent(a.event) && /tornado/i.test(a.event)),
+    [styledAlerts]
+  );
+  useEffect(() => {
+    if (!activeTornadoEmergency || !alertSettings.emergencyReminders) return;
+    const timer = setInterval(() => playEmergencyReminder(alertSettings), alertSettings.reminderIntervalMs);
+    return () => clearInterval(timer);
+  }, [activeTornadoEmergency, alertSettings]);
   const mesoaiWarning = useMemo(() => {
     const alert = styledAlerts.find((a) => a.category === 'warning') || null;
     return alert ? {

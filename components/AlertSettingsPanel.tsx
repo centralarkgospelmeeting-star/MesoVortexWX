@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_ALERT_SETTINGS, defaultAlertTypePreferences, type AlertSettings, type AlertSoundProfile } from '../lib/alerts/settings';
 import { ALERT_SECTIONS, TEST_ALERTS } from '../lib/alerts/categories';
 import { playTestAlert } from '../lib/alerts/audio';
@@ -75,6 +75,14 @@ export function AlertSettingsPanel({ settings, onChange, onClose, onPreviewNotif
     soundProfile: DEFAULT_ALERT_SETTINGS.soundProfile,
     categoryPrefs: defaultAlertTypePreferences(),
   });
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    const load = () => setVoices(window.speechSynthesis.getVoices());
+    load();
+    window.speechSynthesis.addEventListener('voiceschanged', load);
+    return () => window.speechSynthesis.removeEventListener('voiceschanged', load);
+  }, []);
   const setColors = (patch: Partial<AlertSettings['colors']>) => set({ colors: { ...settings.colors, ...patch } });
   const setSpeech = (patch: Partial<AlertSettings['speech']>) => set({ speech: { ...settings.speech, ...patch } });
   const setCustomSounds = (patch: Partial<AlertSettings['customSounds']>) => set({ customSounds: { ...settings.customSounds, ...patch } });
@@ -114,6 +122,35 @@ export function AlertSettingsPanel({ settings, onChange, onClose, onPreviewNotif
             <label className="flex items-center justify-between rounded-lg border border-slate-800 bg-[#111827] px-3 py-2 text-[11px] font-semibold text-slate-200">
               <span>Voice announcements</span>
               <input type="checkbox" checked={settings.speech.enabled} onChange={(e) => setSpeech({ enabled: e.target.checked })} />
+            </label>
+            <label className="block rounded-lg border border-slate-800 bg-[#111827] px-3 py-2 text-[11px] font-semibold text-slate-200">
+              <div className="mb-1">Alert voice (default: deep, calm, authoritative)</div>
+              <select
+                value={settings.voiceURI || ''}
+                onChange={(e) => set({ voiceURI: e.target.value || null })}
+                className="w-full rounded bg-slate-950 border border-slate-700 px-2 py-1 text-[11px]"
+              >
+                <option value="">System default — authoritative profile</option>
+                {voices.map((voice) => <option key={voice.voiceURI} value={voice.voiceURI}>{voice.name} ({voice.lang})</option>)}
+              </select>
+            </label>
+            <label className="block rounded-lg border border-slate-800 bg-[#111827] px-3 py-2 text-[11px] font-semibold text-slate-200">
+              <div className="flex justify-between"><span>Voice pitch</span><span className="text-slate-400">{settings.voicePitch.toFixed(1)}</span></div>
+              <input type="range" min={0.5} max={1.2} step={0.1} value={settings.voicePitch} onChange={(e) => set({ voicePitch: Number(e.target.value) })} className="mt-2 w-full" aria-label="Alert voice pitch" />
+            </label>
+            <label className="flex items-center justify-between rounded-lg border border-slate-800 bg-[#111827] px-3 py-2 text-[11px] font-semibold text-slate-200">
+              <span>Active Emergency Mode reminders (Tornado Emergency)</span>
+              <input type="checkbox" checked={settings.emergencyReminders} onChange={(e) => set({ emergencyReminders: e.target.checked })} />
+            </label>
+            <label className="flex items-center justify-between rounded-lg border border-slate-800 bg-[#111827] px-3 py-2 text-[11px] font-semibold text-slate-200">
+              <span>Reminder interval</span>
+              <select
+                value={settings.reminderIntervalMs}
+                onChange={(e) => set({ reminderIntervalMs: Number(e.target.value) })}
+                className="rounded bg-slate-950 border border-slate-700 px-2 py-1 text-[11px]"
+              >
+                <option value={300000}>5 min</option><option value={600000}>10 min</option><option value={900000}>15 min</option>
+              </select>
             </label>
           </section>
 
@@ -158,7 +195,7 @@ export function AlertSettingsPanel({ settings, onChange, onClose, onPreviewNotif
           </section>
 
           <section className="space-y-2">
-            <div className="text-[10px] font-black uppercase tracking-wider text-sky-400">Alert Colors</div>
+            <div className="text-[10px] font-black uppercase tracking-wider text-sky-400">Legacy map colors (per-product colors in categories above)</div>
             <ColorRow label="Tornado Warning" value={settings.colors.tornadoWarning} onChange={(v) => setColors({ tornadoWarning: v })} />
             <ColorRow label="Severe Thunderstorm Warning" value={settings.colors.severeThunderstormWarning} onChange={(v) => setColors({ severeThunderstormWarning: v })} />
             <ColorRow label="Flash Flood Warning" value={settings.colors.flashFloodWarning} onChange={(v) => setColors({ flashFloodWarning: v })} />

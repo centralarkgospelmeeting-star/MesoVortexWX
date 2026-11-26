@@ -1,4 +1,4 @@
-import { ALERT_TYPES, type AlertTypeConfig } from './categories';
+import { ALERT_TYPES, alertTypeForEvent, type AlertTypeConfig } from './categories';
 
 export type AlertSoundProfile = 'classic' | 'nws' | 'broadcast' | 'minimal' | 'silent';
 
@@ -16,7 +16,11 @@ export const DEFAULT_ALERT_TYPE_PREFERENCE: AlertTypePreference = {
 
 export function defaultAlertTypePreferences(): Record<string, AlertTypePreference> {
   return ALERT_TYPES.reduce((out, type) => {
-    out[type.id] = { ...DEFAULT_ALERT_TYPE_PREFERENCE, color: type.color };
+    out[type.id] = {
+      ...DEFAULT_ALERT_TYPE_PREFERENCE,
+      color: type.color,
+      voice: ['siren', 'enhanced', 'warning', 'flood', 'emergency-flood'].includes(type.tone),
+    };
     return out;
   }, {} as Record<string, AlertTypePreference>);
 }
@@ -63,10 +67,15 @@ export type AlertSettings = {
   notificationDurationMs: number;
   notificationAutoMinimize: boolean;
   emergencyEffects: boolean;
+  emergencyReminders: boolean;
+  reminderIntervalMs: number;
+  voiceURI: string | null;
+  voicePitch: number;
+  voiceRate: number;
   categoryPrefs: Record<string, AlertTypePreference>;
 };
 
-export const ALERT_SETTINGS_KEY = 'mesovortex_alert_settings_v3';
+export const ALERT_SETTINGS_KEY = 'mesovortex_alert_settings_v4';
 
 export const DEFAULT_ALERT_SETTINGS: AlertSettings = {
   colors: {
@@ -81,7 +90,7 @@ export const DEFAULT_ALERT_SETTINGS: AlertSettings = {
   },
   soundProfile: 'classic',
   speech: {
-    enabled: false,
+    enabled: true,
     warnings: true,
     statements: false,
     watches: false,
@@ -97,6 +106,11 @@ export const DEFAULT_ALERT_SETTINGS: AlertSettings = {
   notificationDurationMs: 9000,
   notificationAutoMinimize: true,
   emergencyEffects: true,
+  emergencyReminders: true,
+  reminderIntervalMs: 300000,
+  voiceURI: null,
+  voicePitch: 0.8,
+  voiceRate: 0.95,
   categoryPrefs: defaultAlertTypePreferences(),
 };
 
@@ -129,6 +143,14 @@ export function loadAlertSettings(): AlertSettings {
         ? parsed.notificationAutoMinimize : DEFAULT_ALERT_SETTINGS.notificationAutoMinimize,
       emergencyEffects: typeof parsed?.emergencyEffects === 'boolean'
         ? parsed.emergencyEffects : DEFAULT_ALERT_SETTINGS.emergencyEffects,
+      emergencyReminders: typeof parsed?.emergencyReminders === 'boolean'
+        ? parsed.emergencyReminders : DEFAULT_ALERT_SETTINGS.emergencyReminders,
+      reminderIntervalMs: Number.isFinite(parsed?.reminderIntervalMs)
+        ? Math.max(120000, Math.min(900000, Number(parsed.reminderIntervalMs)))
+        : DEFAULT_ALERT_SETTINGS.reminderIntervalMs,
+      voiceURI: typeof parsed?.voiceURI === 'string' ? parsed.voiceURI : null,
+      voicePitch: Number.isFinite(parsed?.voicePitch) ? Math.max(0.5, Math.min(1.2, Number(parsed.voicePitch))) : DEFAULT_ALERT_SETTINGS.voicePitch,
+      voiceRate: Number.isFinite(parsed?.voiceRate) ? Math.max(0.7, Math.min(1.3, Number(parsed.voiceRate))) : DEFAULT_ALERT_SETTINGS.voiceRate,
       categoryPrefs: (() => {
         const base = defaultAlertTypePreferences();
         for (const type of ALERT_TYPES) {
@@ -156,6 +178,9 @@ export function saveAlertSettings(settings: AlertSettings) {
 }
 
 export function eventColorOverride(event: string, category: string, settings: AlertSettings): string | null {
+  const type = alertTypeForEvent(event);
+  const pref = type ? settings.categoryPrefs?.[type.id] : null;
+  if (pref) return pref.color;
   const e = String(event || '').toLowerCase();
   const c = settings.colors;
   if (category === 'warning') {

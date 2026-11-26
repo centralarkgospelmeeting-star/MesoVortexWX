@@ -1,4 +1,5 @@
-import { alertSoundForEvent, profileAllowsTone, type AlertSettings, type AlertSoundProfile } from './settings';
+import { alertSoundForEvent, formatAlertSpeech, profileAllowsTone, type AlertSettings, type AlertSoundProfile } from './settings';
+import { alertTypeForEvent } from './categories';
 import type { AlertCategory } from './model';
 
 type Tone = {
@@ -146,8 +147,13 @@ export function playAlertTone(category: AlertCategory, profile: AlertSoundProfil
  */
 export function playAlertAudio(event: string, category: AlertCategory, settings: AlertSettings): void {
   if (!profileAllowsTone(settings.soundProfile)) return;
+  const type = alertTypeForEvent(event);
+  const pref = type ? settings.categoryPrefs?.[type.id] : null;
+  if (pref && !pref.enabled) return;
+  const custom = pref?.sound || alertSoundForEvent(event, settings);
+  const speak = pref ? pref.voice && settings.speech.enabled : settings.speech.enabled;
+  const after = type?.id === 'tornado-emergency' ? () => { if (profileAllowsTone(settings.soundProfile)) playSiren(10, true); } : undefined;
 
-  const custom = alertSoundForEvent(event, settings);
   if (custom && typeof window !== 'undefined' && typeof Audio !== 'undefined') {
     try {
       const audio = new Audio(custom);
@@ -155,24 +161,93 @@ export function playAlertAudio(event: string, category: AlertCategory, settings:
       void audio.play().catch(() => {
         // Browser may require another gesture; never fabricate a fallback tone.
       });
+      if (speak) speakAlertText(type?.phrase || formatAlertSpeech(event), settings, after);
       return;
     } catch {
       return;
     }
   }
 
-  playAlertTone(category, settings.soundProfile);
+  if (type) playEventTone(type.tone, type.label, settings);
+  else playAlertTone(category, settings.soundProfile);
+  if (speak) speakAlertText(type?.phrase || formatAlertSpeech(event), settings, after);
+}
+
+/** Air-raid-style siren with a slow alternation and short, limited duration. */
+function playSiren(seconds: number, enhanced: boolean): void {
+  const ctx = unlockAlertAudio();
+  if (!ctx) return;
+  const start = ctx.currentTime + 0.02;
+  const count = Math.ceil(seconds / 0.5);
+  for (let i = 0; i < count; i += 1) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const at = start + i * 0.5;
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime((enhanced ? 820 : 720) + (i % 2) * (enhanced ? 260 : 280), at);
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.exponentialRampToValueAtTime(enhanced ? 0.42 : 0.34, at + 0.06);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.46);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(at);
+    osc.stop(at + 0.48);
+  }
+}
+
+/** Short non-continuous reminder used only while a Tornado Emergency is active. */
+export function playEmergencyReminder(settings: AlertSettings): void {
+  if (!profileAllowsTone(settings.soundProfile)) return;
+  playSiren(1.5, false);
+}
+
+function playEventTone(tone: string, event: string, settings: AlertSettings): void {
+  if (tone === 'siren') { playSiren(event === 'Tornado Emergency' ? 7 : 3, false); return; }
+  if (tone === 'enhanced') { playSiren(event === 'Confirmed Tornado Warning' ? 3 : 5, true); return; }
+  if (tone === 'flood') {
+    playAlertTone('warning', settings.soundProfile === 'silent' ? 'minimal' : 'classic');
+    return;
+  }
+  if (tone === 'emergency-flood') {
+    const ctx = unlockAlertAudio();
+    if (!ctx) return;
+    [0, 0.45, 0.9].forEach((offset, index) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const at = ctx.currentTime + 0.02 + offset;
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(index === 1 ? 620 : 494, at);
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(0.38, at + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.4);
+      osc.connect(gain); gain.connect(ctx.destination); osc.start(at); osc.stop(at + 0.42);
+    });
+    return;
+  }
+  playAlertTone(tone === 'attention' ? 'advisory' : 'warning', settings.soundProfile === 'silent' ? 'minimal' : 'broadcast');
 }
 
 /** Speak real alert text; silent mode and disabled speech produce no audio. */
-export function speakAlertText(text: string, settings: AlertSettings): void {
+export function speakAlertText(text: string, settings: AlertSettings, onEnd?: () => void): void {
   if (!settings.speech.enabled || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
   try {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1;
-    utterance.pitch = 1;
+    utterance.rate = settings.voiceRate;
+    utterance.pitch = settings.voicePitch;
     utterance.volume = Math.max(0, Math.min(1, settings.speech.volume));
+    const voices = window.speechSynthesis.getVoices();
+    if (settings.voiceURI) {
+      const chosen = voices.find((voice) => voice.voiceURI === settings.voiceURI);
+      if (chosen) utterance.voice = chosen;
+    } else {
+      // Default: deep, calm, commanding male-style voice when the platform
+      // exposes one; never a cheerful or conversational voice.
+      const preferred = voices.find((voice) => /male|david|daniel|alex|google us english/i.test(voice.name) && /^en(-|_)/i.test(voice.lang))
+        || voices.find((voice) => /^en(-|_)/i.test(voice.lang));
+      if (preferred) utterance.voice = preferred;
+    }
+    if (onEnd) utterance.onend = onEnd;
     window.speechSynthesis.speak(utterance);
   } catch {
     // Speech may be blocked; never fabricate a fallback announcement.
@@ -181,12 +256,15 @@ export function speakAlertText(text: string, settings: AlertSettings): void {
 
 /** Test the exact configured tone + voice for a without waiting for a real alert. */
 export function playTestAlert(test: { event: string; tone: string; phrase: string }, settings: AlertSettings): void {
-  const profile = settings.soundProfile === 'silent' ? 'silent'
-    : test.tone === 'siren' || test.tone === 'enhanced' ? 'nws'
-      : test.tone === 'warning' ? 'broadcast'
-        : test.tone === 'attention' ? 'minimal' : 'classic';
-  if (profile !== 'silent') playAlertTone('warning', profile);
-  speakAlertText(test.phrase, settings);
+  if (settings.soundProfile !== 'silent') playEventTone(test.tone, test.event, settings);
+  const after = test.event === 'Tornado Emergency'
+    ? () => { if (settings.soundProfile !== 'silent') playSiren(10, true); }
+    : undefined;
+  speakAlertText(test.phrase, settings, after);
+  if (after && !settings.speech.enabled && settings.soundProfile !== 'silent') {
+    // No speech to wait for; still play the promised follow-on siren.
+    setTimeout(after, 1200);
+  }
 }
 
 export function isAlertAudioSupported(): boolean {
