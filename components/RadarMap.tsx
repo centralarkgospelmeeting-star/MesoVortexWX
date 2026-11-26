@@ -1043,14 +1043,14 @@ export function RadarMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
-    map.on('render', scheduleStationPaint);
+    // Camera-only repaint. Repainting on every map 'render' event caused a
+    // station re-project/decluster/repaint storm on tile loads and in quad view.
     map.on('resize', scheduleStationPaint);
     map.on('move', scheduleStationPaint);
     map.on('zoom', scheduleStationPaint);
     window.addEventListener('resize', scheduleStationPaint);
     scheduleStationPaint();
     return () => {
-      map.off('render', scheduleStationPaint);
       map.off('resize', scheduleStationPaint);
       map.off('move', scheduleStationPaint);
       map.off('zoom', scheduleStationPaint);
@@ -2071,11 +2071,11 @@ export function RadarMap({
               source: SPOTTER_SOURCE_ID,
               filter: ['==', ['get', 'mobile'], true],
               paint: {
-                'circle-radius': 6,
+                'circle-radius': 10,
                 'circle-color': 'rgba(255, 45, 45, 0)',
                 'circle-stroke-width': 2,
                 'circle-stroke-color': '#ff3b3b',
-                'circle-stroke-opacity': 0.7,
+                'circle-stroke-opacity': 0.5,
               },
             },
             reportLayerBefore
@@ -2232,19 +2232,15 @@ export function RadarMap({
     if (!showSpotterReports) document.querySelectorAll('.maplibregl-popup').forEach((p) => p.remove());
   }, [showSpotterReports]);
 
+  // Single warning update path. Calling updateWarnings from two effects caused
+  // duplicate source.setData re-tiling on every alerts/filter change.
   useEffect(() => {
     showWarningsRef.current = showWarnings;
     showWatchesRef.current = showWatches;
     const map = mapRef.current;
     if (!map || !mapReady) return;
-    updateWarnings(map, alertFeaturesRef.current);
-  }, [showWarnings, showWatches, mapReady, updateWarnings]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !mapReady) return;
     updateWarnings(map, alertFeatures);
-  }, [alertFeatures, mapReady, updateWarnings]);
+  }, [alertFeatures, showWarnings, showWatches, mapReady, updateWarnings]);
 
   // Subtle, user-disableable emergency boundary treatment: a slow moving dash
   // on the warning outline. No flashing perimeter, pulsing edge, or gimmick.
@@ -2280,32 +2276,8 @@ export function RadarMap({
     return registerSyncedMap(syncGroup, map);
   }, [syncGroup, mapReady]);
 
-  // Mobile spotter pulse. Imperative MapLibre paint updates only: no React
-  // state changes per frame, so the rest of the workstation is not re-rendered.
-  useEffect(() => {
-    if (!mapReady || !showSpotters) return;
-
-    let frame = 0;
-    let lastPaint = 0;
-    const startedAt = performance.now();
-
-    const animate = (now: number) => {
-      frame = requestAnimationFrame(animate);
-      if (now - lastPaint < 40) return;
-      lastPaint = now;
-
-      const map = mapRef.current;
-      if (!map || !map.getLayer(SPOTTER_PULSE_LAYER_ID)) return;
-
-      const phase = ((now - startedAt) % 2200) / 2200;
-      const eased = 1 - Math.pow(1 - phase, 2);
-      map.setPaintProperty(SPOTTER_PULSE_LAYER_ID, 'circle-radius', 4 + eased * 18);
-      map.setPaintProperty(SPOTTER_PULSE_LAYER_ID, 'circle-stroke-opacity', 0.7 * (1 - phase));
-    };
-
-    frame = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(frame);
-  }, [mapReady, showSpotters]);
+  // Static spotter presence ring. No per-frame animation: continuous rAF paint
+  // updates on the pulse layer are a measurable CPU cost in multi-pane views.
 
   useEffect(() => {
     const map = mapRef.current;

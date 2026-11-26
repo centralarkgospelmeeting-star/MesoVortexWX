@@ -37,6 +37,9 @@ assert.match(radarMap, /satelliteSourceConfigRef/, 'satellite bounds/maxzoom cha
 assert.match(radarMap, /\[mode, product, compositeSource, tilt/, 'composite source selection must rebuild the raster source');
 assert.doesNotMatch(radarMap, /getSatelliteProbeTile\(satSel\)\s*\|\|\s*'0\/0\/0'/, 'unstable satellite probes must not fall back to a blank world tile');
 assert.doesNotMatch(radarMap, /setSweepAngle/, 'reveal animation must not set React state per frame');
+assert.doesNotMatch(radarMap, /map\.setPaintProperty\(SPOTTER_PULSE_LAYER_ID/, 'no per-frame spotter pulse painting');
+assert.doesNotMatch(radarMap, /map\.on\('render', scheduleStationPaint\)/, 'no station repaint on every map render');
+assert.match(radarMap, /map\.on\('move', scheduleStationPaint\)/, 'camera-only station repaint');
 
 // Phase 4B: active product labels must not claim super-resolution when the
 // capability matrix says superResolutionSupport is UNKNOWN and the app renders
