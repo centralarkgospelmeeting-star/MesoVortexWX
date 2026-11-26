@@ -119,6 +119,8 @@ export interface RadarMapProps {
   playbackActive?: boolean;
   /** GOES satellite selection when mode is Satellite. */
   satelliteSelection?: SatelliteSelection;
+  showSatelliteOverlay?: boolean;
+  satelliteOverlayOpacity?: number;
   /** Flat mercator or globe projection. */
   projectionMode?: 'mercator' | 'globe';
   /** Show official NHC/CPHC active tropical cyclones. */
@@ -150,9 +152,11 @@ const RADAR_PREVIOUS_SOURCE_ID = 'mv-radar-previous-source';
 const RADAR_PREVIOUS_LAYER_ID = 'mv-radar-previous-layer';
 const SATELLITE_SOURCE_ID = 'mv-satellite-source';
 const SATELLITE_LAYER_ID = 'mv-satellite-layer';
+const SATELLITE_OVERLAY_SOURCE_ID = 'mv-satellite-overlay-source';
+const SATELLITE_OVERLAY_LAYER_ID = 'mv-satellite-overlay-layer';
 const ROTATION_SOURCE_ID = 'mv-rotation-tracks-source';
 const ROTATION_LAYER_ID = 'mv-rotation-tracks-layer';
-const RASTER_SOURCE_IDS = [RADAR_SOURCE_ID, RADAR_PREVIOUS_SOURCE_ID, SATELLITE_SOURCE_ID];
+const RASTER_SOURCE_IDS = [RADAR_SOURCE_ID, RADAR_PREVIOUS_SOURCE_ID, SATELLITE_SOURCE_ID, SATELLITE_OVERLAY_SOURCE_ID];
 const FASTSCAN_REVEAL_MS = 6000;
 const WARNINGS_SOURCE_ID = 'mv-warnings-source';
 const WARNINGS_FILL_ID = 'mv-warnings-fill';
@@ -354,6 +358,8 @@ export function RadarMap({
   playbackIndex = 0,
   playbackActive = false,
   satelliteSelection = DEFAULT_SATELLITE_SELECTION,
+  showSatelliteOverlay = false,
+  satelliteOverlayOpacity = 35,
   projectionMode = 'mercator',
   showHurricanes = false,
   mapPitch = 0,
@@ -491,6 +497,7 @@ export function RadarMap({
   // Tile errors are tracked per raster source. A healthy basemap or a previously
   // loaded product must never suppress a real failure of the active source.
   const activeRasterSourceIdRef = useRef<string>(RADAR_SOURCE_ID);
+  const satOverlayConfigRef = useRef('');
   const rasterTileErrorsRef = useRef<Set<string>>(new Set());
   const tileErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const spotterHandlersBoundRef = useRef(false);
@@ -1688,6 +1695,43 @@ export function RadarMap({
     [mode, product, compositeSource, tilt, maxRefWindow, site.radarId, radarOpacity, fastScanEnabled, onNewScan, playbackIndex, playbackActive, startReveal, satelliteSelection?.bird, satelliteSelection?.sector, satelliteSelection?.productId]
   );
 
+  // Optional satellite overlay on the radar/composite workflows. It never
+  // replaces the base product and never renders an unverified tile URL.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const enabled = showSatelliteOverlay && mode !== 'Satellite' && !crossSectionMode;
+    if (!enabled) {
+      if (map.getLayer(SATELLITE_OVERLAY_LAYER_ID)) map.removeLayer(SATELLITE_OVERLAY_LAYER_ID);
+      if (map.getSource(SATELLITE_OVERLAY_SOURCE_ID)) map.removeSource(SATELLITE_OVERLAY_SOURCE_ID);
+      satOverlayConfigRef.current = '';
+      return;
+    }
+    const sel = normalizeSatelliteSelection(satelliteSelection);
+    const sat = getSatelliteTileUrl(sel);
+    if (!sat.url) return;
+    const bounds = getSatelliteTileBounds(sel.sector);
+    const maxzoom = getSatelliteTileMaxzoom(sel.sector);
+    const config = JSON.stringify({ url: sat.url, bounds, maxzoom });
+    if (satOverlayConfigRef.current !== config) {
+      if (map.getLayer(SATELLITE_OVERLAY_LAYER_ID)) map.removeLayer(SATELLITE_OVERLAY_LAYER_ID);
+      if (map.getSource(SATELLITE_OVERLAY_SOURCE_ID)) map.removeSource(SATELLITE_OVERLAY_SOURCE_ID);
+      const source: any = { type: 'raster', tiles: [sat.url], tileSize: 256 };
+      if (bounds) source.bounds = bounds;
+      if (typeof maxzoom === 'number') source.maxzoom = maxzoom;
+      map.addSource(SATELLITE_OVERLAY_SOURCE_ID, source);
+      const before = map.getLayer(WARNINGS_FILL_ID) ? WARNINGS_FILL_ID : undefined;
+      map.addLayer(
+        { id: SATELLITE_OVERLAY_LAYER_ID, type: 'raster', source: SATELLITE_OVERLAY_SOURCE_ID, paint: { 'raster-opacity': 0, 'raster-resampling': 'linear', 'raster-fade-duration': 0 } },
+        before
+      );
+      satOverlayConfigRef.current = config;
+    }
+    if (map.getLayer(SATELLITE_OVERLAY_LAYER_ID)) {
+      map.setPaintProperty(SATELLITE_OVERLAY_LAYER_ID, 'raster-opacity', Math.max(0, Math.min(1, satelliteOverlayOpacity / 100)));
+    }
+  }, [mapReady, mode, showSatelliteOverlay, satelliteOverlayOpacity, satelliteSelection?.bird, satelliteSelection?.sector, satelliteSelection?.productId, crossSectionMode]);
+
   /**
    * Live MRMS rotation-track overlay. This uses the existing verified
    * RotationTrack30min raster route only. It is a rolling 30-minute grid
@@ -2518,7 +2562,7 @@ export function RadarMap({
 
   return (
     <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'hidden', cursor: (crossSectionMode || inspectionMode) ? 'crosshair' : 'default' }}>
-      <div ref={containerRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+      <div ref={containerRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', background: '#071426' }} />
       <canvas ref={stationCanvasRef} data-station-model-canvas="true" style={{ position: 'absolute', inset: 0, zIndex: 6, pointerEvents: 'none' }} />
       <canvas ref={sweepCanvasRef} className="radar-sweep-canvas" />
 

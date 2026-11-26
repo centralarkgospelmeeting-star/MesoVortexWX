@@ -56,6 +56,12 @@ export const SATELLITE_BIRDS: Array<{ id: SatelliteBird; label: string }> = [
   { id: 'meteosat', label: 'Meteosat' },
 ];
 
+export const SATELLITE_BIRD_GROUPS: readonly { id: string; label: string; birds: SatelliteBird[] }[] = [
+  { id: 'north-america', label: 'North America', birds: ['goes-east', 'goes-west'] },
+  { id: 'europe-africa', label: 'Europe / Africa', birds: ['meteosat'] },
+  { id: 'asia-pacific', label: 'Asia / Pacific', birds: ['himawari'] },
+];
+
 export const SATELLITE_SECTORS: Array<{ id: SatelliteSector; label: string; birds: SatelliteBird[] }> = [
   { id: 'conus', label: 'CONUS', birds: ['goes-east', 'goes-west'] },
   { id: 'fulldisk', label: 'Full Disk', birds: ['goes-east', 'goes-west', 'himawari'] },

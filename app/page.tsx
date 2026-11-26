@@ -48,6 +48,7 @@ import { OBSERVATION_MASTER_LAYERS, SURFACE_LAYERS, type SurfaceLayerId, type St
 import {
   DEFAULT_SATELLITE_SELECTION,
   SATELLITE_BIRDS,
+  SATELLITE_BIRD_GROUPS,
   SATELLITE_PRODUCTS,
   getSectorsForBird,
   getSatelliteProductDef,
@@ -390,6 +391,9 @@ export default function MesoVortexWorkstation() {
   const [selectedReport, setSelectedReport] = useState<ReportDetail | null>(null);
   const [cursor, setCursor] = useState<{ lat: number; lon: number } | null>(null);
   const [toolboxOpen, setToolboxOpen] = useState(false);
+  const [showSatelliteOverlay, setShowSatelliteOverlay] = useState(false);
+  const [satelliteOverlayOpacity, setSatelliteOverlayOpacity] = useState(35);
+  const [jtwcProducts, setJtwcProducts] = useState<Array<{ title: string; link: string; description: string; published: string | null }>>([]);
 
   const [spotterReportsForContext, setSpotterReportsForContext] = useState<any[]>([]);
   const [mcdFeaturesForContext, setMcdFeaturesForContext] = useState<any[]>([]);
@@ -767,6 +771,21 @@ export default function MesoVortexWorkstation() {
     load();
     const t = setInterval(load, 120000);
     return () => { cancelled = true; clearInterval(t); };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch('/api/tropical/jtwc', { cache: 'no-store' });
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data?.products)) setJtwcProducts(data.products);
+      } catch {}
+    };
+    void load();
+    const timer = setInterval(load, 300_000);
+    return () => { cancelled = true; clearInterval(timer); };
   }, []);
 
   const alertLocationContext = useMemo(() => {
@@ -1190,6 +1209,8 @@ export default function MesoVortexWorkstation() {
         mode={paneMode}
         product={paneProduct}
         satelliteSelection={paneSatelliteSelection}
+        showSatelliteOverlay={showSatelliteOverlay}
+        satelliteOverlayOpacity={satelliteOverlayOpacity}
         syncGroup={syncGroup}
         playbackIndex={playbackIndex}
         playbackActive={isPlaying && timelineLoopAvailable}
@@ -1633,6 +1654,8 @@ export default function MesoVortexWorkstation() {
             mode={tab}
             product={product}
             satelliteSelection={satelliteSelection}
+            showSatelliteOverlay={showSatelliteOverlay}
+            satelliteOverlayOpacity={satelliteOverlayOpacity}
             syncGroup={null}
             playbackIndex={playbackIndex}
             playbackActive={isPlaying && timelineLoopAvailable}
@@ -1921,6 +1944,15 @@ export default function MesoVortexWorkstation() {
               >
                 {broadcastMode ? 'Exit' : 'Enter'} Broadcast Workspace
               </button>
+              <button
+                key="TropicalMode"
+                type="button"
+                data-menu-tropical="true"
+                onClick={() => { setTab('Satellite'); setShowHurricanes(true); setOpenPanel('Tropics'); setMenuOpen(false); }}
+                className="w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white"
+              >
+                Open Tropical Mode
+              </button>
               <a
                 href="/about"
                 data-menu-about="true"
@@ -2081,7 +2113,11 @@ export default function MesoVortexWorkstation() {
               <div className="grid grid-cols-2 gap-2">
                 <label className="block"><div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Satellite</div>
                   <select value={activeSatSel.bird} onChange={(e)=>{ const bird=e.target.value as SatelliteSelection['bird']; const sectors=getSectorsForBird(bird); const next=normalizeSatelliteSelection({ ...activeSatSel, bird, sector: sectors.some(s=>s.id===activeSatSel.sector)?activeSatSel.sector:sectors[0]?.id }); setSatelliteSelection(next); if(quadMode) setQuadPanes((prev)=>prev.map((p)=>p.mode==='Satellite'?{...p,satelliteSelection:next}:p)); }} className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none">
-                    {SATELLITE_BIRDS.map((b)=> <option key={b.id} value={b.id}>{b.label}</option>)}
+                    {SATELLITE_BIRD_GROUPS.map((group) => (
+                      <optgroup key={group.id} label={group.label}>
+                        {group.birds.map((id) => <option key={id} value={id}>{SATELLITE_BIRDS.find((b) => b.id === id)?.label || id}</option>)}
+                      </optgroup>
+                    ))}
                   </select></label>
                 <label className="block"><div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Sector</div>
                   <select value={activeSatSel.sector} onChange={(e)=>{ const next=normalizeSatelliteSelection({ ...activeSatSel, sector: e.target.value as SatelliteSelection['sector'] }); setSatelliteSelection(next); if(quadMode) setQuadPanes((prev)=>prev.map((p)=>p.mode==='Satellite'?{...p,satelliteSelection:next}:p)); }} className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none">
@@ -2094,6 +2130,14 @@ export default function MesoVortexWorkstation() {
                 </select></label>
               {!activeSatDef.available && <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-300">DATA UNAVAILABLE — {activeSatDef.unavailableReason || 'No verified real tile source'}</div>}
               <div className="text-[10px] text-slate-500">{activeSatDef.description}</div>
+              <div className="rounded-lg border border-slate-800 bg-[#111827] p-2 space-y-1.5">
+                <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Overlays</div>
+                <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={showSatelliteOverlay} onChange={(e)=>setShowSatelliteOverlay(e.target.checked)} />Satellite over radar/composite</label>
+                <label className="block text-[10px] text-slate-400">Opacity: {satelliteOverlayOpacity}%
+                  <input type="range" min={10} max={90} step={5} value={satelliteOverlayOpacity} onChange={(e)=>setSatelliteOverlayOpacity(Number(e.target.value))} className="w-full accent-sky-400" aria-label="Satellite overlay opacity" />
+                </label>
+                <div className="text-[10px] text-slate-500">Warnings, reports, observations and GLM remain independently toggled layers in their own panels.</div>
+              </div>
             </div>
           )}
 
@@ -2104,6 +2148,16 @@ export default function MesoVortexWorkstation() {
                 <div><span className="text-slate-500">Source:</span> NOAA NHC/CPHC official feeds</div>
                 <div><span className="text-slate-500">Availability:</span> {showHurricanes ? 'Enabled (data-dependent)' : 'Disabled by user'}</div>
                 <div className="text-slate-500">No placeholder storms. Details in Layer Details/Inspector behavior on map click when available.</div>
+              </div>
+              <div className="rounded-lg border border-slate-800 bg-[#111827] p-2 space-y-1 text-[10px]">
+                <div className="font-black uppercase tracking-wider text-sky-300">JTWC products</div>
+                <div className="text-slate-500">Joint Typhoon Warning Center · public RSS · verified 2026-11-25</div>
+                {jtwcProducts.length ? jtwcProducts.slice(0, 6).map((product, index) => (
+                  <div key={`${product.title}-${index}`} className="border-t border-slate-800 pt-1">
+                    <a href={product.link} target="_blank" rel="noreferrer" className="font-bold text-slate-200 hover:text-sky-300">{product.title}</a>
+                    <div className="text-slate-500">{product.published || 'Time unavailable from source'}</div>
+                  </div>
+                )) : <div className="text-slate-500">JTWC products DATA UNAVAILABLE.</div>}
               </div>
             </div>
           )}
