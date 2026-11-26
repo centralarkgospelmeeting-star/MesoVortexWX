@@ -23,6 +23,7 @@ import { distanceMeters, formatArea, formatDistance, polygonAreaMeters2, polylin
 import { declusterStationPlots, normalizeStationPlots, stationDetailFields, DATA_UNAVAILABLE } from '../lib/surface/station-model';
 import { drawStationModels, hitTestStationModels, type PositionedStationPlot } from '../lib/surface/draw-station-model';
 import { getCompositeSource, COMPOSITE_SOURCES } from '../lib/radar/composite-sources';
+import { isEmergencyEvent } from '../lib/alerts/categories';
 import type { SurfaceLayerId, StationPlot } from '../lib/surface/types';
 
 // Next/webpack bundles maplibre-gl, so the library's relative worker URL
@@ -138,6 +139,7 @@ export interface RadarMapProps {
   onMapContextClick?: (lat: number, lon: number) => void;
   onCursorMove?: (lat: number, lon: number) => void;
   alertOutlineThickness?: number;
+  emergencyEffects?: boolean;
   onCrossSectionComplete?: (pointA: [number, number], pointB: [number, number]) => void;
   onToolMeasurementsChange?: (items: MapToolMeasurement[]) => void;
   onToolDrawingsChange?: (items: MapToolDrawing[]) => void;
@@ -374,6 +376,7 @@ export function RadarMap({
   onMapContextClick,
   onCursorMove,
   alertOutlineThickness = 2,
+  emergencyEffects = true,
   onCrossSectionComplete,
   onToolMeasurementsChange,
   onToolDrawingsChange,
@@ -2242,6 +2245,34 @@ export function RadarMap({
     if (!map || !mapReady) return;
     updateWarnings(map, alertFeatures);
   }, [alertFeatures, mapReady, updateWarnings]);
+
+  // Subtle, user-disableable emergency boundary treatment: a slow moving dash
+  // on the warning outline. No flashing perimeter, pulsing edge, or gimmick.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const features = Array.isArray(alertFeatures?.features) ? alertFeatures.features : [];
+    const hasEmergency = features.some((f: any) => isEmergencyEvent(f?.properties?.event));
+    if (!emergencyEffects || !hasEmergency) return;
+    let flip = false;
+    const apply = () => {
+      try {
+        map.setPaintProperty(WARNINGS_LINE_INNER_ID, 'line-dasharray', flip ? ['literal', [2, 1.5]] : ['literal', [4, 2]]);
+      } catch {}
+    };
+    apply();
+    const timer = setInterval(() => { flip = !flip; apply(); }, 1400);
+    return () => {
+      clearInterval(timer);
+      try {
+        map.setPaintProperty(WARNINGS_LINE_INNER_ID, 'line-dasharray', [
+          'match', ['get', 'category'],
+          'warning', ['literal', [1, 0]], 'watch', ['literal', [2, 1.5]],
+          'advisory', ['literal', [4, 2]], 'statement', ['literal', [1.5, 1.5]], ['literal', [3, 2]],
+        ]);
+      } catch {}
+    };
+  }, [mapReady, emergencyEffects, alertFeatures]);
 
   useEffect(() => {
     const map = mapRef.current;

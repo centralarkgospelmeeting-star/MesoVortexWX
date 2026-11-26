@@ -25,6 +25,7 @@ import {
   type AlertCategory,
   type WeatherAlert,
 } from '../lib/alerts/model';
+import { alertTypeForEvent } from '../lib/alerts/categories';
 import { AlertDetailsPanel, buildLocationContext } from '../components/AlertDetailsPanel';
 import { getCompositeSource, COMPOSITE_SOURCES } from '../lib/radar/composite-sources';
 import { ProductInfoBanner } from '../components/ProductInfoBanner';
@@ -400,6 +401,8 @@ export default function MesoVortexWorkstation() {
     if (typeof window === 'undefined') return false;
     try { return window.localStorage.getItem(FORCASTER_WORKSPACE_KEY) === '1'; } catch { return false; }
   });
+  const [notificationPreview, setNotificationPreview] = useState<{ event: string; label: string; tone: string } | null>(null);
+
   const [jtwcProducts, setJtwcProducts] = useState<Array<{ title: string; link: string; description: string; published: string | null }>>([]);
 
   const [spotterReportsForContext, setSpotterReportsForContext] = useState<any[]>([]);
@@ -443,6 +446,12 @@ export default function MesoVortexWorkstation() {
     } catch {}
   }, [projectionMode, mapPitch, showRangeRings, radarOpacity, smoothing, playbackSpeed, playbackDirection, loopPauseMs, favoriteProducts, product, tilt, radarSite, colorTable, showRadarPills, showLightning, showLSR, showWatches, showWarnings, showMCD, showSpotters, showSpotterReports, showMetars, surfaceLayers, showStormTracks, showCounties, showTornadoAnalysis, showHurricanes, alertsOpen]);
   const [alertSettings, setAlertSettings] = useState<AlertSettings>(DEFAULT_ALERT_SETTINGS);
+
+  useEffect(() => {
+    if (!notificationPreview || !alertSettings.notificationAutoMinimize) return;
+    const timer = setTimeout(() => setNotificationPreview(null), alertSettings.notificationDurationMs);
+    return () => clearTimeout(timer);
+  }, [notificationPreview, alertSettings.notificationDurationMs, alertSettings.notificationAutoMinimize]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [hsiOpen, setHsiOpen] = useState(true);
   const [overlayProfiles, setOverlayProfiles] = useState(() => {
@@ -731,10 +740,13 @@ export default function MesoVortexWorkstation() {
   // Alerts rendered on the map honor the category filters and visibility toggles.
   // The location card uses the same set so a hidden layer cannot reappear as a popup.
   const visibleMapAlerts = useMemo(() => styledFilteredAlerts.filter((alert) => {
+    const type = alertTypeForEvent(alert.event);
+    const pref = type ? alertSettings.categoryPrefs[type.id] : null;
+    if (pref && !pref.enabled) return false;
     if (alert.category === 'warning') return mapWarnings;
     if (alert.category === 'watch') return mapWatches;
     return true;
-  }), [styledFilteredAlerts, mapWarnings, mapWatches]);
+  }), [styledFilteredAlerts, mapWarnings, mapWatches, alertSettings.categoryPrefs]);
   const mapAlertFeatures = useMemo(() => alertsToFeatureCollection(visibleMapAlerts), [visibleMapAlerts]);
 
   const selectedAlert = useMemo(() => styledAlerts.find((a) => a.id === selectedAlertId) || null, [styledAlerts, selectedAlertId]);
@@ -1001,6 +1013,7 @@ export default function MesoVortexWorkstation() {
     onCrossSectionComplete: handleCrossSectionComplete,
     alertFeatures: mapAlertFeatures,
     alertOutlineThickness: alertSettings.outlineThickness,
+    emergencyEffects: alertSettings.emergencyEffects,
     onSelectWarningFromMap: (w: any, lat?: number, lon?: number) => {
       // WeatherWise-style: clicking inside a warning opens the small
       // location summary first, not the full warning.
@@ -1816,6 +1829,27 @@ export default function MesoVortexWorkstation() {
         </div>
       )}
 
+      {notificationPreview && (
+        <div
+          data-notification-preview="true"
+          role="status"
+          aria-live="polite"
+          className="warning-banner-enter absolute left-1/2 top-24 z-[65] w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border border-sky-500 bg-[#0b1220] p-4 text-left shadow-lg"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="rounded-md bg-sky-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">Test</span>
+                <span className="text-[11px] font-semibold text-slate-400">{notificationPreview.label}</span>
+              </div>
+              <div className="mt-1 text-sm font-black text-white">{notificationPreview.event}</div>
+              <div className="mt-1 line-clamp-2 text-xs text-slate-300">This is a preview of the configured notification, tone, and voice.</div>
+            </div>
+            <button type="button" onClick={() => setNotificationPreview(null)} className="shrink-0 rounded-full p-1 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Dismiss test notification">✕</button>
+          </div>
+        </div>
+      )}
+
 
 
       {(selectedAlert || alertLocationContext) && (
@@ -1873,6 +1907,7 @@ export default function MesoVortexWorkstation() {
           settings={alertSettings}
           onChange={setAlertSettings}
           onClose={() => setAlertSettingsOpen(false)}
+          onPreviewNotification={(test) => setNotificationPreview(test)}
         />
       )}
 

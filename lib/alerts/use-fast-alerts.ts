@@ -14,6 +14,7 @@ import {
   type AlertCategoryFilters,
   type WeatherAlert,
 } from './model';
+import { alertTypeForEvent } from './categories';
 import { isAlertAudioSupported, playAlertAudio, unlockAlertAudio } from './audio';
 import type { AlertSettings } from './settings';
 
@@ -181,7 +182,9 @@ export function useFastAlerts({ settings, bannerVisible }: FastAlertsOptions): F
 
           if (fresh.length > 0) {
             const top = sortAlerts(fresh)[0];
-            setBanner(top);
+            const type = alertTypeForEvent(top.event);
+            const pref = type ? settingsRef.current.categoryPrefs?.[type.id] : null;
+            if (!pref || pref.notify) setBanner(top);
             // One dispatcher owns all policy: arming, category, visible surface,
             // sound profile, custom sounds and silent mode.
             if (
@@ -215,8 +218,13 @@ export function useFastAlerts({ settings, bannerVisible }: FastAlertsOptions): F
     };
   }, [reloadToken]);
 
-  // Warning banners remain visible until the user dismisses them manually.
-  // There is no auto-dismiss timer and no flashing/repeating animation.
+  // New alerts slide in briefly, then automatically minimize to the sidebar.
+  // The timer is one-shot per alert: no flashing and no repeated reappearance.
+  useEffect(() => {
+    if (!banner || !settings.notificationAutoMinimize) return;
+    const timer = setTimeout(() => setBanner(null), settings.notificationDurationMs);
+    return () => clearTimeout(timer);
+  }, [banner, settings.notificationDurationMs, settings.notificationAutoMinimize]);
 
   const toggleFilter = useCallback((category: AlertCategory) => {
     setFilters((previous) => ({ ...previous, [category]: !previous[category] }));

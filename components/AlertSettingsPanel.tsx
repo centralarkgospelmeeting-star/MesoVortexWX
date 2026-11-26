@@ -1,12 +1,15 @@
 'use client';
 
 import { useRef } from 'react';
-import { DEFAULT_ALERT_SETTINGS, type AlertSettings, type AlertSoundProfile } from '../lib/alerts/settings';
+import { DEFAULT_ALERT_SETTINGS, defaultAlertTypePreferences, type AlertSettings, type AlertSoundProfile } from '../lib/alerts/settings';
+import { ALERT_SECTIONS, TEST_ALERTS } from '../lib/alerts/categories';
+import { playTestAlert } from '../lib/alerts/audio';
 
 type Props = {
   settings: AlertSettings;
   onChange: (next: AlertSettings) => void;
   onClose: () => void;
+  onPreviewNotification?: (test: { event: string; label: string; tone: string }) => void;
 };
 
 const PROFILES: Array<{ id: AlertSoundProfile; label: string; desc: string }> = [
@@ -63,8 +66,15 @@ function UploadRow({ label, value, onUpload, onClear }: { label: string; value?:
   );
 }
 
-export function AlertSettingsPanel({ settings, onChange, onClose }: Props) {
+export function AlertSettingsPanel({ settings, onChange, onClose, onPreviewNotification }: Props) {
   const set = (patch: Partial<AlertSettings>) => onChange({ ...settings, ...patch });
+  const setPrefs = (id: string, patch: Partial<AlertSettings['categoryPrefs'][string]>) =>
+    set({ categoryPrefs: { ...settings.categoryPrefs, [id]: { ...settings.categoryPrefs[id], ...patch } } });
+  const restoreDefaults = () => set({
+    customSounds: {},
+    soundProfile: DEFAULT_ALERT_SETTINGS.soundProfile,
+    categoryPrefs: defaultAlertTypePreferences(),
+  });
   const setColors = (patch: Partial<AlertSettings['colors']>) => set({ colors: { ...settings.colors, ...patch } });
   const setSpeech = (patch: Partial<AlertSettings['speech']>) => set({ speech: { ...settings.speech, ...patch } });
   const setCustomSounds = (patch: Partial<AlertSettings['customSounds']>) => set({ customSounds: { ...settings.customSounds, ...patch } });
@@ -84,6 +94,69 @@ export function AlertSettingsPanel({ settings, onChange, onClose }: Props) {
         </div>
 
         <div className="grid max-h-[calc(85vh-56px)] overflow-auto p-4 gap-4 md:grid-cols-2">
+          <section className="space-y-2 md:col-span-2">
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] font-black uppercase tracking-wider text-sky-400">Notification behavior</div>
+              <button type="button" onClick={restoreDefaults} className="rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-slate-300 hover:bg-slate-800">Restore Default Alert Sounds</button>
+            </div>
+            <label className="flex items-center justify-between rounded-lg border border-slate-800 bg-[#111827] px-3 py-2 text-[11px] font-semibold text-slate-200">
+              <span>Auto-minimize new alert notification</span>
+              <input type="checkbox" checked={settings.notificationAutoMinimize} onChange={(e) => set({ notificationAutoMinimize: e.target.checked })} />
+            </label>
+            <label className="block rounded-lg border border-slate-800 bg-[#111827] px-3 py-2 text-[11px] font-semibold text-slate-200">
+              <div className="flex justify-between"><span>Notification duration</span><span className="text-slate-400">{Math.round(settings.notificationDurationMs / 1000)}s</span></div>
+              <input type="range" min={3000} max={30000} step={1000} value={settings.notificationDurationMs} onChange={(e) => set({ notificationDurationMs: Number(e.target.value) })} className="mt-2 w-full" aria-label="Notification duration" />
+            </label>
+            <label className="flex items-center justify-between rounded-lg border border-slate-800 bg-[#111827] px-3 py-2 text-[11px] font-semibold text-slate-200">
+              <span>Professional emergency boundary effects (can be disabled)</span>
+              <input type="checkbox" checked={settings.emergencyEffects} onChange={(e) => set({ emergencyEffects: e.target.checked })} />
+            </label>
+            <label className="flex items-center justify-between rounded-lg border border-slate-800 bg-[#111827] px-3 py-2 text-[11px] font-semibold text-slate-200">
+              <span>Voice announcements</span>
+              <input type="checkbox" checked={settings.speech.enabled} onChange={(e) => setSpeech({ enabled: e.target.checked })} />
+            </label>
+          </section>
+
+          <section className="space-y-2 md:col-span-2">
+            <div className="text-[10px] font-black uppercase tracking-wider text-sky-400">Alert categories</div>
+            {ALERT_SECTIONS.map((section) => (
+              <details key={section.id} className="rounded-lg border border-slate-800 bg-[#111827] p-2">
+                <summary className="cursor-pointer text-[11px] font-black uppercase tracking-wider text-slate-300">{section.label}</summary>
+                <div className="mt-2 space-y-1">
+                  {section.types.map((type) => {
+                    const pref = settings.categoryPrefs[type.id] || { enabled: true, notify: true, voice: false, color: type.color, sound: null };
+                    return (
+                      <div key={type.id} className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-2 rounded border border-slate-800 bg-[#0b1220] px-2 py-1.5 text-[10px]">
+                        <span className="font-semibold text-slate-200">{type.label}</span>
+                        <label title="Enabled"><input type="checkbox" checked={pref.enabled} onChange={(e) => setPrefs(type.id, { enabled: e.target.checked })} /> Show</label>
+                        <label title="Notification"><input type="checkbox" checked={pref.notify} onChange={(e) => setPrefs(type.id, { notify: e.target.checked })} /> Notify</label>
+                        <label title="Voice"><input type="checkbox" checked={pref.voice} onChange={(e) => setPrefs(type.id, { voice: e.target.checked })} /> Voice</label>
+                        <input type="color" aria-label={`${type.label} color`} value={pref.color} onChange={(e) => setPrefs(type.id, { color: e.target.value })} className="h-6 w-8 cursor-pointer rounded border border-slate-700 bg-transparent p-0" />
+                      </div>
+                    );
+                  })}
+                </div>
+              </details>
+            ))}
+          </section>
+
+          <section className="space-y-2 md:col-span-2">
+            <div className="text-[10px] font-black uppercase tracking-wider text-sky-400">Test alert audio</div>
+            <div className="text-[10px] text-slate-500">Plays the configured tone and voice, then shows the exact notification treatment without waiting for a real warning.</div>
+            <div className="flex flex-wrap gap-1.5">
+              {TEST_ALERTS.map((test) => (
+                <button
+                  key={test.id}
+                  type="button"
+                  onClick={() => { playTestAlert(test, settings); onPreviewNotification?.(test); }}
+                  className="rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-[11px] font-bold text-slate-200 hover:bg-slate-800"
+                >
+                  ▶ {test.label}
+                </button>
+              ))}
+            </div>
+          </section>
+
           <section className="space-y-2">
             <div className="text-[10px] font-black uppercase tracking-wider text-sky-400">Alert Colors</div>
             <ColorRow label="Tornado Warning" value={settings.colors.tornadoWarning} onChange={(v) => setColors({ tornadoWarning: v })} />

@@ -80,7 +80,7 @@ assert.doesNotMatch(page, /warningFlash|animate-pulse|animate-bounce/, 'main war
 assert.match(page, /role="status"/, 'banner must expose accessible status semantics');
 assert.match(page, /aria-live="polite"/, 'new alerts must be announced without interrupting the user');
 assert.match(page, /onClick=\{dismissBanner\}/, 'warning banner must support manual dismissal');
-assert.doesNotMatch(hook, /setTimeout\(\(\) => setBanner\(null\)/, 'warning banner must remain visible until dismissed');
+assert.match(hook, /setTimeout\(\(\) => setBanner\(null\), settings\.notificationDurationMs/, 'banner auto-minimizes after the configured duration');
 assert.match(css, /@keyframes warning-slide-in/, 'one-time slide-in keyframes must exist');
 assert.doesNotMatch(css, /warning-slide-in[\s\S]*?infinite/, 'slide-in must not repeat');
 

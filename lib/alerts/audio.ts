@@ -164,6 +164,31 @@ export function playAlertAudio(event: string, category: AlertCategory, settings:
   playAlertTone(category, settings.soundProfile);
 }
 
+/** Speak real alert text; silent mode and disabled speech produce no audio. */
+export function speakAlertText(text: string, settings: AlertSettings): void {
+  if (!settings.speech.enabled || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    utterance.volume = Math.max(0, Math.min(1, settings.speech.volume));
+    window.speechSynthesis.speak(utterance);
+  } catch {
+    // Speech may be blocked; never fabricate a fallback announcement.
+  }
+}
+
+/** Test the exact configured tone + voice for a without waiting for a real alert. */
+export function playTestAlert(test: { event: string; tone: string; phrase: string }, settings: AlertSettings): void {
+  const profile = settings.soundProfile === 'silent' ? 'silent'
+    : test.tone === 'siren' || test.tone === 'enhanced' ? 'nws'
+      : test.tone === 'warning' ? 'broadcast'
+        : test.tone === 'attention' ? 'minimal' : 'classic';
+  if (profile !== 'silent') playAlertTone('warning', profile);
+  speakAlertText(test.phrase, settings);
+}
+
 export function isAlertAudioSupported(): boolean {
   if (typeof window === 'undefined') return false;
   return Boolean(window.AudioContext || (window as unknown as { webkitAudioContext?: unknown }).webkitAudioContext);
