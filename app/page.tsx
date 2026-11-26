@@ -9,7 +9,7 @@ import type { LiveCrossSectionResult } from '../lib/radar/cross-section-types';
 import { VolumeScanInspector } from '../components/radar/VolumeScanInspector';
 import { WeatherWiseRadarCard } from '../components/WeatherWiseRadarCard';
 import { MesoAIPanel } from '../components/MesoAIPanel';
-import { ToolboxPanel } from '../components/map-tools/ToolboxPanel';
+import { ToolboxPanel, type ToolMode } from '../components/map-tools/ToolboxPanel';
 import { WeatherWiseAlertsPanel } from '../components/WeatherWiseAlertsPanel';
 import { AlertSettingsPanel } from '../components/AlertSettingsPanel';
 import { RADAR_SITES } from '../lib/radar-config';
@@ -29,6 +29,7 @@ import { AlertDetailsPanel, buildLocationContext } from '../components/AlertDeta
 import { getCompositeSource, COMPOSITE_SOURCES } from '../lib/radar/composite-sources';
 import { ProductInfoBanner } from '../components/ProductInfoBanner';
 import { ReportDetailPopup, type ReportDetail } from '../components/reports/ReportDetailPopup';
+import { AtmosphericAnalysisPanel } from '../components/sounding/AtmosphericAnalysisPanel';
 import { HsiPanel } from '../components/hsi/HsiPanel';
 import {
   DEFAULT_OVERLAY_PROFILES,
@@ -115,6 +116,7 @@ const PREFS_STORAGE_KEY = 'mesovortex_preferences_v1';
 const HSI_STORAGE_KEY = 'mesovortex_hsi_visible';
 const OVERLAY_STORAGE_KEY = 'mesovortex_overlay_profiles_v1';
 const WORKSPACE_STORAGE_KEY = 'mesovortex_workspace_panels_v1';
+const FORCASTER_WORKSPACE_KEY = 'mesovortex_forecaster_workspace_v1';
 const DEFAULT_MESONET_NETWORK = 'ISUSM';
 const DEFAULT_AWOS_NETWORK = 'IA_ASOS';
 const PANE_MODES: PaneMode[] = ['Radar', 'Satellite', 'Composite', 'Models'];
@@ -372,7 +374,7 @@ export default function MesoVortexWorkstation() {
   const [crossSectionResult, setCrossSectionResult] = useState<LiveCrossSectionResult | null>(null);
   const [crossSectionLoading, setCrossSectionLoading] = useState(false);
   const [crossSectionError, setCrossSectionError] = useState<string | null>(null);
-  const [toolMode, setToolMode] = useState<'none'|'measure-distance'|'measure-area'|'draw-point'|'draw-line'|'draw-polygon'|'annotate'>('none');
+  const [toolMode, setToolMode] = useState<ToolMode>('none');
   const [toolRevision, setToolRevision] = useState(0);
   const [toolMeasurements, setToolMeasurements] = useState<Array<{id:string;kind:'distance'|'area';label:string;value:string;points:Array<[number,number]>}>>([]);
   const [toolDrawings, setToolDrawings] = useState<Array<{id:string;kind:'point'|'line'|'polygon'|'annotation';label?:string;points:Array<[number,number]>;color:string}>>([]);
@@ -393,6 +395,11 @@ export default function MesoVortexWorkstation() {
   const [toolboxOpen, setToolboxOpen] = useState(false);
   const [showSatelliteOverlay, setShowSatelliteOverlay] = useState(false);
   const [satelliteOverlayOpacity, setSatelliteOverlayOpacity] = useState(35);
+  const [analysisPoint, setAnalysisPoint] = useState<{ lat: number; lon: number } | null>(null);
+  const [forecasterWorkspace, setForecasterWorkspace] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try { return window.localStorage.getItem(FORCASTER_WORKSPACE_KEY) === '1'; } catch { return false; }
+  });
   const [jtwcProducts, setJtwcProducts] = useState<Array<{ title: string; link: string; description: string; published: string | null }>>([]);
 
   const [spotterReportsForContext, setSpotterReportsForContext] = useState<any[]>([]);
@@ -480,6 +487,10 @@ export default function MesoVortexWorkstation() {
   useEffect(() => {
     try { window.localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(workspacePanels)); } catch {}
   }, [workspacePanels]);
+
+  useEffect(() => {
+    try { window.localStorage.setItem(FORCASTER_WORKSPACE_KEY, forecasterWorkspace ? '1' : '0'); } catch {}
+  }, [forecasterWorkspace]);
 
   // Mode-specific overlay profile gates. Global switches remain the outer gate
   // so a mode can only remove layers, never enable an unverified source.
@@ -1011,6 +1022,7 @@ export default function MesoVortexWorkstation() {
       if (alertSettings.sidebarAutoHide && !alertSettings.sidebarPinned) setAlertsOpen(false);
     },
     onCursorMove: (lat: number, lon: number) => setCursor({ lat, lon }),
+    onSoundingPoint: (lat: number, lon: number) => { setAnalysisPoint({ lat, lon }); setToolMode('none'); },
     focusTarget,
     onSelectSite: (id: string) => setRadarSite(id),
   } as const;
@@ -1824,6 +1836,15 @@ export default function MesoVortexWorkstation() {
 
       {selectedReport && <ReportDetailPopup report={selectedReport} onClose={() => setSelectedReport(null)} />}
 
+      {analysisPoint && (
+        <AtmosphericAnalysisPanel
+          open
+          lat={analysisPoint.lat}
+          lon={analysisPoint.lon}
+          onClose={() => setAnalysisPoint(null)}
+        />
+      )}
+
       {toolboxOpen && workspacePanels[overlayMode].toolbox && (
         <div className="absolute bottom-16 right-3 z-40 w-[min(20rem,calc(100vw-1.5rem))]">
           <ToolboxPanel
@@ -1952,6 +1973,26 @@ export default function MesoVortexWorkstation() {
                 className="w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white"
               >
                 Open Tropical Mode
+              </button>
+              <button
+                key="ForecasterWorkspace"
+                type="button"
+                data-menu-forecaster-workspace="true"
+                onClick={() => {
+                  const next = !forecasterWorkspace;
+                  setForecasterWorkspace(next);
+                  setExpertMode(next);
+                  setQuadMode(false);
+                  if (next) {
+                    setLeftPane('Radar');
+                    setRightPane('Satellite');
+                    setAnalysisPoint({ lat: mapCenter.lat, lon: mapCenter.lon });
+                  } else setAnalysisPoint(null);
+                  setMenuOpen(false);
+                }}
+                className="w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white"
+              >
+                {forecasterWorkspace ? 'Close' : 'Open'} Forecaster Workspace
               </button>
               <a
                 href="/about"

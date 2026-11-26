@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { distanceMeters } from '../../lib/map-tools/geo';
 
-export type ToolMode = 'none' | 'measure-distance' | 'measure-area' | 'draw-point' | 'draw-line' | 'draw-polygon' | 'annotate';
+export type ToolMode = 'none' | 'measure-distance' | 'measure-area' | 'draw-point' | 'draw-line' | 'draw-polygon' | 'annotate' | 'sounding';
 
 export interface MeasurementRecord {
   id: string;
@@ -78,6 +78,7 @@ export function ToolboxPanel({
           <button type="button" className={btn(toolMode==='draw-line')} onClick={()=>onSetToolMode(toolMode==='draw-line'?'none':'draw-line')}>／ Line</button>
           <button type="button" className={btn(toolMode==='draw-polygon')} onClick={()=>onSetToolMode(toolMode==='draw-polygon'?'none':'draw-polygon')}>△ Polygon</button>
           <button type="button" className={btn(toolMode==='annotate')} onClick={()=>onSetToolMode(toolMode==='annotate'?'none':'annotate')}>T Annotate</button>
+          <button type="button" className={btn(toolMode==='sounding')} onClick={()=>onSetToolMode(toolMode==='sounding'?'none':'sounding')}>⌁ Sounding</button>
         </div>
         <div className="mt-2 text-[10px] text-slate-400 leading-snug">
           Measurements/drawings are local user annotations (not meteorological data). Double-click to finish line/area. Esc cancels active tool.

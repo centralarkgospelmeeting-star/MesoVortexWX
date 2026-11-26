@@ -35,7 +35,7 @@ export type ModeTab = 'Radar' | '3D Radar' | 'Composite' | 'Satellite' | 'Models
 export type BasemapType = 'satellite-streets' | 'custom-weather' | 'mapbox' | 'satellite' | 'light';
 export type BasemapId = BasemapType;
 
-export type MapToolMode = 'none' | 'measure-distance' | 'measure-area' | 'draw-point' | 'draw-line' | 'draw-polygon' | 'annotate';
+export type MapToolMode = 'none' | 'measure-distance' | 'measure-area' | 'draw-point' | 'draw-line' | 'draw-polygon' | 'annotate' | 'sounding';
 
 export interface MapToolMeasurement {
   id: string;
@@ -142,6 +142,7 @@ export interface RadarMapProps {
   onToolMeasurementsChange?: (items: MapToolMeasurement[]) => void;
   onToolDrawingsChange?: (items: MapToolDrawing[]) => void;
   onToolModeChange?: (mode: MapToolMode) => void;
+  onSoundingPoint?: (lat: number, lon: number) => void;
   focusTarget?: { lat: number; lon: number; zoom?: number; ts?: number } | null;
   [key: string]: any;
 }
@@ -377,6 +378,7 @@ export function RadarMap({
   onToolMeasurementsChange,
   onToolDrawingsChange,
   onToolModeChange,
+  onSoundingPoint,
   focusTarget = null,
 }: RadarMapProps) {
   const [scanIngesting, setScanIngesting] = useState(false);
@@ -393,6 +395,7 @@ export function RadarMap({
   const onToolMeasurementsChangeRef = useRef(onToolMeasurementsChange);
   const onToolDrawingsChangeRef = useRef(onToolDrawingsChange);
   const onToolModeChangeRef = useRef(onToolModeChange);
+  const onSoundingPointRef = useRef(onSoundingPoint);
   const lastFrameRef = useRef<{ time: string; product: string; site: string; tilt: string }>({ time: '', product: '', site: '', tilt: '' });
   const isRadarMode = mode === 'Radar' || mode === '3D Radar';
   const radarVisualsEnabled = isRadarMode; // beam/sweep/towers/pills/range rings/scan-ingest visuals
@@ -434,6 +437,7 @@ export function RadarMap({
   useEffect(() => { onToolMeasurementsChangeRef.current = onToolMeasurementsChange; }, [onToolMeasurementsChange]);
   useEffect(() => { onToolDrawingsChangeRef.current = onToolDrawingsChange; }, [onToolDrawingsChange]);
   useEffect(() => { onToolModeChangeRef.current = onToolModeChange; }, [onToolModeChange]);
+  useEffect(() => { onSoundingPointRef.current = onSoundingPoint; }, [onSoundingPoint]);
   useEffect(() => {
     // External revision bump signals clear/undo from UI.
     if (toolRevRef.current === toolRevision) return;
@@ -2488,6 +2492,10 @@ export function RadarMap({
       }
       const mode = toolModeRef.current;
       if (onCursorMoveRef.current) onCursorMoveRef.current(e.lngLat.lat, e.lngLat.lng);
+      if (mode === 'sounding') {
+        onSoundingPointRef.current?.(e.lngLat.lat, e.lngLat.lng);
+        return;
+      }
       if (!mode || mode === 'none' || inspectionMode) {
         const warningFeatures = map.queryRenderedFeatures(e.point, { layers: [WARNINGS_FILL_ID].filter((id) => map.getLayer(id)) });
         if (warningFeatures.length > 0) return;
